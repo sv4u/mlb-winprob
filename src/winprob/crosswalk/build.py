@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 import pandas as pd
 
@@ -16,8 +17,22 @@ class CrosswalkResult:
 
 
 def _prep_schedule(schedule: pd.DataFrame) -> pd.DataFrame:
+    """Normalise a schedule DataFrame for crosswalk matching.
+
+    Crucially, ``date`` is derived from ``game_date_local`` (the API's local
+    calendar date grouping) rather than the UTC timestamp.  West-Coast evening
+    games cross UTC midnight and would land on the wrong date if we used the
+    UTC value, causing systematic mismatches against Retrosheet gamelogs, which
+    always record the local game date.
+    """
     s = schedule.copy()
-    s["date"] = pd.to_datetime(s["game_date_utc"].str.replace("Z", "+00:00", regex=False), errors="coerce").dt.date
+    if "game_date_local" in s.columns and s["game_date_local"].notna().any():
+        s["date"] = pd.to_datetime(s["game_date_local"], errors="coerce").dt.date
+    else:
+        # Fallback for schedules ingested before this fix: parse UTC timestamp.
+        s["date"] = pd.to_datetime(
+            s["game_date_utc"].str.replace("Z", "+00:00", regex=False), errors="coerce"
+        ).dt.date
     s["game_number"] = pd.to_numeric(s["game_number"], errors="coerce").astype("Int64")
     return s
 
@@ -62,7 +77,13 @@ def build_crosswalk(*, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFra
         return g.head(1).assign(status="ambiguous", mlb_game_pk=pd.NA, match_confidence=0.0, notes="multiple_candidates")
 
     key_cols = ["date", "home_mlb_id", "away_mlb_id", "home_team", "visiting_team", "dh_game_num"]
-    resolved = merged.groupby(key_cols, dropna=False, as_index=False).apply(resolve_group).reset_index(drop=True)
+    gb = merged.groupby(key_cols, dropna=False, as_index=False)
+    # include_groups=True was added in pandas 2.2 to silence a FutureWarning;
+    # fall back for older environments.
+    _apply_kwargs = {}
+    if "include_groups" in inspect.signature(gb.apply).parameters:
+        _apply_kwargs["include_groups"] = True
+    resolved = gb.apply(resolve_group, **_apply_kwargs).reset_index(drop=True)
 
     out = resolved[[
         "date",
@@ -76,6 +97,31 @@ def build_crosswalk(*, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFra
         "match_confidence",
         "notes",
     ]].rename(columns={"home_team": "home_retro", "visiting_team": "away_retro"})
+
+    # --- Fallback pass: try swapped home/away for any still-missing games ------
+    # In unusual seasons (e.g. 2020 COVID relocations) a game may be played at
+    # a neutral site so that the "home" team in Retrosheet differs from the
+    # "home" team in the MLB API schedule.  For these rows we attempt a second
+    # lookup with home_mlb_id / away_mlb_id reversed.
+    still_missing_mask = out["status"] == "missing"
+    if still_missing_mask.any():
+        # Build a date × mlb_ids lookup into the schedule (take first game_pk if dups).
+        sched_pk_map: dict[tuple, int] = {}
+        for _, srow in sched[["date", "home_mlb_id", "away_mlb_id", "game_pk"]].iterrows():
+            key = (srow["date"], int(srow["home_mlb_id"]), int(srow["away_mlb_id"]))
+            if key not in sched_pk_map:
+                sched_pk_map[key] = int(srow["game_pk"])
+
+        for idx in out[still_missing_mask].index:
+            r = out.loc[idx]
+            if pd.isna(r["home_mlb_id"]) or pd.isna(r["away_mlb_id"]):
+                continue
+            swapped_key = (r["date"], int(r["away_mlb_id"]), int(r["home_mlb_id"]))
+            if swapped_key in sched_pk_map:
+                out.loc[idx, "status"] = "matched"
+                out.loc[idx, "mlb_game_pk"] = sched_pk_map[swapped_key]
+                out.loc[idx, "match_confidence"] = 0.6
+                out.loc[idx, "notes"] = "matched_swapped_home_away"
 
     matched = int((out["status"] == "matched").sum())
     ambiguous = int((out["status"] == "ambiguous").sum())

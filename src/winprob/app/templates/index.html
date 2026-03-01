@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MLB Win Probability</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
+      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
+      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    header span { color: var(--muted); font-size: 0.85rem; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
+    .filters select, .filters input { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.45rem 0.75rem; font-size: 0.9rem; }
+    button { background: var(--accent); border: none; border-radius: 6px; color: white; padding: 0.5rem 1.25rem; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
+    button:hover { opacity: 0.85; }
+    button.sec { background: var(--card); border: 1px solid var(--border); }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .tab { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 1rem; cursor: pointer; font-size: 0.85rem; color: var(--muted); }
+    .tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+    th:hover { color: var(--text); }
+    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: var(--card); }
+    .prob-bar { display: flex; align-items: center; gap: 0.5rem; }
+    .bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 8px; max-width: 120px; }
+    .bar-fill { height: 8px; border-radius: 4px; }
+    .home-win { color: var(--green); font-weight: 600; }
+    .away-win { color: var(--red); }
+    .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .badge-home { background: rgba(46,204,113,.15); color: var(--green); }
+    .badge-away { background: rgba(231,76,60,.15); color: var(--red); }
+    .badge-neutral { background: rgba(79,142,247,.1); color: var(--accent); }
+    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: var(--muted); }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .stat-card .label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
+    .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .chart-wrap h3 { margin-bottom: 1rem; font-size: 0.95rem; color: var(--muted); }
+    #cv-chart { width: 100%; height: 240px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .section-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .75rem; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚾ MLB Win Probability</h1>
+  <span>2000 – 2025 • v3 model</span>
+</header>
+
+<div class="container">
+
+  <!-- Stat cards filled by JS -->
+  <div class="stat-cards" id="stat-cards">
+    <div class="stat-card"><div class="label">Total games</div><div class="value" id="sc-total">—</div></div>
+    <div class="stat-card"><div class="label">Seasons</div><div class="value" id="sc-seasons">—</div></div>
+    <div class="stat-card"><div class="label">Best model Brier</div><div class="value" id="sc-brier">—</div></div>
+    <div class="stat-card"><div class="label">Best season accuracy</div><div class="value" id="sc-acc">—</div></div>
+  </div>
+
+  <!-- CV accuracy chart -->
+  <div class="chart-wrap">
+    <h3>Out-of-Sample Accuracy by Season (Expanding-Window CV)</h3>
+    <canvas id="cv-chart"></canvas>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('games',this)">Games</div>
+    <div class="tab" onclick="switchTab('upsets',this)">Biggest Upsets</div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <label>Season
+      <select id="f-season"><option value="">All</option></select>
+    </label>
+    <label>Home team
+      <select id="f-home"><option value="">Any</option></select>
+    </label>
+    <label>Away team
+      <select id="f-away"><option value="">Any</option></select>
+    </label>
+    <label>Date (YYYY-MM-DD)
+      <input type="text" id="f-date" placeholder="2024-04-01" style="width:140px" />
+    </label>
+    <label>Min fav prob (upsets)
+      <input type="number" id="f-minprob" value="0.65" min="0.5" max="0.99" step="0.01" style="width:90px" />
+    </label>
+    <button onclick="loadData()">Search</button>
+    <button class="sec" onclick="resetFilters()">Reset</button>
+  </div>
+
+  <!-- Results table -->
+  <div id="table-wrap"></div>
+  <div class="pagination" id="pagination"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let currentTab = 'games', currentPage = 0, pageSize = 50, totalRows = 0;
+
+async function api(url) {
+  const r = await fetch(url);
+  return r.json();
+}
+
+function teamColor(prob) {
+  if (prob >= 0.65) return '#2ecc71';
+  if (prob <= 0.35) return '#e74c3c';
+  return '#4f8ef7';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  const [seasons, teams, cv] = await Promise.all([
+    api('/api/seasons'), api('/api/teams'), api('/api/cv-summary')
+  ]);
+
+  // Season dropdown
+  const sel = $('f-season');
+  seasons.reverse().forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+
+  // Team dropdowns
+  ['f-home','f-away'].forEach(id => {
+    const s = $(id);
+    teams.forEach(t => { const o = document.createElement('option'); o.value=t.code; o.textContent=t.name; s.appendChild(o); });
+  });
+
+  // Stat cards from CV data
+  if (cv.length) {
+    const byModel = {};
+    cv.forEach(r => { if (!byModel[r.model]) byModel[r.model]=[]; byModel[r.model].push(r); });
+    const allBriers = cv.map(r=>r.brier);
+    const allAccs = cv.map(r=>r.accuracy);
+    $('sc-brier').textContent = Math.min(...allBriers).toFixed(4);
+    $('sc-acc').textContent = (Math.max(...allAccs)*100).toFixed(1)+'%';
+  }
+
+  // Draw CV chart
+  if (cv.length) drawCvChart(cv);
+
+  $('sc-total').textContent = '—';
+  $('sc-seasons').textContent = seasons.length;
+
+  loadData();
+}
+
+function drawCvChart(cv) {
+  const seasons = [...new Set(cv.map(r=>r.season))].sort();
+  const models = [...new Set(cv.map(r=>r.model))];
+  const palette = {'logistic':'#4f8ef7','lightgbm':'#f7a04f','xgboost':'#2ecc71','stacked':'#e74c8e'};
+
+  const datasets = models.map(m => {
+    const rows = cv.filter(r=>r.model===m);
+    const bySeason = Object.fromEntries(rows.map(r=>[r.season, r.accuracy]));
+    return {
+      label: m,
+      data: seasons.map(s => bySeason[s] != null ? +(bySeason[s]*100).toFixed(2) : null),
+      borderColor: palette[m] || '#aaa',
+      backgroundColor: 'transparent',
+      pointRadius: 3,
+      tension: 0.3,
+      spanGaps: true,
+    };
+  });
+
+  new Chart($('cv-chart'), {
+    type: 'line',
+    data: { labels: seasons, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#8b90a8' } } },
+      scales: {
+        x: { ticks: { color: '#8b90a8' }, grid: { color: '#2e3350' } },
+        y: { ticks: { color: '#8b90a8', callback: v => v+'%' }, grid: { color: '#2e3350' }, min: 50, max: 65 }
+      }
+    }
+  });
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────
+async function loadData(page=0) {
+  currentPage = page;
+  if (currentTab === 'games') await loadGames();
+  else await loadUpsets();
+}
+
+async function loadGames() {
+  const season = $('f-season').value;
+  const home   = $('f-home').value;
+  const away   = $('f-away').value;
+  const date   = $('f-date').value.trim();
+  const offset = currentPage * pageSize;
+  let url = `/api/games?limit=${pageSize}&offset=${offset}&sort=date&order=desc`;
+  if (season) url += `&season=${season}`;
+  if (home)   url += `&home=${home}`;
+  if (away)   url += `&away=${away}`;
+  if (date)   url += `&date=${date}`;
+
+  const data = await api(url);
+  totalRows = data.total;
+  $('sc-total').textContent = data.total.toLocaleString();
+
+  let html = `<table>
+    <thead><tr>
+      <th>Date</th><th>Matchup</th><th>P(home win)</th><th>P(away win)</th><th>Result</th>
+    </tr></thead><tbody>`;
+
+  data.games.forEach(g => {
+    const ph = g.prob_home ?? 0.5;
+    const pa = 1 - ph;
+    const result = g.home_win == null ? '<span style="color:var(--muted)">—</span>'
+      : g.home_win === 1 ? `<span class="badge badge-home">HOME WIN</span>`
+      : `<span class="badge badge-away">AWAY WIN</span>`;
+    html += `<tr>
+      <td>${g.date}</td>
+      <td><a href="/game/${g.game_pk}">${g.away_name} @ ${g.home_name}</a></td>
+      <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(ph*100)}%;background:${teamColor(ph)}"></div></div>${(ph*100).toFixed(1)}%</div></td>
+      <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(pa*100)}%;background:${teamColor(pa)}"></div></div>${(pa*100).toFixed(1)}%</div></td>
+      <td>${result}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  $('table-wrap').innerHTML = html;
+  renderPagination();
+}
+
+async function loadUpsets() {
+  const season = $('f-season').value;
+  const minProb = parseFloat($('f-minprob').value) || 0.65;
+  let url = `/api/upsets?min_prob=${minProb}&limit=100`;
+  if (season) url += `&season=${season}`;
+  const data = await api(url);
+
+  let html = `<table><thead><tr>
+    <th>Date</th><th>Away</th><th>@</th><th>Home</th><th>Favourite</th><th>Fav prob</th><th>Winner</th>
+  </tr></thead><tbody>`;
+
+  data.forEach(g => {
+    const favTeam = g.fav_team === 'home' ? g.home_name : g.away_name;
+    const winBadge = g.winner === 'home' ? `<span class="badge badge-home">HOME</span>` : `<span class="badge badge-away">AWAY</span>`;
+    html += `<tr>
+      <td>${g.date}</td>
+      <td><a href="/game/${g.game_pk}">${g.away_name}</a></td>
+      <td style="color:var(--muted)">@</td>
+      <td><a href="/game/${g.game_pk}">${g.home_name}</a></td>
+      <td>${favTeam}</td>
+      <td><span class="badge badge-neutral">${(g.fav_prob*100).toFixed(1)}%</span></td>
+      <td>${winBadge}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  $('table-wrap').innerHTML = html;
+  $('pagination').innerHTML = '';
+}
+
+function renderPagination() {
+  const pages = Math.ceil(totalRows / pageSize);
+  $('pagination').innerHTML = `
+    <span>${totalRows.toLocaleString()} games found</span>
+    <span>
+      <button class="sec" onclick="loadData(${currentPage-1})" ${currentPage===0?'disabled':''}>← Prev</button>
+      &nbsp; Page ${currentPage+1} / ${pages} &nbsp;
+      <button class="sec" onclick="loadData(${currentPage+1})" ${currentPage>=pages-1?'disabled':''}>Next →</button>
+    </span>`;
+}
+
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadData(0);
+}
+
+function resetFilters() {
+  ['f-season','f-home','f-away'].forEach(id => $(id).value = '');
+  $('f-date').value = '';
+  $('f-minprob').value = '0.65';
+  loadData(0);
+}
+
+init();
+</script>
+</body>
+</html>

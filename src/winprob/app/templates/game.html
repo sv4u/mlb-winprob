@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Detail — MLB Win Probability</title>
+  <style>
+    :root {
+      --bg:#0f1117;--surface:#1a1d27;--card:#22263a;--border:#2e3350;
+      --accent:#4f8ef7;--text:#e8ecf4;--muted:#8b90a8;--green:#2ecc71;--red:#e74c3c;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+    header{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;gap:1rem}
+    header h1{font-size:1.25rem;font-weight:700;color:var(--accent)}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .container{max-width:960px;margin:0 auto;padding:1.5rem}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem}
+    h2{font-size:1.1rem;margin-bottom:1rem;color:var(--muted)}
+    .matchup{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+    .team-block{text-align:center;flex:1}
+    .team-name{font-size:1.35rem;font-weight:700;margin-bottom:.5rem}
+    .prob-big{font-size:2.5rem;font-weight:800;line-height:1}
+    .vs{color:var(--muted);font-size:1.25rem;padding:.5rem}
+    .bar-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem}
+    .bar-row label{width:90px;font-size:.8rem;color:var(--muted);text-align:right}
+    .bar-outer{flex:1;background:var(--border);border-radius:4px;height:10px}
+    .bar-inner{height:10px;border-radius:4px;transition:width .4s}
+    .bar-row span{width:50px;font-size:.85rem;text-align:right}
+    .shap-row{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
+    .shap-label{width:280px;font-size:.82rem;color:var(--muted)}
+    .shap-bar-wrap{flex:1;position:relative;height:12px}
+    .shap-center{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border)}
+    .shap-bar{position:absolute;top:0;height:12px;border-radius:2px;transition:width .3s}
+    .shap-val{width:55px;font-size:.82rem;text-align:right}
+    .result-badge{display:inline-block;padding:.3rem .8rem;border-radius:6px;font-weight:700;font-size:.95rem}
+    .badge-home{background:rgba(46,204,113,.15);color:var(--green)}
+    .badge-away{background:rgba(231,76,60,.15);color:var(--red)}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th{background:var(--card);color:var(--muted);padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}
+    td{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+    tr:hover td{background:var(--card)}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+    @media(max-width:640px){.grid-2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <h1><a href="/">⚾ MLB Win Probability</a></h1>
+  <span id="header-sub" style="color:var(--muted);font-size:.85rem">Loading…</span>
+</header>
+
+<div class="container">
+
+  <!-- Matchup overview -->
+  <div class="card" id="matchup-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <span id="game-date" style="color:var(--muted);font-size:.9rem"></span>
+      <span id="result-badge"></span>
+    </div>
+    <div class="matchup">
+      <div class="team-block">
+        <div class="team-name" id="home-name">—</div>
+        <div class="prob-big" id="home-prob" style="color:var(--green)">—</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">P(home win)</div>
+      </div>
+      <div class="vs">vs</div>
+      <div class="team-block">
+        <div class="team-name" id="away-name">—</div>
+        <div class="prob-big" id="away-prob" style="color:var(--red)">—</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">P(away win)</div>
+      </div>
+    </div>
+
+    <!-- Comparison bars -->
+    <div id="comparison-bars"></div>
+  </div>
+
+  <div class="grid-2">
+    <!-- SHAP Attribution -->
+    <div class="card">
+      <h2>Top Factors (SHAP Attribution)</h2>
+      <div id="shap-chart"></div>
+      <p style="margin-top:.75rem;font-size:.75rem;color:var(--muted)">
+        Bars show log-odds contribution of each factor.  Blue = favors home team, red = favors away.
+      </p>
+    </div>
+
+    <!-- Key stats -->
+    <div class="card">
+      <h2>Key Statistics</h2>
+      <table>
+        <thead><tr><th>Metric</th><th>Home</th><th>Away</th></tr></thead>
+        <tbody id="stats-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const gamePk = {{ game_pk }};
+
+const FEATURE_LABELS = {
+  home_elo:'Home Elo',away_elo:'Away Elo',elo_diff:'Elo edge (H−A)',
+  home_win_pct_30:'Home 30g win%',away_win_pct_30:'Away 30g win%',
+  home_pythag_30:'Home 30g Pythagorean',away_pythag_30:'Away 30g Pythagorean',
+  home_win_pct_ewm:'Home recent form',away_win_pct_ewm:'Away recent form',
+  home_win_pct_home_only:'Home at-home win%',away_win_pct_away_only:'Away on-road win%',
+  home_sp_era:'Home SP ERA',away_sp_era:'Away SP ERA',
+  home_sp_k9:'Home SP K/9',away_sp_k9:'Away SP K/9',
+  home_bat_woba:'Home batting wOBA',away_bat_woba:'Away batting wOBA',
+  home_pit_fip:'Home pitching FIP',away_pit_fip:'Away pitching FIP',
+  pythag_diff_30:'Pythagorean edge',pythag_diff_ewm:'Recent Pythagorean edge',
+  home_away_split_diff:'Home/road split edge',
+  sp_era_diff:'Pitcher ERA edge',woba_diff:'Batting edge (wOBA)',
+  fip_diff:'Pitching edge (FIP)',park_run_factor:'Park run factor',
+  season_progress:'Season progress',
+  home_streak:'Home streak',away_streak:'Away streak',
+  home_rest_days:'Home rest days',away_rest_days:'Away rest days',
+};
+
+const STAT_PAIRS = [
+  ['Elo rating','home_elo','away_elo','%.0f'],
+  ['30g win%','home_win_pct_30','away_win_pct_30','pct'],
+  ['30g Pythagorean','home_pythag_30','away_pythag_30','pct'],
+  ['At-home / on-road win%','home_win_pct_home_only','away_win_pct_away_only','pct'],
+  ['SP ERA (prior season)','home_sp_era','away_sp_era','%.2f'],
+  ['SP K/9 (prior season)','home_sp_k9','away_sp_k9','%.2f'],
+  ['Team wOBA','home_bat_woba','away_bat_woba','%.3f'],
+  ['Team FIP','home_pit_fip','away_pit_fip','%.2f'],
+  ['Park run factor',null,null,'park_run_factor'],
+  ['Rest days','home_rest_days','away_rest_days','%.0f'],
+  ['Win streak','home_streak','away_streak','+%.0f'],
+];
+
+function fmt(v, f, key) {
+  if (v == null) return '—';
+  if (key === 'park_run_factor') return v.toFixed(3);
+  if (f === 'pct') return (v*100).toFixed(1)+'%';
+  return f.replace('%',v+'').replace('%.0f',Math.round(v)).replace('%.2f',v.toFixed(2)).replace('%.3f',v.toFixed(3)).replace('+%.0f',(v>=0?'+':'')+Math.round(v));
+}
+
+async function load() {
+  const r = await fetch(`/api/games/${gamePk}`);
+  const g = await r.json();
+  if (g.error) { document.body.innerHTML = `<div style="padding:2rem;color:#e74c3c">${g.error}</div>`; return; }
+
+  document.getElementById('header-sub').textContent = `${g.away_name} @ ${g.home_name} — ${g.date}`;
+  document.getElementById('game-date').textContent = g.date;
+  document.getElementById('home-name').textContent = g.home_name;
+  document.getElementById('away-name').textContent = g.away_name;
+  document.title = `${g.away_name} @ ${g.home_name} — MLB Win Prob`;
+
+  const ph = g.prob_home ?? 0.5;
+  const pa = 1 - ph;
+  document.getElementById('home-prob').textContent = (ph*100).toFixed(1)+'%';
+  document.getElementById('home-prob').style.color = ph >= 0.5 ? '#2ecc71' : '#e74c3c';
+  document.getElementById('away-prob').textContent = (pa*100).toFixed(1)+'%';
+  document.getElementById('away-prob').style.color = pa >= 0.5 ? '#2ecc71' : '#e74c3c';
+
+  if (g.home_win != null) {
+    const rb = document.getElementById('result-badge');
+    rb.innerHTML = g.home_win === 1
+      ? `<span class="result-badge badge-home">HOME WIN</span>`
+      : `<span class="result-badge badge-away">AWAY WIN</span>`;
+  }
+
+  // Comparison bars
+  const bars = document.getElementById('comparison-bars');
+  const barsData = [
+    ['P(home win)', ph, 1-ph],
+    ['30g win%', g.stats?.home_win_pct_30, g.stats?.away_win_pct_30],
+    ['Pythagorean (30g)', g.stats?.home_pythag_30, g.stats?.away_pythag_30],
+    ['wOBA', g.stats?.home_bat_woba ? (g.stats.home_bat_woba-0.28)/0.1 : null, g.stats?.away_bat_woba ? (g.stats.away_bat_woba-0.28)/0.1 : null],
+  ];
+  bars.innerHTML = barsData.map(([lbl, h, a]) => {
+    if (h == null || a == null) return '';
+    const tot = (h||0) + (a||0);
+    const hp = tot > 0 ? Math.round(h/tot*100) : 50;
+    return `<div class="bar-row">
+      <label>${lbl}</label>
+      <div class="bar-outer"><div class="bar-inner" style="width:${hp}%;background:#4f8ef7"></div></div>
+      <span>${h.toFixed ? (h*100<10?h.toFixed(3):(h*100).toFixed(1)+'%') : h}</span>
+    </div>`;
+  }).join('');
+
+  // SHAP chart
+  const shap = document.getElementById('shap-chart');
+  const factors = (g.top_factors || []).slice(0, 10);
+  const maxAbs = Math.max(...factors.map(f => Math.abs(f.value)), 0.01);
+  shap.innerHTML = factors.map(f => {
+    const pct = Math.abs(f.value) / maxAbs * 45; // max 45% from center
+    const label = FEATURE_LABELS[f.feature] || f.feature;
+    const color = f.value >= 0 ? '#4f8ef7' : '#e74c3c';
+    const left = f.value >= 0 ? `50%` : `${50-pct}%`;
+    return `<div class="shap-row">
+      <div class="shap-label">${label}</div>
+      <div class="shap-bar-wrap">
+        <div class="shap-center"></div>
+        <div class="shap-bar" style="left:${left};width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="shap-val" style="color:${color}">${f.value>=0?'+':''}${f.value.toFixed(3)}</div>
+    </div>`;
+  }).join('');
+
+  // Stats table
+  const tbody = document.getElementById('stats-table');
+  tbody.innerHTML = STAT_PAIRS.map(([label, hk, ak, f]) => {
+    if (hk === null) {
+      const v = g.stats?.[f];
+      return `<tr><td>${label}</td><td colspan="2" style="text-align:center">${fmt(v, f, f)}</td></tr>`;
+    }
+    const hv = g.stats?.[hk], av = g.stats?.[ak];
+    const better_h = (hk.includes('era') || hk.includes('fip')) ? hv < av : hv > av;
+    const hStyle = better_h ? 'color:var(--green);font-weight:600' : '';
+    const aStyle = !better_h ? 'color:var(--green);font-weight:600' : '';
+    return `<tr><td>${label}</td><td style="${hStyle}">${fmt(hv,f,hk)}</td><td style="${aStyle}">${fmt(av,f,ak)}</td></tr>`;
+  }).join('');
+}
+
+load();
+</script>
+</body>
+</html>

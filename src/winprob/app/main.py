@@ -1,0 +1,235 @@
+"""FastAPI application — MLB Win Probability dashboard."""
+
+from __future__ import annotations
+
+import math
+from pathlib import Path
+from typing import Annotated
+
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from winprob.app.data_cache import (
+    TEAM_NAMES,
+    get_features,
+    get_model,
+    startup,
+)
+
+app = FastAPI(title="MLB Win Probability", version="3.0")
+
+_BASE = Path(__file__).parent
+templates = Jinja2Templates(directory=str(_BASE / "templates"))
+
+# Mount static files
+_static = _BASE / "static"
+_static.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    startup()
+
+
+# ---------------------------------------------------------------------------
+# API endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/seasons")
+def api_seasons() -> list[int]:
+    """List all available seasons."""
+    df = get_features()
+    return sorted(df["season"].dropna().unique().astype(int).tolist())
+
+
+@app.get("/api/teams")
+def api_teams() -> list[dict]:
+    """List all known teams with their Retrosheet codes and names."""
+    df = get_features()
+    teams = set(df["home_retro"].dropna().tolist()) | set(df["away_retro"].dropna().tolist())
+    return sorted(
+        [{"code": t, "name": TEAM_NAMES.get(t, t)} for t in teams],
+        key=lambda x: x["name"],
+    )
+
+
+@app.get("/api/games")
+def api_games(
+    season: Annotated[int | None, Query()] = None,
+    home: Annotated[str | None, Query()] = None,
+    away: Annotated[str | None, Query()] = None,
+    date: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Annotated[str, Query()] = "date",
+    order: Annotated[str, Query()] = "desc",
+) -> dict:
+    """Query games with optional filters."""
+    df = get_features()
+    if season:
+        df = df[df["season"] == season]
+    if home:
+        df = df[df["home_retro"] == home.upper()]
+    if away:
+        df = df[df["away_retro"] == away.upper()]
+    if date:
+        df = df[df["date"].astype(str) == date]
+
+    valid_sorts = {"date", "prob", "season", "game_pk"}
+    sort_col = sort if sort in valid_sorts else "date"
+    ascending = order.lower() != "desc"
+    df = df.sort_values(sort_col, ascending=ascending)
+
+    total = len(df)
+    page = df.iloc[offset : offset + limit]
+
+    rows = []
+    for _, r in page.iterrows():
+        rows.append(
+            {
+                "game_pk": int(r.get("game_pk", 0) or 0),
+                "date": str(r.get("date", ""))[:10],
+                "season": int(r.get("season", 0) or 0),
+                "home_retro": str(r.get("home_retro", "")),
+                "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+                "away_retro": str(r.get("away_retro", "")),
+                "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
+                "prob_home": round(float(r["prob"]), 4) if pd.notna(r.get("prob")) else None,
+                "home_win": (
+                    int(r["home_win"]) if pd.notna(r.get("home_win")) else None
+                ),
+                "home_elo": round(float(r["home_elo"]), 1) if pd.notna(r.get("home_elo")) else None,
+                "away_elo": round(float(r["away_elo"]), 1) if pd.notna(r.get("away_elo")) else None,
+            }
+        )
+
+    return {"total": total, "offset": offset, "limit": limit, "games": rows}
+
+
+@app.get("/api/games/{game_pk}")
+def api_game_detail(game_pk: int) -> dict:
+    """Full feature breakdown + SHAP attribution for a single game."""
+    df = get_features()
+    matches = df[df["game_pk"] == game_pk]
+    if matches.empty:
+        return JSONResponse({"error": "game_pk not found"}, status_code=404)
+
+    row = matches.iloc[0]
+    model, meta, feature_cols = get_model()
+
+    # SHAP attribution
+    shap_vals: dict[str, float] = {}
+    try:
+        from winprob.app.data_cache import _model
+        base = getattr(model, "base", model)
+        x = row[feature_cols].values.astype(float)
+        if hasattr(base, "named_steps"):  # logistic
+            scaler = base.named_steps["scaler"]
+            lr = base.named_steps["lr"]
+            coef = lr.coef_[0]
+            z = (x - scaler.mean_) / scaler.scale_
+            shap_arr = coef * z
+            shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
+        elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
+            import shap
+            X_df = pd.DataFrame([x], columns=feature_cols)
+            explainer = shap.TreeExplainer(base)
+            sv = explainer.shap_values(X_df)
+            arr = sv[1][0] if isinstance(sv, list) else sv[0]
+            shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
+    except Exception:
+        pass
+
+    # Top SHAP factors (sorted by absolute value)
+    top_factors = sorted(
+        [{"feature": k, "value": v} for k, v in shap_vals.items()],
+        key=lambda x: abs(x["value"]),
+        reverse=True,
+    )[:12]
+
+    stats = {k: (round(float(v), 4) if pd.notna(v) else None) for k, v in row.items()
+             if k in feature_cols}
+
+    return {
+        "game_pk": game_pk,
+        "date": str(row.get("date", ""))[:10],
+        "season": int(row.get("season", 0) or 0),
+        "home_retro": str(row.get("home_retro", "")),
+        "home_name": TEAM_NAMES.get(str(row.get("home_retro", "")), ""),
+        "away_retro": str(row.get("away_retro", "")),
+        "away_name": TEAM_NAMES.get(str(row.get("away_retro", "")), ""),
+        "prob_home": round(float(row["prob"]), 4) if pd.notna(row.get("prob")) else None,
+        "home_win": int(row["home_win"]) if pd.notna(row.get("home_win")) else None,
+        "stats": stats,
+        "top_factors": top_factors,
+    }
+
+
+@app.get("/api/upsets")
+def api_upsets(
+    season: Annotated[int | None, Query()] = None,
+    min_prob: Annotated[float, Query(ge=0.5, le=1.0)] = 0.65,
+    limit: Annotated[int, Query(ge=1, le=200)] = 20,
+) -> list[dict]:
+    """Return the biggest upsets (heavy favorites that lost)."""
+    df = get_features()
+    if season:
+        df = df[df["season"] == season]
+    has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
+    has_result["fav_home"] = has_result["prob"] >= 0.5
+    has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
+    has_result.loc[~has_result["fav_home"], "fav_prob"] = 1 - has_result.loc[~has_result["fav_home"], "prob"]
+    has_result = has_result[has_result["fav_prob"] >= min_prob]
+    has_result["upset"] = (
+        (has_result["fav_home"] & (has_result["home_win"] == 0))
+        | (~has_result["fav_home"] & (has_result["home_win"] == 1))
+    )
+    upsets = has_result[has_result["upset"]].nlargest(limit, "fav_prob")
+    result = []
+    for _, r in upsets.iterrows():
+        result.append({
+            "game_pk": int(r.get("game_pk", 0) or 0),
+            "date": str(r.get("date", ""))[:10],
+            "season": int(r.get("season", 0) or 0),
+            "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+            "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
+            "prob_home": round(float(r["prob"]), 4),
+            "fav_prob": round(float(r["fav_prob"]), 4),
+            "fav_team": "home" if r["fav_home"] else "away",
+            "winner": "home" if r["home_win"] == 1 else "away",
+        })
+    return result
+
+
+@app.get("/api/cv-summary")
+def api_cv_summary() -> list[dict]:
+    """Return cross-validation results from the latest training run."""
+    import json
+    paths = [
+        Path("data/models/cv_summary_v3.json"),
+        Path("data/models/cv_summary_v2.json"),
+        Path("data/models/cv_summary.json"),
+    ]
+    for p in paths:
+        if p.exists():
+            return json.loads(p.read_text())
+    return []
+
+
+# ---------------------------------------------------------------------------
+# HTML pages
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def page_home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/game/{game_pk}", response_class=HTMLResponse)
+async def page_game(request: Request, game_pk: int):
+    return templates.TemplateResponse("game.html", {"request": request, "game_pk": game_pk})

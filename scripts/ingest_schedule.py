@@ -46,20 +46,36 @@ async def fetch_with_adaptive_split(client: MLBAPIClient, *, season: int, start:
 
 
 def add_local_times(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalise UTC timestamps and ensure ``game_date_local`` is populated.
+
+    ``normalize_schedule`` already extracts the local date from the API's
+    date-group field (``dates[].date``), which is the authoritative local game
+    date.  This function preserves that value and only falls back to computing
+    the local datetime from ``local_timezone`` when it is absent.
+    """
     out = df.copy()
     utc_dt = out["game_date_utc"].map(parse_utc_iso)
     out["game_date_utc"] = utc_dt.map(lambda x: x.isoformat())
 
-    def to_local(row: Any) -> str | None:
-        tz = row["local_timezone"]
-        if not tz:
-            return None
-        try:
-            return parse_utc_iso(row["game_date_utc"]).astimezone(ZoneInfo(tz)).isoformat()
-        except Exception:
-            return None
+    # Prefer the local date already set by normalize_schedule; only compute
+    # from local_timezone for rows where game_date_local is still missing.
+    missing_local = out["game_date_local"].isna() if "game_date_local" in out.columns else pd.Series(True, index=out.index)
 
-    out["game_date_local"] = out.apply(to_local, axis=1)
+    if missing_local.any():
+        def to_local(row: Any) -> str | None:
+            tz = row["local_timezone"]
+            if not tz:
+                return None
+            try:
+                return parse_utc_iso(row["game_date_utc"]).astimezone(ZoneInfo(tz)).isoformat()
+            except Exception:
+                return None
+
+        computed = out[missing_local].apply(to_local, axis=1)
+        if "game_date_local" not in out.columns:
+            out["game_date_local"] = None
+        out.loc[missing_local, "game_date_local"] = computed
+
     return out
 
 
@@ -75,7 +91,19 @@ async def ingest_one_season(*, season: int, refresh_mlbapi: bool, max_mb: int, m
             dfs.append(await fetch_with_adaptive_split(client, season=season, start=cs, end=ce, max_mb=max_mb, max_depth=max_depth))
         df = pd.concat(dfs, ignore_index=True)
 
-    df = df.drop_duplicates(subset=["game_pk"]).sort_values("game_pk").reset_index(drop=True)
+    # When a game is rescheduled (common in 2020) the same game_pk appears in
+    # multiple monthly chunks — once as "Postponed" on the original date and
+    # again as "Final" on the rescheduled date.  Keep the Final entry so that
+    # game_date_local reflects when the game was actually played.
+    _PLAYED_STATUSES = {"Final", "Completed Early", "Game Over"}
+    df["_status_rank"] = df["status"].map(lambda s: 0 if s in _PLAYED_STATUSES else 1)
+    df = (
+        df.sort_values(["game_pk", "_status_rank"])
+        .drop_duplicates(subset=["game_pk"])
+        .drop(columns=["_status_rank"])
+        .sort_values("game_pk")
+        .reset_index(drop=True)
+    )
     df["season"] = int(season)
     df = add_local_times(df)
     df["home_abbrev"] = df["home_mlb_id"].map(team_maps.mlb_id_to_abbrev)

@@ -23,6 +23,12 @@ SCHEDULE_FIELDS_MIN = ",".join(
     ]
 )
 
+# Columns guaranteed to be present in a normalized schedule DataFrame.
+_SCHEDULE_COLS = [
+    "game_pk", "game_date_utc", "game_date_local", "home_mlb_id", "away_mlb_id",
+    "venue_id", "local_timezone", "double_header", "game_number", "status",
+]
+
 
 async def schedule_bounds_regular_season(client: MLBAPIClient, *, season: int, sport_id: int = 1) -> tuple[date, date]:
     params: Mapping[str, Any] = {"sportId": sport_id, "season": season, "gameType": "R", "fields": "dates,date"}
@@ -34,15 +40,21 @@ async def schedule_bounds_regular_season(client: MLBAPIClient, *, season: int, s
     return (date.fromisoformat(ds_sorted[0]), date.fromisoformat(ds_sorted[-1]))
 
 
-_SCHEDULE_COLS = [
-    "game_pk", "game_date_utc", "home_mlb_id", "away_mlb_id",
-    "venue_id", "local_timezone", "double_header", "game_number", "status",
-]
-
-
 def normalize_schedule(raw: dict[str, Any]) -> pd.DataFrame:
+    """Parse raw MLB Stats API schedule JSON into a normalized DataFrame.
+
+    The `game_date_local` column is populated from the API's ``dates[].date``
+    field, which reflects the **local** game date at the venue.  This is
+    critical for matching against Retrosheet gamelogs, which also use local
+    dates.  ``game_date_utc`` is preserved for reference but should *not* be
+    used for date-based joins because West-Coast games (7 PM PDT → 2 AM UTC
+    next day) would land on the wrong calendar date.
+    """
     rows: list[dict[str, Any]] = []
     for d in raw.get("dates", []):
+        # d["date"] is the local calendar date used by the MLB API grouping —
+        # this matches the date Retrosheet records for the same game.
+        local_date_str: str | None = d.get("date")
         for g in d.get("games", []):
             teams = g.get("teams", {})
             venue = g.get("venue") or {}
@@ -51,6 +63,7 @@ def normalize_schedule(raw: dict[str, Any]) -> pd.DataFrame:
                 {
                     "game_pk": g.get("gamePk"),
                     "game_date_utc": g.get("gameDate"),
+                    "game_date_local": local_date_str,
                     "home_mlb_id": ((teams.get("home") or {}).get("team") or {}).get("id"),
                     "away_mlb_id": ((teams.get("away") or {}).get("team") or {}).get("id"),
                     "venue_id": venue.get("id"),

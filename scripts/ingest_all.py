@@ -45,8 +45,13 @@ async def main() -> None:
     ap.add_argument("--refresh-retro", action="store_true")
     args = ap.parse_args()
 
-    seasons = args.seasons or list(range(2000, 2026))
-    seasons = sorted(set(seasons + [datetime.utcnow().year]))
+    current_year = datetime.utcnow().year
+    seasons = args.seasons or list(range(2000, current_year + 1))
+    # Include the current year only when explicitly requested or when it is
+    # within the historical default range; always include it so ingestion can
+    # pick up a season that has already started, but downstream scripts will
+    # gracefully handle a missing-data year via try/except.
+    seasons = sorted(set(seasons))
 
     results: list[TaskResult] = []
     mlb_sem = asyncio.Semaphore(4)
