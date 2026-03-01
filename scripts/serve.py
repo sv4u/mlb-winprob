@@ -2,10 +2,22 @@
 
 Usage
 -----
-    python scripts/serve.py                   # default: localhost:8000
-    python scripts/serve.py --port 8080       # custom port
-    python scripts/serve.py --model lightgbm  # use a different model type
-    python scripts/serve.py --reload          # auto-reload on code changes
+    python scripts/serve.py                   # default: localhost:8087
+    python scripts/serve.py --port 9000       # custom port
+    python scripts/serve.py --model xgboost   # use a different model type
+    python scripts/serve.py --model lightgbm  # LightGBM model
+    python scripts/serve.py --reload          # auto-reload on code changes (dev)
+
+Background / daemon
+-------------------
+    # Start in background and save PID
+    nohup python scripts/serve.py --model xgboost >> logs/server.log 2>&1 &
+    echo $! > server.pid
+
+    # Kill the server
+    kill $(cat server.pid)              # graceful
+    kill -9 $(cat server.pid)           # force
+    kill $(lsof -ti:8087)              # by port
 """
 
 from __future__ import annotations

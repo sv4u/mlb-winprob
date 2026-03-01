@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 Season — MLB Win Probability</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
+      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
+      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
+      --gold: #f7c94f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    header nav { display: flex; gap: 0.75rem; margin-left: auto; }
+    header nav a { font-size: 0.82rem; color: var(--muted); text-decoration: none; padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
+    header nav a:hover, header nav a.active { color: var(--text); border-color: var(--accent); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+    /* Hero */
+    .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
+    .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
+    .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .hero p { font-size: 0.88rem; color: var(--muted); max-width: 600px; line-height: 1.6; }
+    .hero-stats { display: flex; gap: 2rem; margin-top: 1.25rem; flex-wrap: wrap; }
+    .hero-stat { }
+    .hero-stat .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .hero-stat .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* Caveat banner */
+    .caveat { background: rgba(247,201,79,.06); border: 1px solid rgba(247,201,79,.25); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--gold); line-height: 1.55; }
+    .caveat strong { color: var(--gold); }
+
+    /* Filters */
+    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
+    .filters select, .filters input { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.45rem 0.75rem; font-size: 0.9rem; }
+    button { background: var(--accent); border: none; border-radius: 6px; color: white; padding: 0.5rem 1.25rem; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
+    button:hover { opacity: 0.85; }
+    button.sec { background: var(--card); border: 1px solid var(--border); }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: var(--card); }
+    .prob-bar { display: flex; align-items: center; gap: 0.5rem; }
+    .bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 8px; max-width: 100px; }
+    .bar-fill { height: 8px; border-radius: 4px; }
+    .badge { display: inline-block; padding: 0.18rem 0.5rem; border-radius: 4px; font-size: 0.73rem; font-weight: 600; }
+    .badge-soon { background: rgba(247,201,79,.12); color: var(--gold); }
+    .badge-upcoming { background: rgba(79,142,247,.1); color: var(--accent); }
+    .badge-home-fav { background: rgba(46,204,113,.12); color: var(--green); }
+    .badge-away-fav { background: rgba(231,76,60,.1); color: var(--red); }
+    .badge-tossup { background: rgba(139,144,168,.1); color: var(--muted); }
+    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: var(--muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Team power rankings sidebar */
+    .layout { display: grid; grid-template-columns: 1fr 260px; gap: 1.25rem; align-items: start; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    .rankings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; position: sticky; top: 1rem; }
+    .rankings-card h3 { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem; }
+    .rank-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+    .rank-row:last-child { border-bottom: none; }
+    .rank-num { width: 1.4rem; color: var(--muted); font-size: 0.75rem; text-align: right; flex-shrink: 0; }
+    .rank-name { flex: 1; }
+    .rank-elo { color: var(--muted); font-size: 0.75rem; }
+    .rank-bar-wrap { width: 50px; height: 5px; background: var(--border); border-radius: 3px; }
+    .rank-bar { height: 5px; border-radius: 3px; background: var(--accent); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚾ MLB Win Probability</h1>
+  <nav>
+    <a href="/">All Seasons</a>
+    <a href="/season/2026" class="active">2026 Season</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="hero">
+    <div class="hero-badge">2026 Season Preview</div>
+    <h2>2026 Pre-Season Predictions</h2>
+    <p>
+      Win probabilities for all {{ total_games }} scheduled games, generated from
+      2025 end-of-season team strength: Elo ratings, rolling Pythagorean expectation,
+      FanGraphs advanced metrics, and starting pitcher priors.
+      Predictions update automatically as the season progresses and the pipeline is re-run.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">{{ total_games }}</div><div class="lbl">Scheduled games</div></div>
+      <div class="hero-stat"><div class="num" id="hs-opener">{{ first_date }}</div><div class="lbl">Season opener</div></div>
+      <div class="hero-stat"><div class="num" id="hs-teams">30</div><div class="lbl">Teams</div></div>
+      <div class="hero-stat"><div class="num" id="hs-mean-prob">—</div><div class="lbl">Avg home-win prob</div></div>
+    </div>
+  </div>
+
+  <div class="caveat">
+    <strong>Pre-season note:</strong> All predictions are based on 2025 end-of-season team strength.
+    Roster moves, trades, spring training injuries, and 2026 in-season results will shift these
+    probabilities once the pipeline is re-run with live data.
+  </div>
+
+  <div class="layout">
+    <!-- Left: filters + schedule table -->
+    <div>
+      <div class="filters">
+        <label>Home team
+          <select id="f-home"><option value="">Any</option></select>
+        </label>
+        <label>Away team
+          <select id="f-away"><option value="">Any</option></select>
+        </label>
+        <label>From date
+          <input type="date" id="f-from" />
+        </label>
+        <label>To date
+          <input type="date" id="f-to" />
+        </label>
+        <button onclick="loadGames(0)">Search</button>
+        <button class="sec" onclick="resetFilters()">Reset</button>
+      </div>
+
+      <div id="table-wrap"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- Right: Elo power rankings -->
+    <div class="rankings-card">
+      <h3>Power Rankings (End-of-2025 Elo)</h3>
+      <div id="rankings-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentPage = 0;
+const pageSize = 50;
+let totalRows = 0;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  return r.json();
+}
+
+function setLoading(on) {
+  $('table-wrap').style.opacity = on ? '0.4' : '1';
+}
+
+function teamColor(prob) {
+  if (prob >= 0.60) return '#2ecc71';
+  if (prob <= 0.40) return '#e74c3c';
+  return '#4f8ef7';
+}
+
+function daysUntil(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const game  = new Date(dateStr + 'T00:00:00');
+  return Math.round((game - today) / 86400000);
+}
+
+function favouriteBadge(prob) {
+  if (prob >= 0.60) return '<span class="badge badge-home-fav">Home fav</span>';
+  if (prob <= 0.40) return '<span class="badge badge-away-fav">Away fav</span>';
+  return '<span class="badge badge-tossup">Toss-up</span>';
+}
+
+function dateBadge(dateStr) {
+  const d = daysUntil(dateStr);
+  if (d < 0)  return `<span class="badge badge-upcoming">Played</span>`;
+  if (d === 0) return `<span class="badge badge-soon">Today</span>`;
+  if (d <= 7)  return `<span class="badge badge-soon">In ${d}d</span>`;
+  return `<span style="color:var(--muted);font-size:0.78rem">In ${d}d</span>`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  let teams = [];
+  try { teams = await api('/api/teams'); } catch (e) {}
+
+  ['f-home', 'f-away'].forEach(id => {
+    const s = $(id);
+    teams.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t.code; o.textContent = t.name;
+      s.appendChild(o);
+    });
+  });
+
+  // Keyboard shortcut on date fields
+  ['f-from', 'f-to'].forEach(id => {
+    $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(0); });
+  });
+
+  await Promise.all([loadGames(0), loadRankings()]);
+}
+
+// ── Games table ───────────────────────────────────────────────────────────
+async function loadGames(page = 0) {
+  currentPage = page;
+  setLoading(true);
+  try {
+    const home = $('f-home').value;
+    const away = $('f-away').value;
+    const from = $('f-from').value;
+    const to   = $('f-to').value;
+    const offset = page * pageSize;
+
+    // Build URL — season=2026, sorted by date ascending
+    let url = `/api/games?season=2026&limit=${pageSize}&offset=${offset}&sort=date&order=asc`;
+    if (home) url += `&home=${home}`;
+    if (away) url += `&away=${away}`;
+
+    const data = await api(url);
+    let games = data.games;
+
+    // Client-side date range filter (API doesn't support from/to yet)
+    if (from) games = games.filter(g => g.date >= from);
+    if (to)   games = games.filter(g => g.date <= to);
+
+    totalRows = data.total;
+
+    // Update hero stat
+    if (data.total > 0) {
+      const probs = data.games.map(g => g.prob_home ?? 0.5);
+      const mean = probs.reduce((a, b) => a + b, 0) / probs.length;
+      $('hs-mean-prob').textContent = (mean * 100).toFixed(1) + '%';
+    }
+
+    if (!games.length) {
+      $('table-wrap').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No games match the selected filters.</p>';
+      $('pagination').innerHTML = '';
+      return;
+    }
+
+    let html = `<table>
+      <thead><tr>
+        <th>Date</th><th>Countdown</th><th>Matchup</th>
+        <th>P(home win)</th><th>P(away win)</th><th>Outlook</th>
+      </tr></thead><tbody>`;
+
+    games.forEach(g => {
+      const ph = g.prob_home ?? 0.5;
+      const pa = 1 - ph;
+      html += `<tr>
+        <td style="white-space:nowrap">${g.date}</td>
+        <td>${dateBadge(g.date)}</td>
+        <td><a href="/game/${g.game_pk}">${g.away_name} @ ${g.home_name}</a></td>
+        <td>
+          <div class="prob-bar">
+            <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(ph*100)}%;background:${teamColor(ph)}"></div></div>
+            <span style="font-weight:${ph>=0.55?'700':'400'}">${(ph*100).toFixed(1)}%</span>
+          </div>
+        </td>
+        <td>
+          <div class="prob-bar">
+            <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(pa*100)}%;background:${teamColor(pa)}"></div></div>
+            <span style="font-weight:${pa>=0.55?'700':'400'}">${(pa*100).toFixed(1)}%</span>
+          </div>
+        </td>
+        <td>${favouriteBadge(ph)}</td>
+      </tr>`;
+    });
+
+    html += '</tbody></table>';
+    $('table-wrap').innerHTML = html;
+    renderPagination(data.total);
+  } catch (e) {
+    $('table-wrap').innerHTML = `<p style="color:var(--red);padding:1.5rem">Failed to load games: ${e.message}</p>`;
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderPagination(total) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) {
+    $('pagination').innerHTML = `<span>${total.toLocaleString()} games</span>`;
+    return;
+  }
+  $('pagination').innerHTML = `
+    <span>${total.toLocaleString()} games</span>
+    <span>
+      <button class="sec" onclick="loadGames(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>← Prev</button>
+      &nbsp; Page ${currentPage + 1} of ${pages} &nbsp;
+      <button class="sec" onclick="loadGames(${currentPage + 1})" ${currentPage >= pages - 1 ? 'disabled' : ''}>Next →</button>
+    </span>`;
+}
+
+// ── Power rankings sidebar ─────────────────────────────────────────────────
+async function loadRankings() {
+  try {
+    // Fetch all 2026 games (no pagination needed for rankings)
+    const data = await api('/api/games?season=2026&limit=500&offset=0&sort=date&order=asc');
+    const games = data.games;
+
+    // Collect each team's Elo from their home games
+    const eloMap = {};
+    games.forEach(g => {
+      if (g.home_elo != null) eloMap[g.home_name] = g.home_elo;
+      if (g.away_elo != null && !(g.away_name in eloMap)) eloMap[g.away_name] = g.away_elo;
+    });
+
+    const ranked = Object.entries(eloMap)
+      .sort((a, b) => b[1] - a[1]);
+
+    const maxElo = ranked[0]?.[1] ?? 1600;
+    const minElo = ranked[ranked.length - 1]?.[1] ?? 1400;
+    const range = maxElo - minElo || 1;
+
+    let html = '';
+    ranked.forEach(([name, elo], i) => {
+      const pct = Math.round(((elo - minElo) / range) * 100);
+      html += `<div class="rank-row">
+        <span class="rank-num">${i + 1}</span>
+        <span class="rank-name">${name}</span>
+        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${pct}%"></div></div>
+        <span class="rank-elo">${Math.round(elo)}</span>
+      </div>`;
+    });
+
+    $('rankings-list').innerHTML = html;
+  } catch (e) {
+    $('rankings-list').innerHTML = '<p style="color:var(--muted);font-size:0.8rem">Could not load rankings.</p>';
+  }
+}
+
+function resetFilters() {
+  ['f-home', 'f-away'].forEach(id => $(id).value = '');
+  $('f-from').value = '';
+  $('f-to').value   = '';
+  loadGames(0);
+}
+
+init();
+</script>
+</body>
+</html>

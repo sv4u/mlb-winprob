@@ -1,6 +1,6 @@
 # MLB Win Probability
 
-Research-grade pre-game win probability model for MLB regular season games, 2000–2025.
+Research-grade pre-game win probability model for MLB regular season games, 2000–2026.
 
 ## Model performance (v3 — out-of-sample, expanding-window CV)
 
@@ -114,14 +114,14 @@ cd mlb-winprob
 pip install -e .
 ```
 
-### Full data ingestion
+### Full data ingestion (first run)
 
 ```bash
-# 1. Fetch MLB schedules (2000–2025)
-python scripts/ingest_schedule.py --seasons $(seq 2000 2025)
+# 1. Fetch MLB schedules (2000–2026)
+python scripts/ingest_schedule.py --seasons $(seq 2000 2026)
 
-# 2. Fetch Retrosheet gamelogs
-python scripts/ingest_gamelogs.py --seasons $(seq 2000 2025)
+# 2. Fetch Retrosheet gamelogs (historical + current season)
+python scripts/ingest_retrosheet_gamelogs.py --seasons $(seq 2000 2025)
 
 # 3. Build Retrosheet ↔ MLB crosswalk
 python scripts/build_crosswalk.py --seasons $(seq 2000 2025)
@@ -136,7 +136,11 @@ python scripts/ingest_fangraphs.py --seasons $(seq 2002 2025)
 ### Build features
 
 ```bash
+# Historical seasons (2000–2025)
 python scripts/build_features.py --seasons $(seq 2000 2025)
+
+# 2026 pre-season predictions (uses 2025 end-of-season team strength)
+python scripts/build_features_2026.py
 ```
 
 ### Train models (with Optuna HPO)
@@ -154,9 +158,15 @@ python scripts/train_model.py
 ### Launch the web dashboard
 
 ```bash
-python scripts/serve.py
-# Open http://localhost:8087
+python scripts/serve.py                   # default: http://localhost:8087
+python scripts/serve.py --model xgboost   # use XGBoost model
+python scripts/serve.py --model lightgbm  # use LightGBM model
 ```
+
+Open:
+
+- `http://localhost:8087` — all-seasons games browser
+- `http://localhost:8087/season/2026` — 2026 schedule and predictions
 
 ### CLI query tool
 
@@ -179,13 +189,153 @@ python scripts/query_game.py --home NYY --season 2025 --brief
 
 ---
 
+## Server management
+
+### Start in foreground (development)
+
+```bash
+python scripts/serve.py --model xgboost
+```
+
+### Start in background (production)
+
+```bash
+mkdir -p logs
+nohup python scripts/serve.py --model xgboost >> logs/server.log 2>&1 &
+echo $! > server.pid
+```
+
+The server PID is saved to `server.pid` so it can be stopped cleanly later.
+
+### Stop the server
+
+```bash
+# Graceful stop using saved PID
+kill $(cat server.pid)
+
+# Force stop using saved PID (if graceful stop hangs)
+kill -9 $(cat server.pid)
+
+# Stop by port number (no PID file needed)
+kill $(lsof -ti:8087)
+
+# Force stop by port number
+kill -9 $(lsof -ti:8087)
+
+# Stop all uvicorn/serve.py processes
+pkill -f "serve.py"
+```
+
+### Restart the server
+
+```bash
+kill $(lsof -ti:8087) 2>/dev/null; sleep 2
+nohup python scripts/serve.py --model xgboost >> logs/server.log 2>&1 &
+echo $! > server.pid
+```
+
+### Check server status
+
+```bash
+# Is the server running?
+lsof -i:8087
+
+# Tail the server log
+tail -f logs/server.log
+
+# Check the PID file
+cat server.pid && kill -0 $(cat server.pid) && echo "running" || echo "not running"
+```
+
+---
+
+## Daily update (cron job)
+
+The `scripts/update_daily.sh` script refreshes game results, rebuilds features, and restarts the server. It is designed to run at 01:00 each night after Retrosheet publishes the previous day's results.
+
+### What the script does
+
+| Step | Action |
+| --- | --- |
+| 1 | Refresh the current-season MLB schedule (picks up postponements and rescheduled games) |
+| 2 | Refresh the current-season Retrosheet gamelogs (yesterday's results) |
+| 3 | Rebuild the Retrosheet ↔ MLB crosswalk for the current season |
+| 4 | Rebuild the 66-feature matrix for the current season |
+| 5 | Rebuild 2026 pre-season predictions from the updated team state |
+| 6 | Kill the running server and start a fresh instance to load the new data |
+
+All output is appended to `logs/cron.log`; the server log goes to `logs/server.log`.
+
+### One-time setup
+
+```bash
+# 1. Make the script executable
+chmod +x scripts/update_daily.sh
+
+# 2. Create the logs directory
+mkdir -p logs
+
+# 3. Test it manually first
+scripts/update_daily.sh
+```
+
+### Install the cron job
+
+```bash
+crontab -e
+```
+
+Add this line (replace the path with your actual project root):
+
+```cron
+0 1 * * * /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/scripts/update_daily.sh >> /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/logs/cron.log 2>&1
+```
+
+The format is `minute hour day month weekday command`:
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| `0` | minute | at the top of the hour |
+| `1` | hour | 1 AM local time |
+| `*` | day | every day |
+| `*` | month | every month |
+| `*` | weekday | every day of the week |
+
+### Verify the cron job is registered
+
+```bash
+crontab -l
+```
+
+### Remove the cron job
+
+```bash
+crontab -e
+# Delete the update_daily.sh line, save and exit
+```
+
+### Override environment variables
+
+The script respects the following environment variables, which can be set inline:
+
+```bash
+# Use a different Python or model
+PYTHON=/usr/local/bin/python3 MODEL=lightgbm scripts/update_daily.sh
+
+# Run for a specific season only (useful for backfilling)
+# Edit update_daily.sh YEAR variable or export:
+YEAR=2025 scripts/update_daily.sh
+```
+
+---
+
 ## Data pipeline
 
 ```
 MLB Stats API        Retrosheet gamelogs      FanGraphs
       │                     │                     │
       ▼                     ▼                     ▼
- schedules/          retrosheet/              fangraphs/          pitcher_stats/
+ schedule/           retrosheet/              fangraphs/          pitcher_stats/
  games_YYYY.parquet  gamelogs_YYYY.parquet    fangraphs_YYYY.parquet  pitchers_YYYY.parquet
       │                     │
       └──── crosswalk ───────┘
@@ -194,6 +344,7 @@ MLB Stats API        Retrosheet gamelogs      FanGraphs
                     ▼
               features/
          features_YYYY.parquet   ←── 66 features per game
+         features_2026.parquet   ←── pre-season 2026 (from build_features_2026.py)
                     │
                     ▼
                models/
@@ -210,7 +361,7 @@ MLB Stats API        Retrosheet gamelogs      FanGraphs
 | ------------------------------- | ---------------------------------------------------------- |
 | `data/raw/schedules/`           | Raw MLB Stats API JSON responses                           |
 | `data/raw/gamelogs/`            | Raw Retrosheet TXT game logs                               |
-| `data/processed/schedules/`     | `games_YYYY.parquet` + checksums                           |
+| `data/processed/schedule/`      | `games_YYYY.parquet` + checksums                           |
 | `data/processed/retrosheet/`    | `gamelogs_YYYY.parquet`                                    |
 | `data/processed/crosswalk/`     | `game_id_map_YYYY.parquet`, coverage report                |
 | `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual stats)         |
@@ -219,6 +370,9 @@ MLB Stats API        Retrosheet gamelogs      FanGraphs
 | `data/models/`                  | Trained model artifacts + HPO results + CV summaries       |
 | `data/processed/predictions/`   | Immutable prediction snapshots                             |
 | `data/processed/drift/`         | Drift monitoring logs                                      |
+| `logs/server.log`               | Web server stdout/stderr                                   |
+| `logs/cron.log`                 | Daily cron job output                                      |
+| `server.pid`                    | PID of the running server process                          |
 
 ---
 
@@ -242,9 +396,14 @@ df["prob"] = _predict_proba(model, df[meta.feature_cols].fillna(0.5))
 df24 = df[df["season"] == 2024].sort_values("prob", ascending=False)
 print(df24[["date","home_retro","away_retro","prob","home_win"]].head(10))
 
-# Accuracy by favourite probability bucket
-df24["fav_won"] = ((df24["prob"] >= 0.5) == (df24["home_win"] == 1)).astype(float)
-print(df24.groupby(pd.cut(df24["prob"].clip(0.5,0.99), 5))["fav_won"].mean())
+# 2026 pre-season predictions
+df26 = df[df["season"] == 2026].sort_values("date")
+print(df26[["date","home_retro","away_retro","prob"]].head(10))
+
+# Accuracy by favourite probability bucket (historical seasons only)
+dfh = df[df["home_win"].notna()]
+dfh["fav_won"] = ((dfh["prob"] >= 0.5) == (dfh["home_win"] == 1)).astype(float)
+print(dfh.groupby(pd.cut(dfh["prob"].clip(0.5, 0.99), 5))["fav_won"].mean())
 ```
 
 ---
@@ -253,23 +412,33 @@ print(df24.groupby(pd.cut(df24["prob"].clip(0.5,0.99), 5))["fav_won"].mean())
 
 Start the dashboard with `python scripts/serve.py`, then open `http://localhost:8087`.
 
-Features:
+### Pages
 
-- **Games browser** — filter by season, home team, away team, or date; sortable columns
+| URL | Description |
+| --- | --- |
+| `http://localhost:8087/` | All-seasons games browser (2000–2026) |
+| `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, and Elo power rankings |
+| `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
+
+### Features
+
+- **Games browser** — filter by season, home team, away team, or date; paginated; links to game detail
+- **2026 season page** — full 2,430-game schedule with pre-season win probabilities, countdown, favourite/toss-up badges, and a sticky Elo power rankings sidebar
 - **Game detail** — probability bars, SHAP factor attribution chart, key stats comparison
-- **Biggest upsets** — all-time or by season, filtered by minimum favourite probability
+- **Biggest upsets** — all-time or by season, filterable by home/away team and minimum favourite probability
 - **CV accuracy chart** — out-of-sample accuracy trend across all 4 model types
+- **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
 
 ### API endpoints
 
-| Endpoint                                   | Description                                 |
-| ------------------------------------------ | ------------------------------------------- |
-| `GET /api/seasons`                         | List available seasons                      |
-| `GET /api/teams`                           | List all teams                              |
-| `GET /api/games?season=&home=&away=&date=` | Paginated game list with predictions        |
-| `GET /api/games/{game_pk}`                 | Full detail + SHAP attribution for one game |
-| `GET /api/upsets?season=&min_prob=0.65`    | Biggest upsets by favourite probability     |
-| `GET /api/cv-summary`                      | Model CV results by season                  |
+| Endpoint                                          | Description                                      |
+| ------------------------------------------------- | ------------------------------------------------ |
+| `GET /api/seasons`                                | List available seasons                           |
+| `GET /api/teams`                                  | List all teams (Retrosheet codes + names)        |
+| `GET /api/games?season=&home=&away=&date=`        | Paginated game list with predictions             |
+| `GET /api/games/{game_pk}`                        | Full detail + SHAP attribution for one game      |
+| `GET /api/upsets?season=&home=&away=&min_prob=`   | Biggest upsets, filterable by team               |
+| `GET /api/cv-summary`                             | Model CV results by season                       |
 
 ---
 
@@ -285,11 +454,11 @@ mlb-winprob/
 │   ├── statcast/        # FanGraphs / Statcast advanced metrics
 │   │   └── fangraphs.py
 │   ├── features/        # Feature engineering pipeline
-│   │   ├── elo.py       # Sequential Elo rating
-│   │   ├── team_stats.py# Multi-window, EWMA, home/away splits
+│   │   ├── elo.py           # Sequential Elo rating
+│   │   ├── team_stats.py    # Multi-window, EWMA, home/away splits
 │   │   ├── pitcher_stats.py # Gamelog-based pitcher ERA
 │   │   ├── park_factors.py
-│   │   └── builder.py   # Assembles 66-feature matrix
+│   │   └── builder.py       # Assembles 66-feature matrix
 │   ├── model/           # Model training and evaluation
 │   │   ├── train.py     # LR + LightGBM + XGBoost + stacked, Optuna, time-weighted
 │   │   ├── evaluate.py
@@ -302,24 +471,28 @@ mlb-winprob/
 │       ├── main.py
 │       ├── data_cache.py
 │       └── templates/
-│           ├── index.html
-│           └── game.html
+│           ├── index.html        # All-seasons games browser
+│           ├── game.html         # Individual game detail + SHAP
+│           └── season_2026.html  # 2026 season schedule + predictions
 ├── scripts/
-│   ├── ingest_schedule.py
-│   ├── ingest_gamelogs.py
-│   ├── build_crosswalk.py
-│   ├── ingest_pitcher_stats.py   # MLB Stats API individual pitcher stats
-│   ├── ingest_fangraphs.py       # FanGraphs team advanced metrics
-│   ├── build_features.py         # Build 66-feature matrices
-│   ├── train_model.py            # Optuna HPO + expanding-window CV + production models
-│   ├── run_predictions.py        # Snapshot predictions
-│   ├── compute_drift.py          # Drift monitoring
-│   ├── query_game.py             # Human-centric CLI query tool
-│   └── serve.py                  # Launch FastAPI dashboard
+│   ├── ingest_schedule.py              # MLB Stats API schedule ingestion
+│   ├── ingest_retrosheet_gamelogs.py   # Retrosheet game log ingestion
+│   ├── build_crosswalk.py              # Retrosheet ↔ MLB ID crosswalk
+│   ├── ingest_pitcher_stats.py         # MLB Stats API individual pitcher stats
+│   ├── ingest_fangraphs.py             # FanGraphs team advanced metrics
+│   ├── ingest_all.py                   # Orchestrate all ingestion steps
+│   ├── build_features.py               # Build 66-feature matrices (historical)
+│   ├── build_features_2026.py          # Build 2026 pre-season feature matrix
+│   ├── train_model.py                  # Optuna HPO + expanding-window CV + production models
+│   ├── run_predictions.py              # Snapshot predictions
+│   ├── compute_drift.py                # Drift monitoring
+│   ├── query_game.py                   # Human-centric CLI query tool
+│   ├── serve.py                        # Launch FastAPI dashboard
+│   └── update_daily.sh                 # Daily cron: refresh data + restart server
 ├── data/
 │   ├── raw/
 │   ├── processed/
-│   │   ├── schedules/
+│   │   ├── schedule/
 │   │   ├── retrosheet/
 │   │   ├── crosswalk/
 │   │   ├── pitcher_stats/
@@ -328,6 +501,10 @@ mlb-winprob/
 │   │   ├── predictions/
 │   │   └── drift/
 │   └── models/
+├── logs/
+│   ├── server.log   # Web server output
+│   └── cron.log     # Daily cron output
+├── server.pid       # PID of the running server
 ├── pyproject.toml
 └── README.md
 ```

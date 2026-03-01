@@ -239,3 +239,16 @@ async def page_home(request: Request):
 @app.get("/game/{game_pk}", response_class=HTMLResponse)
 async def page_game(request: Request, game_pk: int):
     return templates.TemplateResponse("game.html", {"request": request, "game_pk": game_pk})
+
+
+@app.get("/season/2026", response_class=HTMLResponse)
+async def page_season_2026(request: Request):
+    """Dedicated 2026 season schedule + pre-season predictions page."""
+    df = get_features()
+    season_df = df[df["season"] == 2026]
+    total = len(season_df)
+    first_date = str(season_df["date"].min())[:10] if total else "—"
+    return templates.TemplateResponse(
+        "season_2026.html",
+        {"request": request, "total_games": total, "first_date": first_date},
+    )
