@@ -40,10 +40,15 @@ ENV PYTHONUNBUFFERED=1 \
 # System dependencies
 #   supervisor  — process manager (web server + cron side-by-side)
 #   curl        — used to download supercronic and by health checks
+#   libgomp1    — GCC OpenMP runtime required by LightGBM (and XGBoost on
+#                 some platforms).  Not present in python:3.11-slim by default;
+#                 omitting it causes "libgomp.so.1: cannot open shared object
+#                 file" when train.py imports lightgbm.
 # ---------------------------------------------------------------------------
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     curl \
+    libgomp1 \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 

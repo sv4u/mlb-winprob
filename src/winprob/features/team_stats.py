@@ -33,7 +33,11 @@ def _pythag(rs: np.ndarray | pd.Series, ra: np.ndarray | pd.Series) -> np.ndarra
     rs = np.asarray(rs, dtype=float)
     ra = np.asarray(ra, dtype=float)
     denom = rs**2 + ra**2
-    return np.where(denom > 0, rs**2 / denom, _NEUTRAL_PYTHAG)
+    # np.where evaluates both branches before selecting, so rs**2 / denom fires
+    # a RuntimeWarning for every row where denom == 0.  Suppress it here — the
+    # result is always replaced by _NEUTRAL_PYTHAG in those cases anyway.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(denom > 0, rs**2 / denom, _NEUTRAL_PYTHAG)
 
 
 def _compute_streak(win_arr: np.ndarray) -> np.ndarray:
