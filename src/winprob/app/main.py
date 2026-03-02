@@ -111,7 +111,7 @@ def api_games(
     return {"total": total, "offset": offset, "limit": limit, "games": rows}
 
 
-@app.get("/api/games/{game_pk}")
+@app.get("/api/games/{game_pk}", response_model=None)
 def api_game_detail(game_pk: int) -> dict | JSONResponse:
     """Full feature breakdown + SHAP attribution for a single game."""
     df = get_features()
