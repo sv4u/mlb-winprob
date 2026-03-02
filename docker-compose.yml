@@ -1,0 +1,51 @@
+version: "3.9"
+
+# =============================================================================
+# MLB Win Probability — Docker Compose
+#
+# Usage
+# -----
+#   docker compose up --build          # first run (builds image)
+#   docker compose up -d               # detached / daemon mode
+#   docker compose logs -f winprob     # follow logs
+#   docker compose down                # stop and remove container
+#
+# Environment overrides (prefix with `MODEL=xgboost docker compose up`)
+#   MODEL  — model type: logistic | lightgbm | xgboost | stacked (default: stacked)
+#   PORT   — host port to expose the dashboard on (default: 8087)
+#
+# Data persistence
+# ----------------
+# ./data  is mounted at /app/data   inside the container.
+# ./logs  is mounted at /app/logs   inside the container.
+# Both directories are created automatically by Docker Compose on first run.
+# Deleting ./data/models/ forces a full re-ingest and re-train on next start.
+# =============================================================================
+
+services:
+  winprob:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mlb-winprob:latest
+    container_name: mlb-winprob
+    ports:
+      - "${PORT:-8087}:8087"
+    volumes:
+      # Bind-mount host directories so data and models persist across container
+      # restarts and are accessible directly on the host machine.
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      MODEL: "${MODEL:-stacked}"
+      PORT: "8087"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/api/seasons"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # Give the container time to complete the initial bootstrap before the
+      # health check starts firing.  On a machine with an already-populated
+      # data volume this takes ~30 s; on a cold first run it can take hours.
+      start_period: 600s

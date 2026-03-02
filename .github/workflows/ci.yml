@@ -3,14 +3,22 @@ name: CI
 on:
   push:
     branches: ["main"]
+    tags: ["v*.*.*"]
   pull_request:
 
+# ---------------------------------------------------------------------------
+# Permissions
+#   contents: read   — checkout
+#   packages: write  — push image to GitHub Container Registry (GHCR)
+#                      (only used by the docker job; ignored for PRs)
+# ---------------------------------------------------------------------------
 permissions:
   contents: read
+  packages: write
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Lint — ruff check + format
+  # Lint — ruff check + format (native, fast feedback)
   # ---------------------------------------------------------------------------
   lint:
     name: Lint
@@ -34,7 +42,7 @@ jobs:
         run: uv run ruff format --check .
 
   # ---------------------------------------------------------------------------
-  # Type check — mypy on source package only
+  # Type check — mypy on source package only (native, fast feedback)
   # ---------------------------------------------------------------------------
   typecheck:
     name: Type check
@@ -55,7 +63,7 @@ jobs:
         run: uv run mypy src/winprob
 
   # ---------------------------------------------------------------------------
-  # Tests — pytest across Python 3.11 and 3.12
+  # Tests — pytest across Python 3.11 and 3.12 (native, preserves matrix)
   # ---------------------------------------------------------------------------
   test:
     name: Test / Python ${{ matrix.python-version }}
@@ -78,3 +86,97 @@ jobs:
 
       - name: pytest
         run: uv run pytest tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Docker — build image, run pytest inside it, publish to GHCR
+  #
+  # Depends on all quality-gate jobs so the image is only pushed once the
+  # full native test suite passes.
+  #
+  # Push behaviour:
+  #   pull_request  → build only (no push)
+  #   push to main  → push with branch tag + sha tag
+  #   push of tag   → push with semver tags  (e.g. v1.2.3 → 1.2.3, 1.2)
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker — build & publish
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Docker Buildx — enables BuildKit cache export and multi-platform builds
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -----------------------------------------------------------------------
+      # Log in to GHCR
+      # Skipped on pull_request events (fork PRs cannot access secrets anyway).
+      # -----------------------------------------------------------------------
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # Compute tags and OCI labels from git context
+      #   branch push → ghcr.io/<repo>:main, ghcr.io/<repo>:sha-<short>
+      #   tag push    → ghcr.io/<repo>:1.2.3, ghcr.io/<repo>:1.2
+      #   PR          → ghcr.io/<repo>:pr-<N>  (image never pushed)
+      # -----------------------------------------------------------------------
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+
+      # -----------------------------------------------------------------------
+      # Build the test stage and run pytest inside the container.
+      # The entrypoint is overridden so the bootstrap pipeline does not run.
+      # GHA cache is shared with the production build step that follows.
+      # -----------------------------------------------------------------------
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: test
+          push: false
+          load: true
+          tags: mlb-winprob:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run pytest inside Docker
+        run: |
+          docker run --rm \
+            --entrypoint python \
+            mlb-winprob:ci-test \
+            -m pytest tests/ -v --tb=short
+
+      # -----------------------------------------------------------------------
+      # Build and push the production image (default target).
+      # The test-stage layers are already cached so this is fast.
+      # Push is skipped on pull_request to avoid publishing unreviewed code.
+      # -----------------------------------------------------------------------
+      - name: Build and push production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

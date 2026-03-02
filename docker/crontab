@@ -1,0 +1,11 @@
+# MLB Win Probability — scheduled tasks (parsed by supercronic)
+#
+# Timezone: UTC (supercronic default).  Adjust times if you prefer local tz.
+#
+# Format: minute hour dom month dow command
+
+# 01:00 UTC — re-ingest yesterday's results and rebuild current-season features
+0 1 * * * /app/docker/ingest_daily.sh >> /app/logs/ingest_daily.log 2>&1
+
+# 23:00 UTC — retrain all models on the freshest data
+0 23 * * * /app/docker/retrain_daily.sh >> /app/logs/retrain_daily.log 2>&1

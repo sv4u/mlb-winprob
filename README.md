@@ -331,6 +331,145 @@ YEAR=2025 scripts/update_daily.sh
 
 ---
 
+## Docker
+
+The entire workflow — data ingestion, model training, web server, and scheduled re-runs — can be run as a single Docker container with the data volume mounted on the host.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) ≥ 24
+- [Docker Compose](https://docs.docker.com/compose/install/) v2 (bundled with Docker Desktop)
+
+### Quick start
+
+```bash
+# 1. Build the image and start the container
+docker compose up --build
+
+# 2. Open the dashboard (once the bootstrap is complete)
+open http://localhost:8087
+```
+
+> **First-run notice**: On a cold start (no `data/` directory on the host) the container runs the full bootstrap pipeline — ingesting 25 years of historical data and training every model. **This can take several hours.** Subsequent starts are fast because the data volume persists on the host.
+
+### Detached / daemon mode
+
+```bash
+docker compose up --build -d        # start in background
+docker compose logs -f winprob      # follow all logs
+docker compose logs -f winprob | grep '\[server\]'   # server logs only
+```
+
+### Stop / restart
+
+```bash
+docker compose down                  # stop and remove container (data is preserved)
+docker compose restart winprob       # restart without rebuilding
+docker compose up -d                 # start again
+```
+
+### Environment overrides
+
+| Variable | Default   | Description |
+| -------- | --------- | ----------- |
+| `MODEL`  | `stacked` | Model served: `logistic \| lightgbm \| xgboost \| stacked` |
+| `PORT`   | `8087`    | Host port the dashboard is exposed on |
+
+```bash
+# Serve on port 9000 with the XGBoost model
+PORT=9000 MODEL=xgboost docker compose up -d
+```
+
+### Force a full re-bootstrap
+
+Deleting the model artifacts directory causes the entrypoint to re-run the complete pipeline on the next start:
+
+```bash
+docker compose down
+rm -rf data/models/          # remove all trained model artifacts
+docker compose up -d         # triggers full re-ingest + re-train
+```
+
+### Scheduled jobs (inside the container)
+
+The container runs two cron jobs via `supercronic`:
+
+| Schedule   | Script                      | What it does |
+| ---------- | --------------------------- | ------------ |
+| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs, rebuild features, restart server |
+| 23:00 UTC  | `docker/retrain_daily.sh`   | Retrain all models on fresh data, restart server |
+
+Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on the host.
+
+### Inspect or restart processes inside the container
+
+```bash
+docker exec -it mlb-winprob supervisorctl status
+docker exec -it mlb-winprob supervisorctl restart winprob-server
+docker exec -it mlb-winprob supervisorctl tail -f winprob-server
+```
+
+### Data volume layout
+
+Both `./data` and `./logs` on the host are bind-mounted into `/app/data` and `/app/logs` inside the container.
+
+```
+./data/          ←→  /app/data     (raw + processed data, trained models)
+./logs/          ←→  /app/logs     (server, cron, bootstrap, supervisord logs)
+```
+
+All data is accessible on the host machine at all times. The container itself is stateless — removing and recreating it leaves all data intact.
+
+### Build the image without Compose
+
+```bash
+docker build -t mlb-winprob .
+docker run -p 8087:8087 \
+    -v "$(pwd)/data:/app/data" \
+    -v "$(pwd)/logs:/app/logs" \
+    -e MODEL=stacked \
+    mlb-winprob
+```
+
+### GitHub Container Registry (GHCR)
+
+The CI pipeline automatically builds and publishes the production image to GHCR on every push to `main` and on version tags:
+
+```bash
+# Pull the latest image from GHCR
+docker pull ghcr.io/sv4u/mlb-winprob:main
+
+# Run directly from GHCR (no local build needed)
+docker run -p 8087:8087 \
+    -v "$(pwd)/data:/app/data" \
+    -v "$(pwd)/logs:/app/logs" \
+    ghcr.io/sv4u/mlb-winprob:main
+
+| Git event | Image tag(s) published |
+|---|---|
+| Push to `main` | `:main`, `:sha-<short>` |
+| Tag `v1.2.3` | `:1.2.3`, `:1.2`, `:sha-<short>` |
+| Pull request | Image is built but **not** pushed |
+
+### Docker image stages
+
+The `Dockerfile` uses a multi-stage build:
+
+| Stage | Built by | Contents |
+|---|---|---|
+| `base` | both | System deps, supercronic, editable Python package |
+| `test` | CI only | `base` + dev deps (`ruff`, `mypy`, `pytest`) + `tests/` |
+| `production` | CI + local | `base` + `scripts/`, `docker/` helpers, entrypoint |
+
+To build only the test stage locally:
+
+```bash
+docker build --target test -t mlb-winprob:test .
+docker run --rm --entrypoint python mlb-winprob:test -m pytest tests/ -v
+```
+
+---
+
 ## Data pipeline
 
 ```
@@ -493,7 +632,16 @@ mlb-winprob/
 │   ├── compute_drift.py                # Drift monitoring
 │   ├── query_game.py                   # Human-centric CLI query tool
 │   ├── serve.py                        # Launch FastAPI dashboard
-│   └── update_daily.sh                 # Daily cron: refresh data + restart server
+│   └── update_daily.sh                 # Daily cron: refresh data + restart server (host)
+├── docker/
+│   ├── entrypoint.sh                   # Container startup: bootstrap check + supervisord
+│   ├── supervisord.conf                # Process manager config (server + cron)
+│   ├── crontab                         # supercronic schedule (1am ingest, 11pm retrain)
+│   ├── ingest_daily.sh                 # Daily 1am data refresh
+│   └── retrain_daily.sh                # Daily 11pm model retrain
+├── Dockerfile                          # Multi-stage image (base → test → production)
+├── docker-compose.yml                  # Compose config (volumes, ports, env vars)
+├── .dockerignore                       # Excludes data/, .git/, .venv/, caches from build context
 ├── data/
 │   ├── raw/
 │   ├── processed/
@@ -507,9 +655,13 @@ mlb-winprob/
 │   │   └── drift/
 │   └── models/
 ├── logs/
-│   ├── server.log   # Web server output
-│   └── cron.log     # Daily cron output
-├── server.pid       # PID of the running server
+│   ├── server.log          # Web server output
+│   ├── cron.log            # Daily cron output (host-based cron)
+│   ├── ingest_daily.log    # Docker daily ingest output
+│   ├── retrain_daily.log   # Docker daily retrain output
+│   ├── bootstrap.log       # Docker first-run bootstrap output
+│   └── supervisord.log     # Docker process manager output
+├── server.pid       # PID of the running server (host-based only)
 ├── pyproject.toml
 └── README.md
 ```
