@@ -10,7 +10,7 @@ on:
 # Permissions
 #   contents: read   — checkout
 #   packages: write  — push image to GitHub Container Registry (GHCR)
-#                      (only used by the docker job; ignored for PRs)
+#                      (only used by the docker job; skipped on PRs)
 # ---------------------------------------------------------------------------
 permissions:
   contents: read
@@ -90,13 +90,19 @@ jobs:
   # ---------------------------------------------------------------------------
   # Docker — build image, run pytest inside it, publish to GHCR
   #
-  # Depends on all quality-gate jobs so the image is only pushed once the
+  # Depends on all quality-gate jobs so the image is pushed only after the
   # full native test suite passes.
+  #
+  # Multi-platform strategy:
+  #   • The test image is built for linux/amd64 only (must match the runner
+  #     to use `load: true` for `docker run`).
+  #   • The production image is built for linux/amd64 + linux/arm64.
+  #     On PRs, amd64-only (fast); on push to main/tags, both arches (pushed).
   #
   # Push behaviour:
   #   pull_request  → build only (no push)
-  #   push to main  → push with branch tag + sha tag
-  #   push of tag   → push with semver tags  (e.g. v1.2.3 → 1.2.3, 1.2)
+  #   push to main  → push :main + :sha-<short>
+  #   push of tag   → push semver tags (e.g. v1.2.3 → :1.2.3, :1.2)
   # ---------------------------------------------------------------------------
   docker:
     name: Docker — build & publish
@@ -105,6 +111,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # QEMU — enables building linux/arm64 images on the amd64 runner via
+      # software emulation.  Needed for the multi-platform production build.
+      # -----------------------------------------------------------------------
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       # -----------------------------------------------------------------------
       # Docker Buildx — enables BuildKit cache export and multi-platform builds
@@ -143,15 +156,16 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       # -----------------------------------------------------------------------
-      # Build the test stage and run pytest inside the container.
-      # The entrypoint is overridden so the bootstrap pipeline does not run.
-      # GHA cache is shared with the production build step that follows.
+      # Build the test stage (linux/amd64 only — must match runner arch so
+      # `load: true` can expose the image to `docker run`).
+      # GHA layer cache is shared with the production build that follows.
       # -----------------------------------------------------------------------
-      - name: Build test image
+      - name: Build test image (amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
           target: test
+          platforms: linux/amd64
           push: false
           load: true
           tags: mlb-winprob:ci-test
@@ -166,15 +180,21 @@ jobs:
             -m pytest tests/ -v --tb=short
 
       # -----------------------------------------------------------------------
-      # Build and push the production image (default target).
-      # The test-stage layers are already cached so this is fast.
-      # Push is skipped on pull_request to avoid publishing unreviewed code.
+      # Build and push the production image.
+      #
+      # Platform strategy:
+      #   PR builds   → linux/amd64 only (fast; validates build without pushing)
+      #   main/tag    → linux/amd64 + linux/arm64 (full multi-arch; pushed to GHCR)
+      #
+      # arm64 is required so the image runs on ARM-based NAS devices (Synology,
+      # QNAP, etc.) and ARM cloud VMs (AWS Graviton, Oracle Ampere, etc.).
       # -----------------------------------------------------------------------
       - name: Build and push production image
         uses: docker/build-push-action@v6
         with:
           context: .
           target: production
+          platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

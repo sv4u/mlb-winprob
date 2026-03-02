@@ -339,6 +339,8 @@ The entire workflow — data ingestion, model training, web server, and schedule
 
 - [Docker](https://docs.docker.com/get-docker/) ≥ 24
 - [Docker Compose](https://docs.docker.com/compose/install/) v2 (bundled with Docker Desktop)
+- **Minimum 2 GB RAM allocated to the container** (4 GB recommended). The ML stack — pandas, LightGBM, XGBoost, SHAP — requires ~1.5 GB just to load models at startup. A `mem_limit` of 512m will be killed by the OOM killer before the server can respond.
+- Supported platforms: `linux/amd64` and `linux/arm64` (Synology/QNAP NAS, AWS Graviton, Oracle Ampere, Apple Silicon via Rosetta)
 
 ### Quick start
 
@@ -455,11 +457,13 @@ docker run -p 8087:8087 \
 
 The `Dockerfile` uses a multi-stage build:
 
-| Stage | Built by | Contents |
-|---|---|---|
-| `base` | both | System deps, supercronic, editable Python package |
-| `test` | CI only | `base` + dev deps (`ruff`, `mypy`, `pytest`) + `tests/` |
-| `production` | CI + local | `base` + `scripts/`, `docker/` helpers, entrypoint |
+| Stage | Built by | Platforms | Contents |
+|---|---|---|---|
+| `base` | both | amd64 + arm64 | System deps, supercronic (arch-aware), editable Python package |
+| `test` | CI only | amd64 only | `base` + dev deps (`ruff`, `mypy`, `pytest`) + `tests/` |
+| `production` | CI + local | amd64 + arm64 | `base` + `scripts/`, `docker/` helpers, entrypoint |
+
+`supercronic` is downloaded for the correct architecture at build time using Docker BuildKit's `TARGETARCH` built-in — no manual configuration needed.
 
 To build only the test stage locally:
 
