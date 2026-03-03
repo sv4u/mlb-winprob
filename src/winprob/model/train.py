@@ -122,20 +122,22 @@ _TIME_DECAY: float = 0.12  # exponential decay rate per season
 # Features that are highly correlated with others (r > 0.95) and can be dropped
 # to reduce noise for tree models without losing predictive information.
 # Identified from correlation analysis of the 96-feature set.
-_REDUNDANT_FEATURES: frozenset[str] = frozenset({
-    "home_win_pct_14",
-    "away_win_pct_14",
-    "home_run_diff_14",
-    "away_run_diff_14",
-    "home_pythag_14",
-    "away_pythag_14",
-    "home_win_pct_7",
-    "away_win_pct_7",
-    "home_run_diff_7",
-    "away_run_diff_7",
-    "home_pythag_7",
-    "away_pythag_7",
-})
+_REDUNDANT_FEATURES: frozenset[str] = frozenset(
+    {
+        "home_win_pct_14",
+        "away_win_pct_14",
+        "home_run_diff_14",
+        "away_run_diff_14",
+        "home_pythag_14",
+        "away_pythag_14",
+        "home_win_pct_7",
+        "away_win_pct_7",
+        "home_run_diff_7",
+        "away_run_diff_7",
+        "home_pythag_7",
+        "away_pythag_7",
+    }
+)
 
 
 def select_features(
@@ -498,7 +500,9 @@ def run_optuna_hpo(
                 continue
             train_df = pd.concat([season_dfs[s] for s in train_seasons], ignore_index=True)
             X_train, y_train, w_train = _prep(
-                train_df, feature_cols=feat_cols, time_decay=time_decay,
+                train_df,
+                feature_cols=feat_cols,
+                time_decay=time_decay,
             )
             eval_df = season_dfs[eval_s]
             eval_clean = eval_df.dropna(subset=feat_cols + ["home_win"])
@@ -512,7 +516,11 @@ def run_optuna_hpo(
             try:
                 model = _fit_model(model_type, X_fit, y_fit, w_fit, params)
                 cal_model = _calibrate(
-                    model, X_cal, y_cal, platt_C=platt_C, calibration=cal_method,
+                    model,
+                    X_cal,
+                    y_cal,
+                    platt_C=platt_C,
+                    calibration=cal_method,
                 )
                 y_prob = _predict_proba(cal_model, X_eval)
                 er = evaluate(y_eval, y_prob)
@@ -572,9 +580,7 @@ def run_expanding_cv(
         raise RuntimeError(f"No feature files found in {features_dir}")
 
     # Keep seasons that have home_win and at least some features
-    season_dfs = {
-        s: df for s, df in raw_season_dfs.items() if "home_win" in df.columns
-    }
+    season_dfs = {s: df for s, df in raw_season_dfs.items() if "home_win" in df.columns}
     if not season_dfs:
         raise RuntimeError(f"No feature files with 'home_win' column in {features_dir}")
 

@@ -29,8 +29,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger(__name__)
-
 from winprob.features.elo import compute_elo_ratings
 from winprob.features.team_stats import build_team_rolling_stats
 from winprob.features.park_factors import compute_park_factors, _NEUTRAL_FACTOR
@@ -50,6 +48,8 @@ from winprob.statcast.player_stats import (
     get_batter_statcast_for_season,
     get_pitcher_statcast_for_season,
 )
+
+logger = logging.getLogger(__name__)
 
 _LEAGUE_AVG_ERA: float = 4.50
 _LEAGUE_AVG_K9: float = 8.5
@@ -437,8 +437,9 @@ def build_feature_matrix(
             ] + w_away * pitcher_season["away_sp_era"].values
         except Exception as exc:
             logger.warning(
-                "In-season pitcher ERA blend failed for season %d, "
-                "using API-only stats: %s", season, exc
+                "In-season pitcher ERA blend failed for season %d, using API-only stats: %s",
+                season,
+                exc,
             )
 
     # --- FanGraphs advanced metrics (prior season) --------------------------

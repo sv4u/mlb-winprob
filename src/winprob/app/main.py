@@ -46,6 +46,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         status_code=500,
     )
 
+
 _BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
 
