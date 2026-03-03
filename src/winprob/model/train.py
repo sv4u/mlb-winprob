@@ -501,15 +501,18 @@ def run_expanding_cv(
             y_prob = _predict_proba(cal, X_eval)
             er = evaluate(y_eval, y_prob)
 
+            hp: dict[str, Any] = _model_params_only(params) or {
+                "logistic": _LR_PARAMS,
+                "lightgbm": _LGB_PARAMS,
+                "xgboost": _XGB_PARAMS,
+                "catboost": _CATB_PARAMS,
+                "mlp": _MLP_PARAMS,
+            }.get(mt, {})
             meta = ModelMetadata(
                 model_version=_FEATURE_VERSION,
                 model_type=mt,
                 training_seasons=train_seasons,
-                hyperparameters=_model_params_only(params)
-                or (
-                    _LR_PARAMS if mt == "logistic"
-                    else (_LGB_PARAMS if mt == "lightgbm" else (_XGB_PARAMS if mt == "xgboost" else (_CATB_PARAMS if mt == "catboost" else _MLP_PARAMS))),
-                ),
+                hyperparameters=hp,
                 feature_set_version=_FEATURE_VERSION,
                 feature_cols=FEATURE_COLS,
                 train_brier=float(er.brier_score),
@@ -601,15 +604,18 @@ def train_production_model(
         cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C)
         base_models[mt] = cal
 
+        hp: dict[str, Any] = _model_params_only(params) or {
+            "logistic": _LR_PARAMS,
+            "lightgbm": _LGB_PARAMS,
+            "xgboost": _XGB_PARAMS,
+            "catboost": _CATB_PARAMS,
+            "mlp": _MLP_PARAMS,
+        }.get(mt, {})
         meta = ModelMetadata(
             model_version=_FEATURE_VERSION,
             model_type=mt,
             training_seasons=seasons,
-            hyperparameters=_model_params_only(params)
-            or (
-                _LR_PARAMS if mt == "logistic"
-                else (_LGB_PARAMS if mt == "lightgbm" else (_XGB_PARAMS if mt == "xgboost" else (_CATB_PARAMS if mt == "catboost" else _MLP_PARAMS))),
-            ),
+            hyperparameters=hp,
             feature_set_version=_FEATURE_VERSION,
             feature_cols=FEATURE_COLS,
             train_brier=0.0,

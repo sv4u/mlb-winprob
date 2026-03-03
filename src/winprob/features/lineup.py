@@ -50,9 +50,6 @@ def build_lineup_continuity(gamelogs: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
 
-    # Build (team, date, game_num) -> set for home and away
-    home_prev: dict[tuple, set] = {}
-    away_prev: dict[tuple, set] = {}
     home_continuity = np.full(len(gl), _NEUTRAL_CONTINUITY, dtype=float)
     away_continuity = np.full(len(gl), _NEUTRAL_CONTINUITY, dtype=float)
 

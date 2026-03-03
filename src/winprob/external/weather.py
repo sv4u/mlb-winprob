@@ -116,7 +116,6 @@ def get_weather_for_game(park_id: str, game_date: str, weather_dir: Path) -> dic
     # In-memory cache for this run (optional): we could load full cache and write back
     if cache_file.exists():
         cache_df = pd.read_parquet(cache_file)
-        key = (park_id, game_date)
         row = cache_df[(cache_df["park_id"] == park_id) & (cache_df["game_date"] == game_date)]
         if not row.empty:
             return {

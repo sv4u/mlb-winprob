@@ -9,7 +9,6 @@ Uses pitchers_used (and team ER) to compute:
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 _WINDOWS = [15, 30]
