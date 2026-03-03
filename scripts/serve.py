@@ -35,7 +35,9 @@ def main() -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8087)
     ap.add_argument(
-        "--model", default="stacked", choices=["logistic", "lightgbm", "xgboost", "stacked"]
+        "--model",
+        default="stacked",
+        choices=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
     )
     ap.add_argument("--reload", action="store_true")
     args = ap.parse_args()

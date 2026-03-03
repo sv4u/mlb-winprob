@@ -37,6 +37,9 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     pitcher_stats_dir = args.processed_dir / "pitcher_stats"
     fg_dir = args.processed_dir / "fangraphs"
+    statcast_cache_dir = args.processed_dir / "statcast_player"
+    vegas_dir = args.processed_dir / "vegas"
+    weather_dir = args.processed_dir / "weather"
 
     print("Loading all gamelogs for cross-season Elo and rolling stats…")
     gamelogs_all = load_all_gamelogs(args.processed_dir)
@@ -83,6 +86,9 @@ def main() -> None:
                 prior_api_map=prior_api_map,
                 fg_home_map=fg_map_prior,
                 fg_away_map=fg_map_prior,
+                statcast_cache_dir=statcast_cache_dir,
+                vegas_dir=vegas_dir,
+                weather_dir=weather_dir,
             )
             out_path = out_dir / f"features_{s}.parquet"
             df.to_parquet(out_path, index=False)

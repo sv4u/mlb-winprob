@@ -119,7 +119,8 @@ RUN chmod +x docker/entrypoint.sh \
 # provides bind mounts for /app/data and /app/logs the bind mounts take
 # precedence and the entrypoint creates any missing subdirectories.
 # ---------------------------------------------------------------------------
-RUN mkdir -p data/raw data/processed data/models logs
+RUN mkdir -p data/raw data/processed data/processed/statcast_player \
+    data/processed/vegas data/processed/weather data/models logs
 
 VOLUME ["/app/data", "/app/logs"]
 

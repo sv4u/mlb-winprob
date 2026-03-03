@@ -34,12 +34,17 @@ def main() -> None:
     ap.add_argument(
         "--models",
         nargs="*",
-        choices=["logistic", "lightgbm", "xgboost", "stacked"],
-        default=["logistic", "lightgbm", "xgboost", "stacked"],
+        choices=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
+        default=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
     )
     ap.add_argument("--hpo", action="store_true", help="Run Optuna HPO before CV")
-    ap.add_argument("--hpo-trials", type=int, default=60)
+    ap.add_argument("--hpo-trials", type=int, default=200)
     ap.add_argument("--skip-cv", action="store_true", help="Skip CV, only run HPO + production")
+    ap.add_argument(
+        "--feature-importance",
+        action="store_true",
+        help="Run feature importance (SHAP) after training and write report",
+    )
     args = ap.parse_args()
     args.model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -51,6 +56,19 @@ def main() -> None:
 
     lgb_params = _load_hpo(args.model_dir, "lightgbm")
     xgb_params = _load_hpo(args.model_dir, "xgboost")
+    catboost_params = _load_hpo(args.model_dir, "catboost")
+    mlp_params = _load_hpo(args.model_dir, "mlp")
+
+    # Training globals from HPO (time_decay, platt_C) — take from first available
+    def _training_globals(params: dict | None) -> tuple[float | None, float | None]:
+        if not params:
+            return None, None
+        return (
+            params.get("time_decay"),
+            params.get("platt_C"),
+        )
+
+    time_decay, platt_C = _training_globals(lgb_params or xgb_params or catboost_params or mlp_params)
 
     # -------------------------------------------------------------------------
     # Optional Optuna HPO
@@ -83,6 +101,10 @@ def main() -> None:
             model_types=args.models,
             lgb_params=lgb_params,
             xgb_params=xgb_params,
+            catboost_params=catboost_params,
+            mlp_params=mlp_params,
+            time_decay=time_decay,
+            platt_C=platt_C,
         )
 
         all_rows = [row for rows in cv_results.values() for row in rows]
@@ -119,7 +141,31 @@ def main() -> None:
         model_types=args.models,
         lgb_params=lgb_params,
         xgb_params=xgb_params,
+        catboost_params=catboost_params,
+        mlp_params=mlp_params,
+        time_decay=time_decay,
+        platt_C=platt_C,
     )
+
+    if args.feature_importance:
+        print("\nRunning feature importance analysis…")
+        import subprocess
+        script_dir = Path(__file__).resolve().parent
+        subprocess.run(
+            [
+                "python",
+                str(script_dir / "feature_importance.py"),
+                "--model-dir",
+                str(args.model_dir),
+                "--features-dir",
+                str(args.features_dir),
+                "--model-type",
+                "lightgbm",
+            ],
+            cwd=script_dir.parent,
+            check=False,
+        )
+
     print("Done.")
 
 

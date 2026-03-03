@@ -33,14 +33,18 @@ coverage.xml
 # Data — raw and processed artifacts are never committed
 data/
 
-# IDE
+# IDE / editor
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 
 # macOS
 .DS_Store
+
+# CatBoost training artifacts (created in CWD during training)
+catboost_info/
 
 # Runtime server artifacts
 server.pid

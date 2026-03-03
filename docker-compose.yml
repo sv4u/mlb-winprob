@@ -11,7 +11,7 @@ version: "3.9"
 #   docker compose down                # stop and remove container
 #
 # Environment overrides (prefix with `MODEL=xgboost docker compose up`)
-#   MODEL  — model type: logistic | lightgbm | xgboost | stacked (default: stacked)
+#   MODEL  — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
 #   PORT   — host port to expose the dashboard on (default: 8087)
 #
 # Data persistence

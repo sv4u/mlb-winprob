@@ -26,10 +26,13 @@ log "  Daily retrain — $(date -u '+%Y-%m-%d %H:%M UTC')"
 log "  Model: $MODEL"
 log "========================================================"
 
-log "→ Training all production models..."
+log "→ Training all production models (logistic, lightgbm, xgboost, catboost, mlp, stacked)..."
 python scripts/train_model.py \
+    --models logistic lightgbm xgboost catboost mlp stacked \
     || die "Model training failed — server will continue with previous artifacts"
 log "  ✓ Training complete"
+
+date -u '+%Y-%m-%dT%H:%M:%SZ' > /app/data/models/.last_retrain
 
 log "→ Restarting web server to load new model artifacts..."
 supervisorctl -c /app/docker/supervisord.conf restart winprob-server \

@@ -61,6 +61,8 @@
     .model-card.logistic::before { background: #4f8ef7; }
     .model-card.lightgbm::before { background: #f7a04f; }
     .model-card.xgboost::before  { background: #2ecc71; }
+    .model-card.catboost::before { background: #f1c40f; }
+    .model-card.mlp::before      { background: #9b59b6; }
     .model-card.stacked::before  { background: #e74c8e; }
     .model-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; }
     .model-card .model-tag { font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.45rem; border-radius: 4px; }
@@ -84,6 +86,8 @@
     <a href="/season/2026"
       style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">2026
       Season ✦</a>
+    <a href="/dashboard"
+      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Dashboard</a>
   </nav>
 </header>
 
@@ -169,17 +173,55 @@
         </div>
       </div>
   
+      <div class="model-card catboost">
+        <h4>CatBoost</h4>
+        <p class="model-desc">
+          Yandex's gradient-boosted tree library with ordered boosting and native categorical
+          feature support.  Uses symmetric (oblivious) decision trees, which tend to generalise
+          well on tabular data and are resistant to overfitting.  Acts as a third complementary
+          tree model in the stacked ensemble.
+        </p>
+        <ul class="model-facts">
+          <li>Ordered boosting reduces prediction shift</li>
+          <li>Symmetric trees, L2 leaf regularisation, learning rate decay</li>
+          <li>Best for: robustness, low-variance ensemble partner</li>
+        </ul>
+        <div class="model-perf" id="perf-catboost">
+          <div><span>Brier </span><strong id="brier-catboost">—</strong></div>
+          <div><span>Accuracy </span><strong id="acc-catboost">—</strong></div>
+        </div>
+      </div>
+  
+      <div class="model-card mlp">
+        <h4>Neural Network (MLP)</h4>
+        <p class="model-desc">
+          A multi-layer perceptron classifier with two hidden layers (128, 64 units) and ReLU
+          activations.  Captures nonlinear feature interactions that tree models may miss.
+          Features are z-score normalised before training.  Provides model diversity for stacking
+          since its error surface is fundamentally different from tree-based learners.
+        </p>
+        <ul class="model-facts">
+          <li>Architecture: 128 → 64 → 1, Adam optimizer</li>
+          <li>L2 weight decay for regularisation</li>
+          <li>Best for: ensemble diversity, nonlinear interactions</li>
+        </ul>
+        <div class="model-perf" id="perf-mlp">
+          <div><span>Brier </span><strong id="brier-mlp">—</strong></div>
+          <div><span>Accuracy </span><strong id="acc-mlp">—</strong></div>
+        </div>
+      </div>
+  
       <div class="model-card stacked">
         <h4>Stacked Ensemble <span class="model-tag">default</span></h4>
         <p class="model-desc">
           The stacked ensemble never sees raw features. It takes the <strong>calibrated
-            probability outputs</strong> of all three base models as its inputs and trains a
+            probability outputs</strong> of all five base models as its inputs and trains a
           logistic-regression meta-learner to find the optimal blend. Because each base model
           makes different errors, the meta-learner learns to up-weight whichever model is most
           reliable in each probability range. Achieves the best overall Brier and calibration.
         </p>
         <ul class="model-facts">
-          <li>Inputs: Logistic + LightGBM + XGBoost calibrated probabilities</li>
+          <li>Inputs: Logistic + LightGBM + XGBoost + CatBoost + MLP calibrated probabilities</li>
           <li>Meta-learner: LogisticRegression (C = 0.5)</li>
           <li>All base probabilities are out-of-sample relative to the meta-learner</li>
           <li>Best for: maximum production accuracy</li>
@@ -499,7 +541,7 @@ function renderPagination() {
 
   // ── Model performance cards ────────────────────────────────────────────────
   function fillModelPerf(cv) {
-    const modelKeys = ['logistic', 'lightgbm', 'xgboost', 'stacked'];
+    const modelKeys = ['logistic', 'lightgbm', 'xgboost', 'catboost', 'mlp', 'stacked'];
     modelKeys.forEach(m => {
       const rows = cv.filter(r => r.model === m);
       if (!rows.length) return;

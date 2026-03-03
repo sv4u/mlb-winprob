@@ -39,11 +39,14 @@ run_step "Refresh $YEAR Retrosheet gamelogs" \
 run_step "Rebuild $YEAR crosswalk" \
     python scripts/build_crosswalk.py --seasons "$YEAR"
 
-run_step "Rebuild $YEAR feature matrix" \
+run_step "Rebuild $YEAR feature matrix (incl. Statcast, Vegas, weather)" \
     python scripts/build_features.py --seasons "$YEAR"
 
 run_step "Rebuild 2026 pre-season features" \
     python scripts/build_features_2026.py
+
+# Write a timestamp marker so the dashboard can show last-ingest time
+date -u '+%Y-%m-%dT%H:%M:%SZ' > /app/data/processed/.last_ingest
 
 log "→ Restarting web server to reload updated features..."
 supervisorctl -c /app/docker/supervisord.conf restart winprob-server \

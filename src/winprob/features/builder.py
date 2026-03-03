@@ -31,11 +31,29 @@ import pandas as pd
 from winprob.features.elo import compute_elo_ratings
 from winprob.features.team_stats import build_team_rolling_stats
 from winprob.features.park_factors import compute_park_factors, _NEUTRAL_FACTOR
+from winprob.features.pitcher_stats import build_pitcher_stats
+from winprob.features.lineup import build_lineup_features
+from winprob.features.bullpen import build_bullpen_features
+from winprob.external.vegas import build_vegas_features, load_vegas_season
+from winprob.external.weather import build_weather_features, load_weather_season
+from winprob.statcast.player_stats import (
+    _LEAGUE_AVG_BARREL_PCT,
+    _LEAGUE_AVG_PIT_EST_WOBA,
+    _LEAGUE_AVG_XWOBA,
+    _load_chadwick_register,
+    _retro_to_mlbam_map,
+    build_lineup_statcast_features,
+    build_pitcher_statcast_features,
+    get_batter_statcast_for_season,
+    get_pitcher_statcast_for_season,
+)
 
 _LEAGUE_AVG_ERA: float = 4.50
 _LEAGUE_AVG_K9: float = 8.5
 _LEAGUE_AVG_BB9: float = 3.0
+_LEAGUE_AVG_WHIP: float = 1.30
 _SHRINKAGE_PRIOR_W: float = 0.30  # weight given to prior-season API stats (vs gamelog)
+_MIN_STARTS_FOR_BLEND: int = 15  # in-season ERA weight ramps up over this many starts
 
 FEATURE_COLS: list[str] = [
     # --- Elo ------------------------------------------------------------------
@@ -43,21 +61,33 @@ FEATURE_COLS: list[str] = [
     "away_elo",
     "elo_diff",
     # --- Multi-window rolling -------------------------------------------------
+    "home_win_pct_7",
+    "home_win_pct_14",
     "home_win_pct_15",
     "home_win_pct_30",
     "home_win_pct_60",
+    "away_win_pct_7",
+    "away_win_pct_14",
     "away_win_pct_15",
     "away_win_pct_30",
     "away_win_pct_60",
+    "home_run_diff_7",
+    "home_run_diff_14",
     "home_run_diff_15",
     "home_run_diff_30",
     "home_run_diff_60",
+    "away_run_diff_7",
+    "away_run_diff_14",
     "away_run_diff_15",
     "away_run_diff_30",
     "away_run_diff_60",
+    "home_pythag_7",
+    "home_pythag_14",
     "home_pythag_15",
     "home_pythag_30",
     "home_pythag_60",
+    "away_pythag_7",
+    "away_pythag_14",
     "away_pythag_15",
     "away_pythag_30",
     "away_pythag_60",
@@ -73,6 +103,11 @@ FEATURE_COLS: list[str] = [
     "home_pythag_home_only",
     "away_win_pct_away_only",
     "away_pythag_away_only",
+    # --- Run distribution / 1-run games ---------------------------------------
+    "home_run_std_30",
+    "away_run_std_30",
+    "home_one_run_win_pct_30",
+    "away_one_run_win_pct_30",
     # --- Streak and rest ------------------------------------------------------
     "home_streak",
     "away_streak",
@@ -85,6 +120,8 @@ FEATURE_COLS: list[str] = [
     "away_sp_k9",
     "home_sp_bb9",
     "away_sp_bb9",
+    "home_sp_whip",
+    "away_sp_whip",
     # --- FanGraphs advanced metrics (prior season) ---------------------------
     "home_bat_woba",
     "away_bat_woba",
@@ -92,12 +129,24 @@ FEATURE_COLS: list[str] = [
     "away_bat_barrel_pct",
     "home_bat_hard_pct",
     "away_bat_hard_pct",
+    "home_bat_iso",
+    "away_bat_iso",
+    "home_bat_babip",
+    "away_bat_babip",
+    "home_bat_xwoba",
+    "away_bat_xwoba",
     "home_pit_fip",
     "away_pit_fip",
     "home_pit_xfip",
     "away_pit_xfip",
     "home_pit_k_pct",
     "away_pit_k_pct",
+    "home_pit_bb_pct",
+    "away_pit_bb_pct",
+    "home_pit_hr_fb",
+    "away_pit_hr_fb",
+    "home_pit_whip",
+    "away_pit_whip",
     # --- Differentials --------------------------------------------------------
     "pythag_diff_30",  # home_pythag_30 - away_pythag_30
     "pythag_diff_ewm",  # home_pythag_ewm - away_pythag_ewm
@@ -105,9 +154,43 @@ FEATURE_COLS: list[str] = [
     "sp_era_diff",  # away_sp_era - home_sp_era
     "woba_diff",  # home_bat_woba - away_bat_woba
     "fip_diff",  # away_pit_fip - home_pit_fip
+    "xwoba_diff",  # home_bat_xwoba - away_bat_xwoba
+    "whip_diff",  # away_pit_whip - home_pit_whip (lower home whip = home advantage)
+    "iso_diff",  # home_bat_iso - away_bat_iso
+    # --- Lineup ---------------------------------------------------------------
+    "home_lineup_continuity",
+    "away_lineup_continuity",
+    # --- Statcast lineup-weighted (prior-season player xwOBA/barrel%) ----------
+    "home_lineup_xwoba",
+    "away_lineup_xwoba",
+    "home_lineup_barrel_pct",
+    "away_lineup_barrel_pct",
+    # --- Statcast pitcher (prior-season xwOBA allowed) ------------------------
+    "home_sp_est_woba",
+    "away_sp_est_woba",
+    # --- Bullpen --------------------------------------------------------------
+    "home_bullpen_usage_15",
+    "home_bullpen_usage_30",
+    "away_bullpen_usage_15",
+    "away_bullpen_usage_30",
+    "home_bullpen_era_proxy_15",
+    "home_bullpen_era_proxy_30",
+    "away_bullpen_era_proxy_15",
+    "away_bullpen_era_proxy_30",
     # --- Park / context -------------------------------------------------------
     "park_run_factor",
     "season_progress",
+    # --- Contextual -----------------------------------------------------------
+    "day_night",
+    "interleague",
+    "day_of_week",
+    # --- Vegas (opening implied prob, line movement) --------------------------
+    "vegas_implied_home_win",
+    "vegas_line_movement",
+    # --- Weather (game location) ----------------------------------------------
+    "game_temp_f",
+    "game_wind_mph",
+    "game_humidity",
 ]
 
 FEATURE_COLS = list(dict.fromkeys(FEATURE_COLS))
@@ -131,7 +214,7 @@ def _load_api_pitcher_map(pitcher_stats_dir: Path, season: int) -> dict[str, dic
     Returns
     -------
     dict
-        Mapping normalized pitcher name → {era, k9, bb9}.
+        Mapping normalized pitcher name → {era, k9, bb9, whip}.
     """
     path = pitcher_stats_dir / f"pitchers_{season}.parquet"
     if not path.exists():
@@ -144,6 +227,7 @@ def _load_api_pitcher_map(pitcher_stats_dir: Path, season: int) -> dict[str, dic
             "era": float(row.get("era", _LEAGUE_AVG_ERA)),
             "k9": float(row.get("k9", _LEAGUE_AVG_K9)),
             "bb9": float(row.get("bb9", _LEAGUE_AVG_BB9)),
+            "whip": float(row.get("whip", _LEAGUE_AVG_WHIP)),
         }
     return result
 
@@ -158,8 +242,8 @@ def _pitcher_api_features(
     ``visiting_starting_pitcher_name`` are matched against the normalized-name
     lookup.  Missing pitchers default to league-average values.
     """
-    home_era, home_k9, home_bb9 = [], [], []
-    away_era, away_k9, away_bb9 = [], [], []
+    home_era, home_k9, home_bb9, home_whip = [], [], [], []
+    away_era, away_k9, away_bb9, away_whip = [], [], [], []
 
     for _, row in gamelogs.iterrows():
 
@@ -175,18 +259,22 @@ def _pitcher_api_features(
         home_era.append(h.get("era", _LEAGUE_AVG_ERA))
         home_k9.append(h.get("k9", _LEAGUE_AVG_K9))
         home_bb9.append(h.get("bb9", _LEAGUE_AVG_BB9))
+        home_whip.append(h.get("whip", _LEAGUE_AVG_WHIP))
         away_era.append(a.get("era", _LEAGUE_AVG_ERA))
         away_k9.append(a.get("k9", _LEAGUE_AVG_K9))
         away_bb9.append(a.get("bb9", _LEAGUE_AVG_BB9))
+        away_whip.append(a.get("whip", _LEAGUE_AVG_WHIP))
 
     return pd.DataFrame(
         {
             "home_sp_era": home_era,
             "home_sp_k9": home_k9,
             "home_sp_bb9": home_bb9,
+            "home_sp_whip": home_whip,
             "away_sp_era": away_era,
             "away_sp_k9": away_k9,
             "away_sp_bb9": away_bb9,
+            "away_sp_whip": away_whip,
         },
         index=gamelogs.index,
     )
@@ -217,17 +305,29 @@ def _fangraphs_features(
         "bat_woba",
         "bat_barrel_pct",
         "bat_hard_pct",
+        "bat_iso",
+        "bat_babip",
+        "bat_xwoba",
         "pit_fip",
         "pit_xfip",
         "pit_k_pct",
+        "pit_bb_pct",
+        "pit_hr_fb",
+        "pit_whip",
     ]
     _DEFAULTS = {
         "bat_woba": 0.320,
         "bat_barrel_pct": 0.08,
         "bat_hard_pct": 0.38,
+        "bat_iso": 0.170,
+        "bat_babip": 0.300,
+        "bat_xwoba": 0.320,
         "pit_fip": 4.20,
         "pit_xfip": 4.20,
         "pit_k_pct": 0.22,
+        "pit_bb_pct": 0.085,
+        "pit_hr_fb": 0.11,
+        "pit_whip": 1.30,
     }
 
     rows: dict[str, list] = {f"home_{k}": [] for k in _FG_KEYS}
@@ -253,6 +353,9 @@ def build_feature_matrix(
     prior_api_map: dict[str, dict[str, float]],
     fg_home_map: dict[str, dict[str, float]] | None = None,
     fg_away_map: dict[str, dict[str, float]] | None = None,
+    statcast_cache_dir: Path | None = None,
+    vegas_dir: Path | None = None,
+    weather_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Assemble the v2 feature matrix for one season.
 
@@ -287,8 +390,42 @@ def build_feature_matrix(
     team_feats = build_team_rolling_stats(gamelogs_all).sort_index()
     team_feats_season = team_feats.iloc[season_mask].reset_index(drop=True)
 
+    # --- Lineup continuity (optional: requires batting order columns) --------
+    lineup_cols = [f"home_{i}_id" for i in range(1, 10)] + [f"visiting_{i}_id" for i in range(1, 10)]
+    if all(c in gamelogs_all.columns for c in lineup_cols):
+        try:
+            lineup_all = build_lineup_features(gamelogs_all).sort_index()
+            lineup_season = lineup_all.iloc[season_mask].reset_index(drop=True)
+        except Exception:
+            lineup_season = None
+    else:
+        lineup_season = None
+
     # --- Prior-season API pitcher stats -------------------------------------
     sp_feats = _pitcher_api_features(gl, prior_api_map)
+
+    # --- In-season gamelog pitcher ERA (Bayesian shrinkage) + blend with API -
+    required_er_cols = ["home_er", "visiting_er", "home_starting_pitcher_id", "visiting_starting_pitcher_id"]
+    if all(c in gamelogs_all.columns for c in required_er_cols):
+        try:
+            pitcher_gamelog_all = build_pitcher_stats(gamelogs_all).sort_index()
+            pitcher_season = pitcher_gamelog_all.iloc[season_mask].reset_index(drop=True)
+            n_starts_h = np.minimum(
+                pitcher_season["home_sp_n_starts"].values.astype(float), _MIN_STARTS_FOR_BLEND
+            )
+            n_starts_a = np.minimum(
+                pitcher_season["away_sp_n_starts"].values.astype(float), _MIN_STARTS_FOR_BLEND
+            )
+            w_home = (1.0 - _SHRINKAGE_PRIOR_W) * (n_starts_h / _MIN_STARTS_FOR_BLEND)
+            w_away = (1.0 - _SHRINKAGE_PRIOR_W) * (n_starts_a / _MIN_STARTS_FOR_BLEND)
+            sp_feats["home_sp_era"] = (
+                (1.0 - w_home) * sp_feats["home_sp_era"] + w_home * pitcher_season["home_sp_era"].values
+            )
+            sp_feats["away_sp_era"] = (
+                (1.0 - w_away) * sp_feats["away_sp_era"] + w_away * pitcher_season["away_sp_era"].values
+            )
+        except Exception:
+            pass  # keep API-only stats if gamelog blend fails
 
     # --- FanGraphs advanced metrics (prior season) --------------------------
     fg_feats = _fangraphs_features(gl, fg_home_map or {}, fg_away_map or {})
@@ -324,17 +461,123 @@ def build_feature_matrix(
     combined["park_run_factor"] = park_run_factor.values
     combined["season_progress"] = season_progress.values
 
+    # --- Contextual: day/night, interleague, day of week ---------------------
+    day_night_raw = gl.get("day_night", pd.Series("D", index=gl.index))
+    combined["day_night"] = (day_night_raw.astype(str).str.upper() == "N").astype(float)
+    if "home_team_league" in gl.columns and "visiting_team_league" in gl.columns:
+        combined["interleague"] = (
+            gl["home_team_league"].astype(str) != gl["visiting_team_league"].astype(str)
+        ).astype(float)
+    else:
+        combined["interleague"] = 0.0
+    combined["day_of_week"] = pd.to_datetime(gl["date"]).dt.dayofweek.values.astype(float) / 6.0
+
     for col in elo_season.columns:
         combined[col] = elo_season[col].values
 
     for col in team_feats_season.columns:
         combined[col] = team_feats_season[col].values
 
+    if lineup_season is not None:
+        for col in lineup_season.columns:
+            combined[col] = lineup_season[col].values
+    else:
+        combined["home_lineup_continuity"] = 4.5
+        combined["away_lineup_continuity"] = 4.5
+
+    # --- Bullpen usage / ERA proxy (optional) ---------------------------------
+    if "home_pitchers_used" in gamelogs_all.columns and "visiting_pitchers_used" in gamelogs_all.columns:
+        try:
+            bullpen_all = build_bullpen_features(gamelogs_all).sort_index()
+            bullpen_season = bullpen_all.iloc[season_mask].reset_index(drop=True)
+            for col in bullpen_season.columns:
+                combined[col] = bullpen_season[col].values
+        except Exception:
+            for c in [
+                "home_bullpen_usage_15", "home_bullpen_usage_30",
+                "away_bullpen_usage_15", "away_bullpen_usage_30",
+                "home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
+                "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30",
+            ]:
+                combined[c] = 2.0 if "usage" in c else 4.5
+    else:
+        for c in [
+            "home_bullpen_usage_15", "home_bullpen_usage_30",
+            "away_bullpen_usage_15", "away_bullpen_usage_30",
+        ]:
+            combined[c] = 2.0
+        for c in [
+            "home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
+            "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30",
+        ]:
+            combined[c] = 4.5
+
     for col in sp_feats.columns:
         combined[col] = sp_feats[col].values
 
     for col in fg_feats.columns:
         combined[col] = fg_feats[col].values
+
+    # --- Statcast lineup-weighted and pitcher (prior-season player-level) ----
+    lineup_cols = [f"home_{i}_id" for i in range(1, 10)] + [
+        f"visiting_{i}_id" for i in range(1, 10)
+    ]
+    prior_season = season - 1
+    cache_dir = statcast_cache_dir or Path("data/processed/statcast_player")
+    if all(c in gl.columns for c in lineup_cols) and all(
+        c in gl.columns for c in ["home_starting_pitcher_id", "visiting_starting_pitcher_id"]
+    ):
+        try:
+            reg = _load_chadwick_register()
+            retro_to_mlbam = _retro_to_mlbam_map(reg)
+            batter_stats = get_batter_statcast_for_season(prior_season, cache_dir)
+            pitcher_stats = get_pitcher_statcast_for_season(prior_season, cache_dir)
+            lineup_sc = build_lineup_statcast_features(
+                gl, prior_season, batter_stats, retro_to_mlbam
+            )
+            pit_sc = build_pitcher_statcast_features(
+                gl, prior_season, pitcher_stats, retro_to_mlbam
+            )
+            for col in lineup_sc.columns:
+                combined[col] = lineup_sc[col].values
+            for col in pit_sc.columns:
+                combined[col] = pit_sc[col].values
+        except Exception:
+            combined["home_lineup_xwoba"] = combined.get("home_bat_xwoba", _LEAGUE_AVG_XWOBA)
+            combined["away_lineup_xwoba"] = combined.get("away_bat_xwoba", _LEAGUE_AVG_XWOBA)
+            combined["home_lineup_barrel_pct"] = combined.get(
+                "home_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
+            )
+            combined["away_lineup_barrel_pct"] = combined.get(
+                "away_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
+            )
+            combined["home_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
+            combined["away_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
+    else:
+        combined["home_lineup_xwoba"] = combined.get("home_bat_xwoba", _LEAGUE_AVG_XWOBA)
+        combined["away_lineup_xwoba"] = combined.get("away_bat_xwoba", _LEAGUE_AVG_XWOBA)
+        combined["home_lineup_barrel_pct"] = combined.get(
+            "home_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
+        )
+        combined["away_lineup_barrel_pct"] = combined.get(
+            "away_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
+        )
+        combined["home_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
+        combined["away_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
+
+    # --- Vegas opening line (and line movement) ----------------------------
+    v_dir = vegas_dir or Path("data/processed/vegas")
+    vegas_df = load_vegas_season(v_dir, season)
+    vegas_feats = build_vegas_features(gl, vegas_df)
+    for col in vegas_feats.columns:
+        combined[col] = vegas_feats[col].values
+
+    # --- Weather (temp, wind, humidity at game location) ----------------------
+    w_dir = weather_dir or Path("data/processed/weather")
+    weather_df = load_weather_season(w_dir, season)
+    weather_feats = build_weather_features(gl, weather_df)
+    for col in weather_feats.columns:
+        combined[col] = weather_feats[col].values
 
     # --- Differential features ----------------------------------------------
     combined["pythag_diff_30"] = combined["home_pythag_30"] - combined["away_pythag_30"]
@@ -349,6 +592,15 @@ def build_feature_matrix(
         "away_bat_woba", 0.320
     )
     combined["fip_diff"] = combined.get("away_pit_fip", 4.20) - combined.get("home_pit_fip", 4.20)
+    combined["xwoba_diff"] = combined.get("home_bat_xwoba", 0.320) - combined.get(
+        "away_bat_xwoba", 0.320
+    )
+    combined["whip_diff"] = combined.get("away_pit_whip", 1.30) - combined.get(
+        "home_pit_whip", 1.30
+    )
+    combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get(
+        "away_bat_iso", 0.170
+    )
 
     # --- Join crosswalk to get game_pk and MLB team IDs ---------------------
     cw_matched = crosswalk[crosswalk["status"] == "matched"][

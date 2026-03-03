@@ -46,6 +46,11 @@ mkdir -p \
     data/processed/crosswalk \
     data/processed/features \
     data/processed/predictions \
+    data/processed/fangraphs \
+    data/processed/pitcher_stats \
+    data/processed/statcast_player \
+    data/processed/vegas \
+    data/processed/weather \
     data/models \
     logs
 
@@ -80,14 +85,14 @@ else
         run_step "Build FanGraphs team metrics" \
             python scripts/ingest_fangraphs.py
 
-        run_step "Build historical feature matrices" \
+        run_step "Build historical feature matrices (incl. Statcast, Vegas, weather)" \
             python scripts/build_features.py
 
         run_step "Build 2026 pre-season features" \
             python scripts/build_features_2026.py
 
-        run_step "Train all models (logistic, lightgbm, xgboost, stacked)" \
-            python scripts/train_model.py
+        run_step "Train all models (logistic, lightgbm, xgboost, catboost, mlp, stacked)" \
+            python scripts/train_model.py --models logistic lightgbm xgboost catboost mlp stacked
 
         log "Bootstrap complete."
 

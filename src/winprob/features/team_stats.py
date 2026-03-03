@@ -20,7 +20,7 @@ import inspect
 import numpy as np
 import pandas as pd
 
-_WINDOWS: list[int] = [15, 30, 60]
+_WINDOWS: list[int] = [7, 14, 15, 30, 60]  # 7/14 for in-season hot/cold (Phase 5b)
 _EWMA_SPAN: int = 20
 _SPLIT_WINDOW: int = 20  # rolling window within the home-only / away-only subsequence
 
@@ -207,6 +207,17 @@ def build_team_rolling_stats(
         rows["win_pct_split"] = wp_split.values.tolist()
         rows["pythag_split"] = py_split.values.tolist()
 
+        # Run distribution: scoring variance (std of RS) and 1-run game win %
+        w30 = 30
+        roll_rs = grp["rs"].rolling(w30, min_periods=5).std().shift(1)
+        rows["run_std_30"] = roll_rs.fillna(2.0).values.tolist()  # neutral ~2 runs std
+        one_run = (grp["rs"] - grp["ra"]).abs() == 1
+        one_run_win = (one_run.astype(float) * grp["win"]).rolling(w30, min_periods=1).sum().shift(1)
+        one_run_n = one_run.astype(float).rolling(w30, min_periods=1).sum().shift(1)
+        rows["one_run_win_pct_30"] = (
+            (one_run_win / one_run_n.replace(0, np.nan)).fillna(_NEUTRAL_WIN_PCT).values.tolist()
+        )
+
         return pd.DataFrame(rows, index=idx)
 
     _gb = combined.groupby("team", group_keys=False)
@@ -225,6 +236,7 @@ def build_team_rolling_stats(
         + ["win_pct_ewm", "run_diff_ewm", "pythag_ewm"]
         + ["streak", "rest_days"]
         + ["win_pct_split", "pythag_split"]
+        + ["run_std_30", "one_run_win_pct_30"]
     )
 
     home_s = stats[stats["side"] == "home"].set_index("gl_idx")[stat_cols].add_prefix("home_")

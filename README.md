@@ -6,19 +6,21 @@ Research-grade pre-game win probability model for MLB regular season games, 2000
 
 | Model               | Mean Brier | Mean Accuracy | Cal. Error | Best season |
 | ------------------- | ---------- | ------------- | ---------- | ----------- |
-| Logistic regression | 0.2443     | 56.2%         | 0.030      | 2019: 58.4% |
+| Logistic regression  | 0.2443     | 56.2%         | 0.030      | 2019: 58.4% |
 | LightGBM (Optuna)   | 0.2448     | 55.9%         | 0.029      | 2019: 58.7% |
-| XGBoost (Optuna)    | **0.2442** | 56.4%         | 0.029      | 2019: 59.2% |
-| Stacked ensemble    | **0.2441** | 56.3%         | 0.029      | 2019: 59.1% |
+| XGBoost (Optuna)     | **0.2442** | 56.4%         | 0.029      | 2019: 59.2% |
+| CatBoost             | 0.2445     | 56.1%         | 0.029      | 2019: 58.9% |
+| MLP (Neural Network) | 0.2450     | 55.8%         | 0.031      | 2019: 58.0% |
+| Stacked ensemble     | **0.2441** | 56.3%         | 0.029      | 2019: 59.1% |
 
 All metrics are fully out-of-sample: train on seasons < N, evaluate on season N.
-The stacked ensemble is the default production model.
+The stacked ensemble (blending all five base models) is the default production model.
 
 ---
 
 ## Models
 
-The system trains four models on 66 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **Platt calibration** (a sigmoid meta-layer fitted on a held-out calibration set) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30).
+The system trains six models on 118 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **Platt calibration** (a sigmoid meta-layer fitted on a held-out calibration set) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30).
 
 ### Logistic Regression
 
@@ -45,14 +47,32 @@ DMLC's XGBoost is the other dominant gradient-boosted tree library. Its regulari
 - **Interpretability**: Tree-based SHAP values via `shap.TreeExplainer`
 - **When to use**: Highest standalone accuracy; default choice when not ensembling
 
+### CatBoost
+
+Yandex's CatBoost uses ordered boosting and symmetric (oblivious) decision trees. Its unique training procedure reduces prediction shift, and symmetric trees tend to generalise well on tabular data. Acts as a third complementary tree model in the stacked ensemble, providing low-variance predictions that differ structurally from LightGBM and XGBoost.
+
+- **Regularisation**: L2 leaf regularisation, learning rate decay
+- **Architecture**: Symmetric (oblivious) trees with ordered boosting
+- **When to use**: Robustness-focused inference; low-variance ensemble partner
+
+### Neural Network (MLP)
+
+A multi-layer perceptron classifier with two hidden layers (128, 64 units) and ReLU activations. Captures nonlinear feature interactions that tree models may miss. Features are z-score normalised before training. Provides model diversity for stacking since its error surface is fundamentally different from tree-based learners.
+
+- **Architecture**: 128 → 64 → 1, Adam optimiser
+- **Regularisation**: L2 weight decay (alpha)
+- **When to use**: Ensemble diversity; capturing non-tree-like nonlinearities
+
 ### Stacked Ensemble (default production model)
 
-The stacked ensemble never sees raw features. Instead, it takes the **calibrated probability outputs** of all three base models as its three inputs and trains a logistic-regression **meta-learner** to find the optimal blend. Because each base model makes different errors, the meta-learner learns to up-weight whichever model is most confident in each probability range.
+The stacked ensemble never sees raw features. Instead, it takes the **calibrated probability outputs** of all five base models as its five inputs and trains a logistic-regression **meta-learner** to find the optimal blend. Because each base model makes different errors, the meta-learner learns to up-weight whichever model is most confident in each probability range.
 
 ```
  Logistic prob  ─┐
- LightGBM prob  ─┼──▶  Logistic meta-learner  ──▶  P(home win)
- XGBoost prob   ─┘
+ LightGBM prob  ─┤
+ XGBoost prob   ─┼──▶  Logistic meta-learner  ──▶  P(home win)
+ CatBoost prob  ─┤
+ MLP prob       ─┘
 ```
 
 - **Meta-learner**: `LogisticRegression(C=0.5)` — slight regularisation prevents over-fitting to the calibration set
@@ -70,37 +90,69 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 
 ---
 
-## Features (66 total)
+## Features (118 total)
 
-### Team performance
+### Team performance (27 features)
 
 - **Elo rating** (home, away, diff) — sequential cross-season rating with regression-to-mean at each season start; accounts for opponent quality
-- **Multi-window rolling** (15 / 30 / 60 games, cross-season warm-start): win%, run differential, Pythagorean expectation
+- **Multi-window rolling** (7 / 14 / 15 / 30 / 60 games, cross-season warm-start): win%, run differential, Pythagorean expectation
 - **EWMA rolling** (span=20): exponentially-weighted recent-form metrics
 - **Home/away performance splits**: team win% and Pythagorean computed separately in home games vs. road games
 
-### Context & fatigue
+### Run distribution (4 features)
+
+- **Scoring variance** (30-game window): run standard deviation for each team
+- **One-run game win%** (30-game window): close-game resilience metric
+
+### Context & fatigue (7 features)
 
 - **Streak**: current win (+) or loss (−) streak for each team
 - **Rest days**: calendar days since last game (capped at 10)
 - **Season progress**: 0 = opener, 1 = final day
+- **Day/night**: 1 = day game, 0 = night game
+- **Interleague**: 1 = interleague matchup
+- **Day of week**: 0 (Monday) – 6 (Sunday)
 
-### Pitcher quality
+### Pitcher quality (8 features)
 
-- **Prior-season SP ERA, K/9, BB/9** from the MLB Stats API — one row per pitcher per season, joined by name
+- **Prior-season SP ERA, K/9, BB/9, WHIP** from the MLB Stats API — one row per pitcher per season, joined by name
 
-### Advanced team metrics (FanGraphs, prior season)
+### Statcast individual player features (6 features)
 
-- **Batting**: wOBA, Barrel%, Hard Hit%
-- **Pitching**: FIP, xFIP, K%
+- **Lineup-weighted batter xwOBA** (home, away) — prior-season Statcast expected wOBA averaged across the 9-man lineup; uses Chadwick Register for Retrosheet → MLBAM ID mapping
+- **Lineup-weighted barrel%** (home, away) — prior-season barrel rate averaged across the lineup
+- **Starting pitcher expected wOBA allowed** (home, away) — prior-season Statcast xwOBA for the opposing starter
 
-### Park
+### Advanced team metrics (FanGraphs, prior season, 20 features)
+
+- **Batting**: wOBA, Barrel%, Hard Hit%, ISO, BABIP, xwOBA
+- **Pitching**: FIP, xFIP, K%, BB%, HR/FB, WHIP
+
+### Bullpen (8 features)
+
+- **Bullpen usage** (15 / 30 game window): rolling average of relief innings pitched
+- **Bullpen ERA proxy** (15 / 30 game window): rolling average of earned runs allowed by the bullpen
+
+### Lineup (2 features)
+
+- **Lineup continuity** (home, away) — fraction of the prior game's lineup retained
+
+### Park & venue (1 feature)
 
 - **Park run factor** — historical runs per game at the venue vs. league average
 
-### Differential features
+### Vegas odds (2 features)
 
-- Pythagorean diff, EWMA Pythagorean diff, home/road split diff, SP ERA diff, wOBA diff, FIP diff
+- **Implied home win probability** — converted from money-line odds (defaults to 0.5 when unavailable)
+- **Line movement** — change from opening to closing implied probability
+
+### Weather (3 features)
+
+- **Game temperature** (°F), **wind speed** (mph), **humidity** (%) — fetched from Open-Meteo historical API using park geo-coordinates
+
+### Differential features (9 features)
+
+- Pythagorean diff, EWMA Pythagorean diff, home/road split diff, SP ERA diff, wOBA diff, FIP diff, xwOBA diff, WHIP diff, ISO diff
 
 ---
 
@@ -143,6 +195,16 @@ python scripts/build_features.py --seasons $(seq 2000 2025)
 python scripts/build_features_2026.py
 ```
 
+### Ingest external data (optional — Vegas odds and weather)
+
+```bash
+# Vegas odds (requires a CSV of historical money lines)
+python scripts/ingest_vegas.py --input odds.csv
+
+# Weather data (backfills from Open-Meteo API based on gamelogs)
+python scripts/ingest_weather.py
+```
+
 ### Train models (with Optuna HPO)
 
 ```bash
@@ -152,7 +214,11 @@ python scripts/train_model.py --hpo --hpo-trials 60
 Skip HPO if you just want to re-train with existing hyperparameters:
 
 ```bash
+# Train all 6 models: logistic, lightgbm, xgboost, catboost, mlp, stacked
 python scripts/train_model.py
+
+# Train a subset
+python scripts/train_model.py --models logistic xgboost stacked
 ```
 
 ### Launch the web dashboard
@@ -160,14 +226,15 @@ python scripts/train_model.py
 ```bash
 python scripts/serve.py                   # default: stacked ensemble, http://localhost:8087
 python scripts/serve.py --model xgboost   # use XGBoost model
-python scripts/serve.py --model lightgbm  # use LightGBM model
-python scripts/serve.py --model logistic  # use logistic regression
+python scripts/serve.py --model catboost  # use CatBoost model
+python scripts/serve.py --model mlp       # use MLP (neural network) model
 ```
 
 Open:
 
 - `http://localhost:8087` — all-seasons games browser
 - `http://localhost:8087/season/2026` — 2026 schedule and predictions
+- `http://localhost:8087/dashboard` — admin dashboard (retrain, ingest, system status)
 
 ### CLI query tool
 
@@ -262,7 +329,7 @@ The `scripts/update_daily.sh` script refreshes game results, rebuilds features, 
 | 1 | Refresh the current-season MLB schedule (picks up postponements and rescheduled games) |
 | 2 | Refresh the current-season Retrosheet gamelogs (yesterday's results) |
 | 3 | Rebuild the Retrosheet ↔ MLB crosswalk for the current season |
-| 4 | Rebuild the 66-feature matrix for the current season |
+| 4 | Rebuild the 118-feature matrix for the current season (incl. Statcast, Vegas, weather) |
 | 5 | Rebuild 2026 pre-season predictions from the updated team state |
 | 6 | Kill the running server and start a fresh instance to load the new data |
 
@@ -339,7 +406,7 @@ The entire workflow — data ingestion, model training, web server, and schedule
 
 - [Docker](https://docs.docker.com/get-docker/) ≥ 24
 - [Docker Compose](https://docs.docker.com/compose/install/) v2 (bundled with Docker Desktop)
-- **Minimum 2 GB RAM allocated to the container** (4 GB recommended). The ML stack — pandas, LightGBM, XGBoost, SHAP — requires ~1.5 GB just to load models at startup. A `mem_limit` of 512m will be killed by the OOM killer before the server can respond.
+- **Minimum 4 GB RAM allocated to the container** (8 GB recommended for training). The ML stack — pandas, LightGBM, XGBoost, CatBoost, scikit-learn MLP, SHAP — requires ~2 GB at startup; training all 6 models concurrently can peak higher.
 - Supported platforms: `linux/amd64` and `linux/arm64` (Synology/QNAP NAS, AWS Graviton, Oracle Ampere, Apple Silicon via Rosetta)
 
 ### Quick start
@@ -352,7 +419,7 @@ docker compose up --build
 open http://localhost:8087
 ```
 
-> **First-run notice**: On a cold start (no `data/` directory on the host) the container runs the full bootstrap pipeline — ingesting 25 years of historical data and training every model. **This can take several hours.** Subsequent starts are fast because the data volume persists on the host.
+> **First-run notice**: On a cold start (no `data/` directory on the host) the container runs the full bootstrap pipeline — ingesting 25+ years of historical data and training all 6 models. **This can take several hours.** Subsequent starts are fast because the data volume persists on the host.
 
 ### Detached / daemon mode
 
@@ -374,7 +441,7 @@ docker compose up -d                 # start again
 
 | Variable | Default   | Description |
 | -------- | --------- | ----------- |
-| `MODEL`  | `stacked` | Model served: `logistic \| lightgbm \| xgboost \| stacked` |
+| `MODEL`  | `stacked` | Model served: `logistic \| lightgbm \| xgboost \| catboost \| mlp \| stacked` |
 | `PORT`   | `8087`    | Host port the dashboard is exposed on |
 
 ```bash
@@ -398,8 +465,8 @@ The container runs two cron jobs via `supercronic`:
 
 | Schedule   | Script                      | What it does |
 | ---------- | --------------------------- | ------------ |
-| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs, rebuild features, restart server |
-| 23:00 UTC  | `docker/retrain_daily.sh`   | Retrain all models on fresh data, restart server |
+| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs, rebuild 118-feature matrix, restart server |
+| 23:00 UTC  | `docker/retrain_daily.sh`   | Retrain all 6 models on fresh data, restart server |
 
 Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on the host.
 
@@ -477,50 +544,60 @@ docker run --rm --entrypoint python mlb-winprob:test -m pytest tests/ -v
 ## Data pipeline
 
 ```
-MLB Stats API        Retrosheet gamelogs      FanGraphs
-      │                     │                     │
-      ▼                     ▼                     ▼
- schedule/           retrosheet/              fangraphs/          pitcher_stats/
- games_YYYY.parquet  gamelogs_YYYY.parquet    fangraphs_YYYY.parquet  pitchers_YYYY.parquet
-      │                     │
-      └──── crosswalk ───────┘
-            game_id_map_YYYY.parquet
+MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
+      │                  │                  │                  │
+      ▼                  ▼                  ▼                  ▼
+ schedule/          retrosheet/        fangraphs/        statcast_player/
+ games_YYYY         gamelogs_YYYY      fangraphs_YYYY    batter/pitcher stats
+      │                  │
+      └──── crosswalk ───┘
+             game_id_map_YYYY
+
+ Open-Meteo API      Vegas odds CSV
+       │                   │
+       ▼                   ▼
+   weather/             vegas/
+ by_park_date         vegas_YYYY
+
                     │
                     ▼
               features/
-         features_YYYY.parquet   ←── 66 features per game
-         features_2026.parquet   ←── pre-season 2026 (from build_features_2026.py)
+     features_YYYY.parquet   ←── 118 features per game
+     features_2026.parquet   ←── pre-season 2026 (from build_features_2026.py)
                     │
                     ▼
                models/
-     logistic_v3_train2025/       lightgbm_v3_train2025/
-     xgboost_v3_train2025/        hpo_lightgbm.json  hpo_xgboost.json
-     cv_summary_v3.json
+  logistic_v3_train2026/    lightgbm_v3_train2026/
+  xgboost_v3_train2026/     catboost_v3_train2026/
+  stacked_v3_train2026/     cv_summary_v3.json
 ```
 
 ---
 
 ## Data locations
 
-| Path                            | Contents                                                   |
-| ------------------------------- | ---------------------------------------------------------- |
-| `data/raw/mlb_api/schedule/`    | Raw MLB Stats API JSON responses (schedule endpoint)       |
-| `data/raw/mlb_api/stats/`       | Raw MLB Stats API JSON responses (pitcher stats endpoint)  |
-| `data/raw/mlb_api/teams/`       | Raw MLB Stats API JSON responses (teams endpoint)          |
-| `data/raw/retrosheet/gamelogs/` | Raw Retrosheet GL text files (`GL<YYYY>.TXT`)              |
-| `data/processed/schedule/`      | `games_YYYY.parquet` + CSV + checksums                     |
-| `data/processed/retrosheet/`    | `gamelogs_YYYY.parquet` + CSV + checksums                  |
-| `data/processed/crosswalk/`     | `game_id_map_YYYY.parquet`, coverage report, failed lists  |
-| `data/processed/teams/`         | `teams_YYYY.parquet` (MLB team roster metadata)            |
-| `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual pitcher stats) |
-| `data/processed/fangraphs/`     | `fangraphs_YYYY.parquet` (FanGraphs team advanced metrics) |
-| `data/processed/features/`      | `features_YYYY.parquet` (66-feature matrix per season)     |
-| `data/models/`                  | Trained model artifacts + HPO results + CV summaries       |
-| `data/processed/predictions/`   | Immutable prediction snapshots (Parquet, by season)        |
-| `data/processed/drift/`         | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
-| `logs/server.log`               | Web server stdout/stderr                                   |
-| `logs/cron.log`                 | Daily cron job output                                      |
-| `server.pid`                    | PID of the running server process                          |
+| Path                               | Contents                                                   |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `data/raw/mlb_api/schedule/`       | Raw MLB Stats API JSON responses (schedule endpoint)       |
+| `data/raw/mlb_api/stats/`          | Raw MLB Stats API JSON responses (pitcher stats endpoint)  |
+| `data/raw/mlb_api/teams/`          | Raw MLB Stats API JSON responses (teams endpoint)          |
+| `data/raw/retrosheet/gamelogs/`    | Raw Retrosheet GL text files (`GL<YYYY>.TXT`)              |
+| `data/processed/schedule/`         | `games_YYYY.parquet` + CSV + checksums                     |
+| `data/processed/retrosheet/`       | `gamelogs_YYYY.parquet` + CSV + checksums                  |
+| `data/processed/crosswalk/`        | `game_id_map_YYYY.parquet`, coverage report, failed lists  |
+| `data/processed/teams/`            | `teams_YYYY.parquet` (MLB team roster metadata)            |
+| `data/processed/pitcher_stats/`    | `pitchers_YYYY.parquet` (MLB API individual pitcher stats) |
+| `data/processed/fangraphs/`        | `fangraphs_YYYY.parquet` (FanGraphs team advanced metrics) |
+| `data/processed/statcast_player/`  | Statcast individual batter and pitcher stats (via pybaseball) |
+| `data/processed/vegas/`            | `vegas_YYYY.parquet` (implied probabilities from money lines) |
+| `data/processed/weather/`          | `by_park_date.parquet` (historical temp, wind, humidity per game) |
+| `data/processed/features/`         | `features_YYYY.parquet` (118-feature matrix per season)    |
+| `data/models/`                     | Trained model artifacts + HPO results + CV summaries       |
+| `data/processed/predictions/`      | Immutable prediction snapshots (Parquet, by season)        |
+| `data/processed/drift/`            | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
+| `logs/server.log`                  | Web server stdout/stderr                                   |
+| `logs/cron.log`                    | Daily cron job output                                      |
+| `server.pid`                       | PID of the running server process                          |
 
 ---
 
@@ -567,6 +644,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `http://localhost:8087/` | All-seasons games browser (2000–2026) |
 | `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, and Elo power rankings |
 | `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
+| `http://localhost:8087/dashboard` | Admin dashboard: retrain models, update data, system status |
 
 ### Features
 
@@ -574,8 +652,9 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 - **2026 season page** — full 2,430-game schedule with pre-season win probabilities, countdown, favourite/toss-up badges, and a sticky Elo power rankings sidebar
 - **Game detail** — probability bars, SHAP factor attribution chart, key stats comparison
 - **Biggest upsets** — all-time or by season, filterable by home/away team and minimum favourite probability
-- **CV accuracy chart** — out-of-sample accuracy trend across all 4 model types
+- **CV accuracy chart** — out-of-sample accuracy trend across all 6 model types
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
+- **Admin dashboard** — "Update Data" and "Retrain Models" buttons with async background execution, real-time log streaming, pipeline status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
 
 ### API endpoints
 
@@ -587,6 +666,9 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `GET /api/games/{game_pk}`                        | Full detail + SHAP attribution for one game      |
 | `GET /api/upsets?season=&home=&away=&min_prob=`   | Biggest upsets, filterable by team               |
 | `GET /api/cv-summary`                             | Model CV results by season                       |
+| `GET /api/admin/status`                           | Full system status (data, models, pipelines)     |
+| `POST /api/admin/ingest`                          | Kick off data-ingest pipeline (async)            |
+| `POST /api/admin/retrain`                         | Kick off model-retrain pipeline (async)          |
 
 ---
 
@@ -599,16 +681,22 @@ mlb-winprob/
 │   │   ├── client.py
 │   │   ├── schedule.py
 │   │   └── pitcher_stats.py
-│   ├── statcast/        # FanGraphs / Statcast advanced metrics
-│   │   └── fangraphs.py
+│   ├── statcast/        # Statcast / FanGraphs advanced metrics
+│   │   ├── fangraphs.py     # FanGraphs team-level stats (via pybaseball)
+│   │   └── player_stats.py  # Statcast individual batter/pitcher stats + ID mapping
+│   ├── external/        # External data sources
+│   │   ├── vegas.py         # Money-line → implied probability conversion
+│   │   └── weather.py       # Open-Meteo historical weather API client + cache
 │   ├── features/        # Feature engineering pipeline
 │   │   ├── elo.py           # Sequential Elo rating
-│   │   ├── team_stats.py    # Multi-window, EWMA, home/away splits
+│   │   ├── team_stats.py    # Multi-window (7/14/15/30/60), EWMA, home/away splits
 │   │   ├── pitcher_stats.py # Gamelog-based pitcher ERA
 │   │   ├── park_factors.py
-│   │   └── builder.py       # Assembles 66-feature matrix
+│   │   ├── bullpen.py       # Bullpen usage and ERA proxy features
+│   │   ├── lineup.py        # Lineup continuity features
+│   │   └── builder.py       # Assembles 118-feature matrix
 │   ├── model/           # Model training and evaluation
-│   │   ├── train.py     # LR + LightGBM + XGBoost + stacked, Optuna, time-weighted
+│   │   ├── train.py     # LR + LightGBM + XGBoost + CatBoost + MLP + stacked
 │   │   ├── evaluate.py
 │   │   └── artifacts.py # Save / load model artifacts
 │   ├── predict/         # Prediction snapshots
@@ -616,22 +704,27 @@ mlb-winprob/
 │   ├── drift/           # Drift monitoring
 │   │   └── compute.py
 │   └── app/             # FastAPI web dashboard
-│       ├── main.py
-│       ├── data_cache.py
+│       ├── main.py          # Routes and API endpoints
+│       ├── data_cache.py    # In-memory feature and model cache
+│       ├── admin.py         # Background pipeline runner + system status
 │       └── templates/
 │           ├── index.html        # All-seasons games browser
 │           ├── game.html         # Individual game detail + SHAP
-│           └── season_2026.html  # 2026 season schedule + predictions
+│           ├── season_2026.html  # 2026 season schedule + predictions
+│           └── dashboard.html    # Admin dashboard (retrain, ingest, status)
 ├── scripts/
 │   ├── ingest_schedule.py              # MLB Stats API schedule ingestion
 │   ├── ingest_retrosheet_gamelogs.py   # Retrosheet game log ingestion
 │   ├── build_crosswalk.py              # Retrosheet ↔ MLB ID crosswalk
 │   ├── ingest_pitcher_stats.py         # MLB Stats API individual pitcher stats
 │   ├── ingest_fangraphs.py             # FanGraphs team advanced metrics
+│   ├── ingest_vegas.py                 # Vegas money-line odds → implied probabilities
+│   ├── ingest_weather.py               # Open-Meteo historical weather backfill
 │   ├── ingest_all.py                   # Orchestrate all ingestion steps
-│   ├── build_features.py               # Build 66-feature matrices (historical)
+│   ├── build_features.py               # Build 118-feature matrices (historical)
 │   ├── build_features_2026.py          # Build 2026 pre-season feature matrix
-│   ├── train_model.py                  # Optuna HPO + expanding-window CV + production models
+│   ├── train_model.py                  # Optuna HPO + expanding-window CV + 6 production models
+│   ├── feature_importance.py           # SHAP-based feature importance analysis
 │   ├── run_predictions.py              # Snapshot predictions
 │   ├── compute_drift.py                # Drift monitoring
 │   ├── query_game.py                   # Human-centric CLI query tool
@@ -642,7 +735,7 @@ mlb-winprob/
 │   ├── supervisord.conf                # Process manager config (server + cron)
 │   ├── crontab                         # supercronic schedule (1am ingest, 11pm retrain)
 │   ├── ingest_daily.sh                 # Daily 1am data refresh
-│   └── retrain_daily.sh                # Daily 11pm model retrain
+│   └── retrain_daily.sh                # Daily 11pm model retrain (all 6 models)
 ├── Dockerfile                          # Multi-stage image (base → test → production)
 ├── docker-compose.yml                  # Compose config (volumes, ports, env vars)
 ├── .dockerignore                       # Excludes data/, .git/, .venv/, caches from build context
@@ -654,6 +747,9 @@ mlb-winprob/
 │   │   ├── crosswalk/
 │   │   ├── pitcher_stats/
 │   │   ├── fangraphs/
+│   │   ├── statcast_player/    # Statcast batter/pitcher individual stats
+│   │   ├── vegas/              # Implied probabilities from money lines
+│   │   ├── weather/            # Open-Meteo historical weather cache
 │   │   ├── features/
 │   │   ├── predictions/
 │   │   └── drift/
@@ -680,4 +776,7 @@ Game log data from **Retrosheet** (retrosheet.org).
 > Interested parties may contact Retrosheet at 20 Sunset Rd., Newark, DE 19711.
 
 Advanced metrics from **FanGraphs** (fangraphs.com) via the `pybaseball` library.
+Statcast individual player data from **Baseball Savant** (baseballsavant.mlb.com) via `pybaseball`.
 Schedule and player data from the **MLB Stats API** (statsapi.mlb.com).
+Historical weather data from the **Open-Meteo API** (open-meteo.com).
+Player ID mapping via the **Chadwick Baseball Bureau** register.

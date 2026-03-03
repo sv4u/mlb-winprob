@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -11,6 +13,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from winprob.app.admin import (
+    PipelineKind,
+    PipelineStatus,
+    gather_data_status,
+    gather_model_status,
+    get_state,
+    run_pipeline,
+)
 from winprob.app.data_cache import (
     TEAM_NAMES,
     get_features,
@@ -23,16 +33,19 @@ app = FastAPI(title="MLB Win Probability", version="3.0")
 _BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
 
-# Mount static files
 _static = _BASE / "static"
 _static.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 
+def _reload_app() -> None:
+    """Re-run startup() to pick up new data/models after a pipeline completes."""
+    model_type = os.environ.get("WINPROB_MODEL_TYPE", "stacked")
+    startup(model_type)
+
+
 @app.on_event("startup")
 async def _startup() -> None:
-    import os
-
     model_type = os.environ.get("WINPROB_MODEL_TYPE", "logistic")
     startup(model_type)
 
@@ -264,3 +277,47 @@ async def page_season_2026(request: Request):
         "season_2026.html",
         {"request": request, "total_games": total, "first_date": first_date},
     )
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def page_dashboard(request: Request):
+    """Admin dashboard with retrain/ingest controls and system status."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+# ---------------------------------------------------------------------------
+# Admin API — pipeline control and status
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/admin/status")
+def api_admin_status() -> dict:
+    """Full system status: data coverage, model inventory, pipeline states."""
+    return {
+        "data": gather_data_status(),
+        "models": gather_model_status(),
+        "pipelines": {
+            "ingest": get_state(PipelineKind.INGEST).to_dict(),
+            "retrain": get_state(PipelineKind.RETRAIN).to_dict(),
+        },
+    }
+
+
+@app.post("/api/admin/ingest")
+async def api_admin_ingest() -> dict:
+    """Kick off the data-ingest pipeline in the background."""
+    state = get_state(PipelineKind.INGEST)
+    if state.status == PipelineStatus.RUNNING:
+        return {"ok": False, "message": "Ingest pipeline is already running."}
+    asyncio.create_task(run_pipeline(PipelineKind.INGEST, on_success=_reload_app))
+    return {"ok": True, "message": "Ingest pipeline started."}
+
+
+@app.post("/api/admin/retrain")
+async def api_admin_retrain() -> dict:
+    """Kick off the model-retrain pipeline in the background."""
+    state = get_state(PipelineKind.RETRAIN)
+    if state.status == PipelineStatus.RUNNING:
+        return {"ok": False, "message": "Retrain pipeline is already running."}
+    asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app))
+    return {"ok": True, "message": "Retrain pipeline started."}

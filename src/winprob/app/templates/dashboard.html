@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — MLB Win Probability</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
+      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
+      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
+      --yellow: #f1c40f; --orange: #f39c12;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    header span { color: var(--muted); font-size: 0.85rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+    .nav-link {
+      font-size: 0.82rem; color: var(--muted); text-decoration: none;
+      padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
+    }
+    .nav-link.active { color: var(--text); border-color: var(--accent); }
+    .nav-link:hover { text-decoration: none; color: var(--text); }
+
+    .section-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.75rem; margin-top: 1.5rem; }
+    .section-title:first-child { margin-top: 0; }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .stat-card .label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
+    .stat-card .sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+
+    .pipeline-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
+    @media (max-width: 768px) { .pipeline-row { grid-template-columns: 1fr; } }
+
+    .pipeline-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem; position: relative; overflow: hidden;
+    }
+    .pipeline-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .pipeline-card.ingest::before { background: var(--accent); }
+    .pipeline-card.retrain::before { background: var(--accent2); }
+    .pipeline-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
+    .pipeline-card .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+
+    .status-badge {
+      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 4px;
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .status-idle { background: rgba(139,144,168,.15); color: var(--muted); }
+    .status-running { background: rgba(79,142,247,.2); color: var(--accent); animation: pulse 1.5s infinite; }
+    .status-success { background: rgba(46,204,113,.15); color: var(--green); }
+    .status-failed { background: rgba(231,76,60,.15); color: var(--red); }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    .pipeline-meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .pipeline-meta span { display: block; margin-bottom: 0.2rem; }
+
+    .btn {
+      border: none; border-radius: 6px; color: white; padding: 0.55rem 1.5rem;
+      font-size: 0.88rem; cursor: pointer; font-weight: 600; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ingest { background: var(--accent); }
+    .btn-retrain { background: var(--accent2); }
+
+    .log-box {
+      background: #0a0c12; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.75rem 1rem; margin-top: 0.75rem; max-height: 260px;
+      overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.72rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-box:empty::after { content: 'No log output yet.'; font-style: italic; }
+
+    .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .model-item {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1rem 1.15rem; position: relative; overflow: hidden;
+    }
+    .model-item::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); }
+    .model-item h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .model-item .model-detail { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+
+    .cv-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: var(--card); }
+    .val-good { color: var(--green); font-weight: 600; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚾ MLB Win Probability</h1>
+  <span>Admin Dashboard</span>
+  <nav style="margin-left:auto;display:flex;gap:0.6rem">
+    <a href="/" class="nav-link">All Seasons</a>
+    <a href="/season/2026" class="nav-link">2026 Season</a>
+    <a href="/dashboard" class="nav-link active">Dashboard</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <h2 class="section-title">System Overview</h2>
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="label">Total Games</div>
+      <div class="value" id="sc-games">—</div>
+      <div class="sub" id="sc-games-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Seasons Ingested</div>
+      <div class="value" id="sc-seasons">—</div>
+      <div class="sub" id="sc-seasons-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Models Trained</div>
+      <div class="value" id="sc-models">—</div>
+      <div class="sub" id="sc-models-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Last Ingest</div>
+      <div class="value" id="sc-ingest" style="font-size:1.1rem">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Last Retrain</div>
+      <div class="value" id="sc-retrain" style="font-size:1.1rem">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Brier Score</div>
+      <div class="value" id="sc-brier">—</div>
+      <div class="sub" id="sc-brier-sub"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Pipeline Controls</h2>
+  <div class="pipeline-row">
+    <div class="pipeline-card ingest">
+      <h3>
+        Update Data
+        <span class="status-badge status-idle" id="ingest-badge">idle</span>
+      </h3>
+      <p class="desc">
+        Refresh the current season's schedule, gamelogs, crosswalk, and feature matrices
+        from MLB Stats API and Retrosheet. The server auto-reloads when complete.
+      </p>
+      <div class="pipeline-meta" id="ingest-meta"></div>
+      <button class="btn btn-ingest" id="btn-ingest" onclick="startPipeline('ingest')">Update Data</button>
+      <div class="log-box" id="ingest-log"></div>
+    </div>
+
+    <div class="pipeline-card retrain">
+      <h3>
+        Retrain Models
+        <span class="status-badge status-idle" id="retrain-badge">idle</span>
+      </h3>
+      <p class="desc">
+        Train all 6 production models (logistic, LightGBM, XGBoost, CatBoost, MLP, stacked)
+        on the latest data. The server auto-reloads with new models when complete.
+      </p>
+      <div class="pipeline-meta" id="retrain-meta"></div>
+      <button class="btn btn-retrain" id="btn-retrain" onclick="startPipeline('retrain')">Retrain Models</button>
+      <div class="log-box" id="retrain-log"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Trained Models</h2>
+  <div class="model-grid" id="model-grid"></div>
+
+  <h2 class="section-title">Cross-Validation Performance (Latest Run)</h2>
+  <div class="cv-table-wrap">
+    <table id="cv-table">
+      <thead>
+        <tr>
+          <th>Season</th>
+          <th>Model</th>
+          <th>Brier</th>
+          <th>Accuracy</th>
+          <th>Cal Error</th>
+          <th>Games</th>
+        </tr>
+      </thead>
+      <tbody id="cv-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let pollTimer = null;
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function setBadge(id, status) {
+  const el = document.getElementById(id);
+  el.textContent = status;
+  el.className = 'status-badge status-' + status;
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/admin/status');
+    const s = await res.json();
+    renderOverview(s);
+    renderPipeline('ingest', s.pipelines.ingest);
+    renderPipeline('retrain', s.pipelines.retrain);
+    renderModels(s.models.production_models);
+    renderCV(s.models.cv_summary);
+
+    const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.retrain.status === 'running';
+    if (anyRunning && !pollTimer) {
+      pollTimer = setInterval(fetchStatus, 2000);
+    } else if (!anyRunning && pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  } catch (e) {
+    console.error('Status fetch failed:', e);
+  }
+}
+
+function renderOverview(s) {
+  document.getElementById('sc-games').textContent = (s.data.total_games || 0).toLocaleString();
+  const seasons = s.data.seasons_available || [];
+  document.getElementById('sc-seasons').textContent = seasons.length;
+  if (seasons.length) {
+    document.getElementById('sc-seasons-sub').textContent = seasons[0] + ' – ' + seasons[seasons.length - 1];
+  }
+  document.getElementById('sc-games-sub').textContent = s.data.feature_files_count + ' feature files';
+
+  const prodModels = s.models.production_models || [];
+  document.getElementById('sc-models').textContent = prodModels.length;
+  const totalArt = s.models.total_artifacts || 0;
+  document.getElementById('sc-models-sub').textContent = totalArt + ' total artifacts';
+
+  document.getElementById('sc-ingest').textContent = fmtDate(s.data.last_ingest);
+  document.getElementById('sc-retrain').textContent = fmtDate(s.models.last_retrain);
+
+  const cv = s.models.cv_summary || [];
+  if (cv.length) {
+    const briers = cv.filter(r => r.brier != null).map(r => r.brier);
+    if (briers.length) {
+      const best = Math.min(...briers);
+      document.getElementById('sc-brier').textContent = best.toFixed(4);
+      const row = cv.find(r => r.brier === best);
+      if (row) document.getElementById('sc-brier-sub').textContent = row.model + ' (' + row.season + ')';
+    }
+  }
+}
+
+function renderPipeline(kind, p) {
+  setBadge(kind + '-badge', p.status);
+  const btn = document.getElementById('btn-' + kind);
+  btn.disabled = p.status === 'running';
+
+  let meta = '';
+  if (p.started_at) meta += '<span>Started: ' + fmtDate(p.started_at) + '</span>';
+  if (p.finished_at) meta += '<span>Finished: ' + fmtDate(p.finished_at) + '</span>';
+  if (p.error) meta += '<span style="color:var(--red)">Error: ' + p.error + '</span>';
+  document.getElementById(kind + '-meta').innerHTML = meta;
+
+  const logEl = document.getElementById(kind + '-log');
+  if (p.log_tail && p.log_tail.length) {
+    logEl.textContent = p.log_tail.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+function renderModels(models) {
+  const grid = document.getElementById('model-grid');
+  if (!models || !models.length) {
+    grid.innerHTML = '<p style="color:var(--muted);font-size:0.85rem">No trained models found.</p>';
+    return;
+  }
+  grid.innerHTML = models.map(m => `
+    <div class="model-item">
+      <h4>${m.model_type}</h4>
+      <div class="model-detail">
+        <div>Artifact: ${m.name}</div>
+        <div>Version: ${m.version}</div>
+        ${m.trained_at ? '<div>Trained: ' + fmtDate(m.trained_at) + '</div>' : ''}
+        ${m.training_seasons ? '<div>Seasons: ' + m.training_seasons.join(', ') + '</div>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCV(rows) {
+  const tbody = document.getElementById('cv-tbody');
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center">No CV data available.</td></tr>';
+    return;
+  }
+  const sorted = [...rows].sort((a, b) => a.season - b.season || a.model.localeCompare(b.model));
+  tbody.innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.season}</td>
+      <td>${r.model}</td>
+      <td>${r.brier != null ? r.brier.toFixed(4) : '—'}</td>
+      <td>${r.accuracy != null ? (r.accuracy * 100).toFixed(1) + '%' : '—'}</td>
+      <td>${r.cal_err != null ? r.cal_err.toFixed(4) : '—'}</td>
+      <td>${r.n_games || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+async function startPipeline(kind) {
+  const btn = document.getElementById('btn-' + kind);
+  btn.disabled = true;
+  setBadge(kind + '-badge', 'running');
+
+  try {
+    const res = await fetch('/api/admin/' + kind, { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.message);
+      btn.disabled = false;
+      return;
+    }
+  } catch (e) {
+    alert('Failed to start pipeline: ' + e.message);
+    btn.disabled = false;
+    return;
+  }
+
+  if (!pollTimer) {
+    pollTimer = setInterval(fetchStatus, 2000);
+  }
+}
+
+fetchStatus();
+</script>
+</body>
+</html>
