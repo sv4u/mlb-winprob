@@ -120,12 +120,19 @@ def startup(model_type: str = "logistic") -> None:
     _model, _meta = load_model(art)
     _feature_cols = _meta.feature_cols
 
-    clean = _features.dropna(subset=_feature_cols)
-    X = clean[_feature_cols].astype(float)
-    probs = _predict_proba(_model, X)
     _features = _features.copy()
     _features["prob"] = np.nan
-    _features.loc[clean.index, "prob"] = probs
+
+    has_all_cols = all(c in _features.columns for c in _feature_cols)
+    if has_all_cols:
+        predictable = _features[_feature_cols].notna().all(axis=1)
+        if predictable.any():
+            X = _features.loc[predictable, _feature_cols].astype(float)
+            probs = _predict_proba(_model, X)
+            _features.loc[predictable, "prob"] = probs
+    else:
+        missing = [c for c in _feature_cols if c not in _features.columns]
+        logger.warning("Feature columns missing from data: %s", missing)
 
     logger.info(
         "Loaded %d games (%.0f with probabilities), model=%s",

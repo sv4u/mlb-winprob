@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -8,8 +9,12 @@ import pandas as pd
 from winprob.crosswalk.build import build_crosswalk
 from winprob.ingest.id_map import load_retro_team_map
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)-5s  %(message)s")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--seasons", nargs="*", type=int, default=[])
     ap.add_argument("--min-coverage", type=float, default=99.0)
@@ -23,9 +28,20 @@ def main() -> None:
 
     rows = []
     for s in seasons:
+        schedule_path = Path("data/processed/schedule") / f"games_{s}.parquet"
+        gamelogs_path = Path("data/processed/retrosheet") / f"gamelogs_{s}.parquet"
+
+        if not gamelogs_path.exists():
+            logger.info("Season %d: no gamelogs found at %s — skipping crosswalk", s, gamelogs_path)
+            continue
+
+        if not schedule_path.exists():
+            logger.info("Season %d: no schedule found at %s — skipping crosswalk", s, schedule_path)
+            continue
+
         try:
-            schedule = pd.read_parquet(Path("data/processed/schedule") / f"games_{s}.parquet")
-            gamelogs = pd.read_parquet(Path("data/processed/retrosheet") / f"gamelogs_{s}.parquet")
+            schedule = pd.read_parquet(schedule_path)
+            gamelogs = pd.read_parquet(gamelogs_path)
             res = build_crosswalk(
                 season=s, schedule=schedule, gamelogs=gamelogs, retro_team_map=retro_map
             )
@@ -45,6 +61,7 @@ def main() -> None:
                 }
             )
         except Exception as e:
+            logger.error("Season %d crosswalk failed: %s", s, e)
             (out_dir / f"crosswalk_failed_{s}.txt").write_text(str(e), encoding="utf-8")
             rows.append(
                 {

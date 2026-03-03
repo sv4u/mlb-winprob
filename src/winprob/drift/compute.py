@@ -14,11 +14,16 @@ Run metrics:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
+from winprob.errors import DriftComputationError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -99,9 +104,21 @@ def compute_drift(
     if len(snaps) < 2:
         return {}
 
-    current = pd.read_parquet(snaps[-1])
-    previous = pd.read_parquet(snaps[-2])
-    baseline = pd.read_parquet(snaps[0])
+    try:
+        current = pd.read_parquet(snaps[-1])
+        previous = pd.read_parquet(snaps[-2])
+        baseline = pd.read_parquet(snaps[0])
+    except Exception as exc:
+        raise DriftComputationError(
+            f"Failed to read snapshot parquets for season={season} model={model_type}: {exc}"
+        ) from exc
+
+    required_col = "predicted_home_win_prob"
+    for label, df in [("current", current), ("previous", previous), ("baseline", baseline)]:
+        if required_col not in df.columns:
+            raise DriftComputationError(
+                f"Snapshot '{label}' missing required column '{required_col}'"
+            )
 
     run_ts = str(current["run_ts_utc"].iloc[0])
     model_version = str(current["model_version"].iloc[0])

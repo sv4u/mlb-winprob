@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wiki — MLB Win Probability</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
+      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
+      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
+      --gold: #f7c94f; --orange: #f39c12; --purple: #9b59b6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; position: sticky; top: 0; z-index: 100; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    header span { color: var(--muted); font-size: 0.85rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .nav-link {
+      font-size: 0.82rem; color: var(--muted); text-decoration: none;
+      padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
+    }
+    .nav-link.active { color: var(--text); border-color: var(--accent); }
+    .nav-link:hover { text-decoration: none; color: var(--text); }
+
+    .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+
+    .sidebar {
+      width: 260px; min-width: 260px; padding: 1.5rem 1rem;
+      position: sticky; top: 60px; height: calc(100vh - 60px);
+      overflow-y: auto; border-right: 1px solid var(--border);
+    }
+    .sidebar h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 0.75rem; }
+    .sidebar ul { list-style: none; }
+    .sidebar li { margin-bottom: 0.15rem; }
+    .sidebar a {
+      display: block; padding: 0.35rem 0.65rem; font-size: 0.8rem;
+      color: var(--muted); border-radius: 5px; border-left: 2px solid transparent;
+    }
+    .sidebar a:hover { color: var(--text); background: var(--card); text-decoration: none; }
+    .sidebar a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,.06); }
+    .sidebar .sub { padding-left: 1.2rem; }
+    .sidebar .sub a { font-size: 0.76rem; }
+
+    .content { flex: 1; padding: 2rem 2.5rem; max-width: 920px; }
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .sidebar { display: none; }
+      .content { padding: 1.5rem; }
+    }
+
+    .content h2 { font-size: 1.5rem; font-weight: 800; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .content h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    .content h3 { font-size: 1.1rem; font-weight: 700; margin: 1.75rem 0 0.5rem; color: var(--accent); }
+    .content h4 { font-size: 0.95rem; font-weight: 700; margin: 1.25rem 0 0.4rem; }
+    .content p { font-size: 0.9rem; line-height: 1.7; color: var(--text); margin-bottom: 0.85rem; }
+    .content ul, .content ol { font-size: 0.88rem; line-height: 1.7; margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text); }
+    .content li { margin-bottom: 0.35rem; }
+    .content code { background: var(--card); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.82rem; color: var(--accent); font-family: 'SF Mono', 'Fira Code', monospace; }
+    .content pre { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.6; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text); }
+    .content pre code { background: none; padding: 0; }
+
+    .info-box { background: rgba(79,142,247,.06); border: 1px solid rgba(79,142,247,.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; }
+    .info-box strong { color: var(--accent); }
+    .warn-box { background: rgba(247,201,79,.06); border: 1px solid rgba(247,201,79,.25); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; color: var(--gold); }
+
+    .feature-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-bottom: 1.25rem; }
+    .feature-table th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    .feature-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .feature-table tr:hover td { background: var(--card); }
+
+    .model-card-wiki { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; position: relative; overflow: hidden; }
+    .model-card-wiki::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .model-card-wiki.logistic::before { background: #4f8ef7; }
+    .model-card-wiki.lightgbm::before { background: #f7a04f; }
+    .model-card-wiki.xgboost::before  { background: #2ecc71; }
+    .model-card-wiki.catboost::before { background: #f1c40f; }
+    .model-card-wiki.mlp::before      { background: #9b59b6; }
+    .model-card-wiki.stacked::before  { background: #e74c8e; }
+    .model-card-wiki h4 { margin-top: 0; }
+
+    .tag { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .tag-blue { background: rgba(79,142,247,.15); color: var(--accent); }
+    .tag-green { background: rgba(46,204,113,.15); color: var(--green); }
+    .tag-orange { background: rgba(243,156,18,.15); color: var(--orange); }
+    .tag-purple { background: rgba(155,89,182,.15); color: var(--purple); }
+    .tag-pink { background: rgba(231,76,142,.15); color: var(--accent2); }
+
+    .diagram { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; line-height: 1.8; color: var(--muted); white-space: pre; overflow-x: auto; }
+    .diagram .hl { color: var(--accent); font-weight: 600; }
+    .diagram .hl2 { color: var(--green); }
+    .diagram .hl3 { color: var(--accent2); }
+
+    .perf-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-bottom: 1.25rem; }
+    .perf-table th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    .perf-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .perf-table tr:hover td { background: var(--card); }
+    .perf-table .best { color: var(--green); font-weight: 700; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚾ MLB Win Probability</h1>
+  <span>Technical Wiki</span>
+  <nav style="margin-left:auto;display:flex;gap:0.6rem">
+    <a href="/" class="nav-link">All Seasons</a>
+    <a href="/season/2026" class="nav-link">2026 Season</a>
+    <a href="/wiki" class="nav-link active">Wiki</a>
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+  </nav>
+</header>
+
+<div class="layout">
+
+<!-- Sidebar TOC -->
+<aside class="sidebar">
+  <h3>Contents</h3>
+  <ul>
+    <li><a href="#overview">System Overview</a></li>
+    <li><a href="#baseball-stats">Baseball Statistics Primer</a>
+      <ul class="sub">
+        <li><a href="#bs-batting">Batting Stats</a></li>
+        <li><a href="#bs-pitching">Pitching Stats</a></li>
+        <li><a href="#bs-advanced">Advanced / Sabermetric</a></li>
+      </ul>
+    </li>
+    <li><a href="#data-sources">Data Sources &amp; Ingestion</a>
+      <ul class="sub">
+        <li><a href="#ds-mlbapi">MLB Stats API</a></li>
+        <li><a href="#ds-retrosheet">Retrosheet</a></li>
+        <li><a href="#ds-fangraphs">FanGraphs</a></li>
+        <li><a href="#ds-statcast">Statcast</a></li>
+        <li><a href="#ds-vegas">Vegas Odds</a></li>
+        <li><a href="#ds-weather">Weather</a></li>
+        <li><a href="#ds-crosswalk">Crosswalk</a></li>
+      </ul>
+    </li>
+    <li><a href="#features">Feature Engineering</a>
+      <ul class="sub">
+        <li><a href="#f-elo">Elo Ratings</a></li>
+        <li><a href="#f-rolling">Rolling Stats</a></li>
+        <li><a href="#f-pitcher">Pitcher Quality</a></li>
+        <li><a href="#f-advanced">Advanced Metrics</a></li>
+        <li><a href="#f-context">Context &amp; Venue</a></li>
+        <li><a href="#f-vegas-weather">Vegas &amp; Weather</a></li>
+      </ul>
+    </li>
+    <li><a href="#models">Models</a>
+      <ul class="sub">
+        <li><a href="#m-logistic">Logistic Regression</a></li>
+        <li><a href="#m-lightgbm">LightGBM</a></li>
+        <li><a href="#m-xgboost">XGBoost</a></li>
+        <li><a href="#m-catboost">CatBoost</a></li>
+        <li><a href="#m-mlp">Neural Network</a></li>
+        <li><a href="#m-stacked">Stacked Ensemble</a></li>
+      </ul>
+    </li>
+    <li><a href="#training">Training Pipeline</a>
+      <ul class="sub">
+        <li><a href="#t-cv">Expanding-Window CV</a></li>
+        <li><a href="#t-calibration">Calibration</a></li>
+        <li><a href="#t-timeweight">Time Weighting</a></li>
+        <li><a href="#t-hpo">Optuna HPO</a></li>
+        <li><a href="#t-features">Dynamic Features</a></li>
+      </ul>
+    </li>
+    <li><a href="#evaluation">Evaluation &amp; Metrics</a>
+      <ul class="sub">
+        <li><a href="#e-brier">Brier Score</a></li>
+        <li><a href="#e-logloss">Log Loss</a></li>
+        <li><a href="#e-accuracy">Accuracy</a></li>
+        <li><a href="#e-calibration">Calibration Error</a></li>
+        <li><a href="#e-results">Current Results</a></li>
+      </ul>
+    </li>
+    <li><a href="#predictions">Predictions &amp; Drift</a></li>
+    <li><a href="#errors">Error Handling</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+  </ul>
+</aside>
+
+<!-- Main Content -->
+<main class="content">
+
+<!-- ================================================================== -->
+<h2 id="overview">System Overview</h2>
+
+<p>
+  This system predicts the probability that the home team wins each MLB regular season game,
+  covering seasons 2000 through 2026. It combines 25 years of historical data from multiple
+  authoritative sources, engineers over 100 pre-game features, and trains six different machine
+  learning models. The default production model is a <strong>stacked ensemble</strong> that blends
+  all five base models for optimal accuracy and calibration.
+</p>
+
+<div class="info-box">
+  <strong>Key design principles:</strong> All metrics are fully out-of-sample (no future data
+  ever leaks into training). Prediction snapshots are immutable. Every derived artifact is
+  traceable back to its source data. The system is designed for long-term sabermetric research.
+</div>
+
+<p>The end-to-end pipeline flows through four stages:</p>
+<ol>
+  <li><strong>Data ingestion</strong> — fetch raw data from 6 external sources into structured Parquet files</li>
+  <li><strong>Feature engineering</strong> — compute 100+ pre-game features per game from the raw data</li>
+  <li><strong>Model training</strong> — train 6 models with time-weighted samples, calibration, and hyperparameter optimisation</li>
+  <li><strong>Prediction &amp; monitoring</strong> — generate immutable prediction snapshots and track model drift over time</li>
+</ol>
+
+
+<!-- ================================================================== -->
+<h2 id="baseball-stats">Baseball Statistics Primer</h2>
+
+<p>
+  Understanding the model's features requires familiarity with the baseball statistics they
+  encode. This section explains the key metrics used throughout the system, from traditional
+  box-score stats to modern sabermetric measures.
+</p>
+
+<h3 id="bs-batting">Batting Statistics</h3>
+
+<table class="feature-table">
+  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <tbody>
+    <tr><td><code>AVG</code></td><td>Batting Average</td><td>Hits per at-bat. A .300 average is excellent; the league average is around .250. Simple but ignores walks and extra-base hits.</td></tr>
+    <tr><td><code>OBP</code></td><td>On-Base Percentage</td><td>How often a batter reaches base (hits + walks + hit-by-pitch). Better than AVG because it values walks. League average is ~.320.</td></tr>
+    <tr><td><code>SLG</code></td><td>Slugging Percentage</td><td>Total bases per at-bat. Singles count 1, doubles 2, triples 3, home runs 4. Measures raw power. League average is ~.400.</td></tr>
+    <tr><td><code>ISO</code></td><td>Isolated Power</td><td>SLG minus AVG. Isolates extra-base hit power by removing singles. An ISO of .200+ indicates a power hitter.</td></tr>
+    <tr><td><code>BABIP</code></td><td>Batting Avg. on Balls In Play</td><td>AVG on batted balls excluding home runs. League average is ~.300. Extremes often regress, making it a luck indicator.</td></tr>
+    <tr><td><code>wOBA</code></td><td>Weighted On-Base Average</td><td>Weights each offensive event (walk, single, double, HR, etc.) by its actual run value. The single best summary stat for offensive production. League average is ~.320.</td></tr>
+    <tr><td><code>xwOBA</code></td><td>Expected wOBA (Statcast)</td><td>Predicts wOBA from <em>how hard</em> and at <em>what angle</em> the ball was hit, ignoring fielding. Strips out luck and defense to measure true batting quality.</td></tr>
+    <tr><td><code>Barrel%</code></td><td>Barrel Rate</td><td>Percentage of batted balls with the ideal exit velocity (≥98 mph) and launch angle (26–30°) for extra-base hits. A proxy for consistent hard, productive contact.</td></tr>
+    <tr><td><code>Hard Hit%</code></td><td>Hard Hit Rate</td><td>Percentage of batted balls with exit velocity ≥ 95 mph. Broader than barrel rate, captures overall contact quality.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="bs-pitching">Pitching Statistics</h3>
+
+<table class="feature-table">
+  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <tbody>
+    <tr><td><code>ERA</code></td><td>Earned Run Average</td><td>Earned runs allowed per 9 innings pitched. The traditional measure of pitching quality. An ERA under 3.00 is elite; league average is ~4.00–4.50.</td></tr>
+    <tr><td><code>WHIP</code></td><td>Walks + Hits per Inning</td><td>Base runners allowed per inning. Measures a pitcher's ability to keep runners off base. Sub-1.00 is elite; league average is ~1.25–1.30.</td></tr>
+    <tr><td><code>K/9</code></td><td>Strikeouts per 9 Innings</td><td>How often a pitcher strikes out batters. Higher is better. Elite pitchers exceed 10.0 K/9.</td></tr>
+    <tr><td><code>BB/9</code></td><td>Walks per 9 Innings</td><td>How often a pitcher walks batters. Lower is better. Control pitchers are under 2.0 BB/9.</td></tr>
+    <tr><td><code>K%</code></td><td>Strikeout Rate</td><td>Percentage of plate appearances ending in a strikeout. More reliable than K/9 because it accounts for varying plate appearance counts.</td></tr>
+    <tr><td><code>BB%</code></td><td>Walk Rate</td><td>Percentage of plate appearances ending in a walk. The rate-based complement to BB/9.</td></tr>
+    <tr><td><code>HR/FB</code></td><td>Home Run per Fly Ball</td><td>Percentage of fly balls that leave the park. Influenced by luck and park factors. League average is ~10–12%.</td></tr>
+    <tr><td><code>FIP</code></td><td>Fielding Independent Pitching</td><td>Estimates ERA using only strikeouts, walks, and home runs — events the pitcher controls directly. Strips out defense and luck.</td></tr>
+    <tr><td><code>xFIP</code></td><td>Expected FIP</td><td>Like FIP but replaces actual HR/FB rate with the league average, since HR/FB has high variance. More stable than FIP for small samples.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="bs-advanced">Advanced / Sabermetric Measures</h3>
+
+<table class="feature-table">
+  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <tbody>
+    <tr><td><code>Elo</code></td><td>Elo Rating</td><td>A chess-style rating system adapted for baseball. Every team starts at 1500. After each game, the winner gains points and the loser drops points, with the magnitude depending on the upset factor. Accounts for opponent quality over time.</td></tr>
+    <tr><td><code>Pythagorean</code></td><td>Pythagorean Expectation</td><td>Estimates a team's expected winning percentage from runs scored (RS) and runs allowed (RA): <code>RS² / (RS² + RA²)</code>. Teams that win more than their Pythagorean expectation are considered "lucky" and likely to regress.</td></tr>
+    <tr><td><code>Run Diff</code></td><td>Run Differential</td><td>Average runs scored minus runs allowed per game. A simple measure of overall team quality. A +1.0 run differential roughly equates to a .600 winning percentage.</td></tr>
+    <tr><td><code>EWMA</code></td><td>Exponentially Weighted Moving Avg</td><td>A rolling average that weights recent games more heavily than older ones. Captures hot/cold streaks more responsively than a uniform rolling window.</td></tr>
+    <tr><td><code>Park Factor</code></td><td>Park Run Factor</td><td>How many runs are scored at a given ballpark relative to the league average. Coors Field (Colorado) has a factor around 1.3 (30% more runs); pitcher-friendly parks like Oracle Park are around 0.85.</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ================================================================== -->
+<h2 id="data-sources">Data Sources &amp; Ingestion</h2>
+
+<p>
+  The system ingests data from six external sources. Each source feeds into the feature
+  engineering pipeline to construct a rich pre-game profile for every matchup.
+</p>
+
+<h3 id="ds-mlbapi">MLB Stats API</h3>
+<p>
+  The official MLB Stats API (<code>statsapi.mlb.com</code>) provides the game schedule and
+  individual pitcher stats. Our async client uses a <strong>token-bucket rate limiter</strong>
+  (5 requests/sec, burst of 10) with bounded concurrency, exponential backoff, and 429
+  (rate-limit) handling. All raw JSON responses are cached locally so repeat runs never hit
+  the API.
+</p>
+<ul>
+  <li><strong>Schedule data:</strong> Every regular season game from 2000–2026 with game IDs, teams, venue, date/time, doubleheader flags</li>
+  <li><strong>Pitcher stats:</strong> Season-level ERA, K/9, BB/9, WHIP for every pitcher — used for prior-season starting pitcher quality features</li>
+</ul>
+
+<h3 id="ds-retrosheet">Retrosheet Game Logs</h3>
+<p>
+  <a href="https://retrosheet.org" target="_blank">Retrosheet</a> is the gold standard for
+  historical baseball data. Each game log contains the final score, starting pitchers, lineups
+  (when available), and dozens of box-score fields. The system downloads game log text files
+  from the <strong>Chadwick GitHub mirror</strong> (primary) or the Retrosheet.org ZIP archive
+  (fallback), parses them into structured DataFrames, and stores them as Parquet files.
+</p>
+<p>
+  Retrosheet data powers the core rolling stats, Elo ratings, pitcher ERA calculations, and
+  park factors. It is the backbone of all historical feature engineering.
+</p>
+
+<h3 id="ds-fangraphs">FanGraphs</h3>
+<p>
+  <a href="https://fangraphs.com" target="_blank">FanGraphs</a> provides team-level advanced
+  metrics: wOBA, Barrel%, Hard Hit%, ISO, BABIP, xwOBA (batting) and FIP, xFIP, K%, BB%,
+  HR/FB, WHIP (pitching). These are fetched via the <code>pybaseball</code> library and
+  joined to each game as prior-season team strength indicators. Available from 2002 onward.
+</p>
+
+<h3 id="ds-statcast">Statcast (Baseball Savant)</h3>
+<p>
+  <a href="https://baseballsavant.mlb.com" target="_blank">Statcast</a> is MLB's ball-tracking
+  system, measuring exit velocity, launch angle, sprint speed, and spin rate since 2015. The
+  system fetches individual batter and pitcher Statcast data via <code>pybaseball</code> and
+  computes:
+</p>
+<ul>
+  <li><strong>Lineup-weighted xwOBA</strong> — the average expected wOBA across a team's 9-man batting order</li>
+  <li><strong>Lineup-weighted Barrel%</strong> — the average barrel rate across the lineup</li>
+  <li><strong>Starting pitcher xwOBA allowed</strong> — how hard the opposing starter was hit, per Statcast</li>
+</ul>
+<p>
+  Player IDs are mapped from Retrosheet to MLBAM IDs using the
+  <strong>Chadwick Baseball Bureau</strong> register.
+</p>
+
+<h3 id="ds-vegas">Vegas Odds</h3>
+<p>
+  Pre-game money-line odds are converted to implied win probabilities using the formula:
+</p>
+<pre><code>If ML &lt; 0 (favourite):  prob = |ML| / (|ML| + 100)
+If ML &gt; 0 (underdog):   prob = 100 / (ML + 100)</code></pre>
+<p>
+  The vig (bookmaker margin) is removed by normalising so the two sides sum to 1.0.
+  Vegas lines encode public money, sharp action, injury news, and weather — information
+  that statistical models often miss. When available, the <strong>line movement</strong>
+  (opening line vs. closing line) is also captured as a feature.
+</p>
+
+<h3 id="ds-weather">Weather</h3>
+<p>
+  Historical weather data is fetched from the <a href="https://open-meteo.com" target="_blank">Open-Meteo API</a>
+  (free, no API key required) using the GPS coordinates of each ballpark. Three features are
+  extracted: <strong>temperature</strong> (°F), <strong>wind speed</strong> (mph), and
+  <strong>humidity</strong> (%). Extreme heat and wind can measurably affect batting outcomes.
+</p>
+
+<h3 id="ds-crosswalk">Crosswalk (Retrosheet ↔ MLB API)</h3>
+<p>
+  Retrosheet and the MLB Stats API use different game identifiers. The crosswalk matches
+  them by (date, home team, away team, doubleheader number), producing a
+  <code>game_id_map_{season}.parquet</code> with match confidence scores. The system enforces
+  a minimum <strong>99% coverage threshold</strong> — if fewer than 99% of games are matched,
+  the crosswalk reports an error.
+</p>
+
+
+<!-- ================================================================== -->
+<h2 id="features">Feature Engineering</h2>
+
+<p>
+  Every game is described by <strong>100+ pre-game features</strong> computed from
+  the raw data sources. Features are always computed <em>before</em> the game occurs — no future
+  information ever leaks into the feature set. Cross-season continuity is maintained: rolling
+  windows and Elo ratings carry forward from the previous season.
+</p>
+
+<h3 id="f-elo">Elo Ratings (3 features)</h3>
+<p>
+  The system computes pre-game Elo ratings for every team using a sequential update rule.
+  After each game, the winner gains points and the loser drops them, with the magnitude
+  proportional to how unexpected the outcome was:
+</p>
+<pre><code>Expected = 1 / (1 + 10^((OpponentElo - TeamElo) / 400))
+NewElo = OldElo + K × (Actual - Expected)</code></pre>
+<ul>
+  <li><strong>K-factor = 20</strong> — the maximum rating swing per game</li>
+  <li><strong>Home field advantage = 24 Elo points</strong> — the home team's rating is boosted by 24 before computing Expected</li>
+  <li><strong>Season regression = 33%</strong> — at each season start, ratings regress 1/3 toward 1500 to account for roster turnover</li>
+</ul>
+<p>
+  The features are: <code>home_elo</code>, <code>away_elo</code>, and <code>elo_diff</code>
+  (home minus away). An Elo difference of +100 corresponds roughly to a 64% expected win rate.
+</p>
+
+<h3 id="f-rolling">Rolling Team Statistics (45+ features)</h3>
+<p>
+  Multi-window rolling statistics capture team form at different time scales. For each of
+  <strong>five windows</strong> (7, 14, 15, 30, and 60 games), the system computes:
+</p>
+<table class="feature-table">
+  <thead><tr><th>Stat</th><th>Features</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Win %</td><td><code>{side}_win_pct_{W}</code></td><td>Winning percentage over the last W games</td></tr>
+    <tr><td>Run Diff</td><td><code>{side}_run_diff_{W}</code></td><td>Average run differential per game over W games</td></tr>
+    <tr><td>Pythagorean</td><td><code>{side}_pythag_{W}</code></td><td>Expected win% from runs scored/allowed over W games</td></tr>
+  </tbody>
+</table>
+<p>
+  The 7 and 14-game windows capture very recent hot/cold streaks; the 60-game window
+  reflects long-term team quality. All use <code>shift(1)</code> to prevent leakage — the
+  current game's result is never included.
+</p>
+<p>Additional rolling features include:</p>
+<ul>
+  <li><strong>EWMA</strong> (span=20): exponentially weighted versions of win%, run diff, and Pythagorean that weight recent games more heavily</li>
+  <li><strong>Home/away splits:</strong> separate rolling win% and Pythagorean for each team's home-game and away-game subsequences</li>
+  <li><strong>Win/loss streak:</strong> consecutive wins (positive) or losses (negative)</li>
+  <li><strong>Rest days:</strong> calendar days since last game (capped at 10)</li>
+  <li><strong>Run std (30-game):</strong> scoring variance — high-variance offences are less predictable</li>
+  <li><strong>One-run game win% (30-game):</strong> close-game resilience</li>
+</ul>
+
+<h3 id="f-pitcher">Pitcher Quality (8+ features)</h3>
+<p>
+  Starting pitcher quality is captured through prior-season stats from the MLB Stats API
+  and in-season cumulative stats from Retrosheet gamelogs.
+</p>
+<ul>
+  <li><strong>Prior-season ERA, K/9, BB/9, WHIP</strong> for the home and away starters</li>
+  <li><strong>In-season ERA blend:</strong> a Bayesian shrinkage estimator that blends the pitcher's current-season gamelog ERA with the league average (ERA=4.50), weighted by the number of starts. This prevents extreme ERA values from small samples from dominating.</li>
+  <li><strong>SP estimated wOBA allowed (Statcast):</strong> how hard the opposing starter was hit in the prior season, based on exit velocity and launch angle data</li>
+</ul>
+
+<h3 id="f-advanced">Advanced Team Metrics (26+ features)</h3>
+<p>
+  From FanGraphs (prior season, available 2002+):
+</p>
+<table class="feature-table">
+  <thead><tr><th>Side</th><th>Batting</th><th>Pitching</th></tr></thead>
+  <tbody>
+    <tr><td>Home &amp; Away</td><td>wOBA, Barrel%, Hard Hit%, ISO, BABIP, xwOBA</td><td>FIP, xFIP, K%, BB%, HR/FB, WHIP</td></tr>
+  </tbody>
+</table>
+<p>
+  <strong>Differential features</strong> are also computed: Pythagorean diff (30-game and EWMA),
+  home/away split diff, SP ERA diff, wOBA diff, FIP diff, xwOBA diff, WHIP diff, and ISO diff.
+  These directly encode the matchup advantage/disadvantage.
+</p>
+
+<h3 id="f-context">Context &amp; Venue (5 features)</h3>
+<ul>
+  <li><strong>Park run factor</strong> — runs at this venue vs. league average (requires 30+ historical games)</li>
+  <li><strong>Season progress</strong> — 0.0 at the opener, 1.0 on the final day; captures the effect of roster expansion and playoff pressure</li>
+  <li><strong>Day/night flag</strong> — some teams and pitchers perform differently in day games</li>
+  <li><strong>Interleague flag</strong> — interleague games (AL vs. NL) have historically different dynamics</li>
+  <li><strong>Day of week</strong> — encodes travel and scheduling patterns (Monday getaway days, Sunday day games)</li>
+</ul>
+
+<h3 id="f-vegas-weather">Vegas &amp; Weather (5 features)</h3>
+<ul>
+  <li><strong>Vegas implied home win probability</strong> — the market's estimate, incorporating injury news, public money, and factors models may miss</li>
+  <li><strong>Line movement</strong> — how much the line shifted from open to close, indicating sharp money or late-breaking news</li>
+  <li><strong>Temperature</strong> (°F), <strong>wind speed</strong> (mph), <strong>humidity</strong> (%) — environmental conditions that affect ball flight and pitcher grip</li>
+</ul>
+
+
+<!-- ================================================================== -->
+<h2 id="models">Models</h2>
+
+<p>
+  The system trains six models, each with different inductive biases. By combining them in a
+  stacked ensemble, the system exploits their complementary strengths while minimising their
+  individual weaknesses.
+</p>
+
+<div class="info-box">
+  <strong>What is a model?</strong> A machine learning model is a mathematical function that takes
+  pre-game features as input (Elo ratings, pitcher stats, rolling stats, etc.) and outputs a
+  number between 0 and 1 representing the estimated probability that the home team wins.
+</div>
+
+<div class="model-card-wiki logistic">
+  <h4>Logistic Regression <span class="tag tag-blue">Baseline</span></h4>
+  <p>
+    Logistic regression is the simplest model in the system. It fits a linear equation to the
+    features and passes the result through a <strong>sigmoid function</strong> to produce a
+    probability. Because the decision boundary is a hyperplane, it captures additive effects —
+    for example, a larger Elo differential increases home-win probability by a fixed amount
+    regardless of other features.
+  </p>
+  <p>
+    All features are <strong>z-score standardised</strong> (subtract mean, divide by standard
+    deviation) before fitting so that features on different scales contribute proportionally.
+    Regularisation (L2/ridge, <code>C=1.0</code>) prevents overfitting by penalising very large
+    coefficients.
+  </p>
+  <p>
+    <strong>Strengths:</strong> Fast, stable, interpretable. Feature importance is directly
+    readable from the coefficients.
+    <br><strong>Limitations:</strong> Cannot capture interactions (e.g., "a good pitcher matters more
+    in a pitcher's park") without explicit interaction features.
+  </p>
+</div>
+
+<div class="model-card-wiki lightgbm">
+  <h4>LightGBM <span class="tag tag-orange">Gradient Boosted Trees</span></h4>
+  <p>
+    <a href="https://lightgbm.readthedocs.io/" target="_blank">LightGBM</a> (Microsoft) grows an ensemble of
+    shallow decision trees in sequence. Each tree corrects the residual errors of the previous
+    ones. Unlike logistic regression, trees automatically capture <strong>non-linear
+    interactions</strong> — for example, a high Elo differential combined with a good home/away
+    split may carry a larger joint effect.
+  </p>
+  <p>
+    LightGBM uses a leaf-wise growth strategy (growing the leaf with the largest loss reduction
+    first) and histogram-based binning for fast training. Hyperparameters are optimised via
+    <strong>Optuna Bayesian search</strong> (200 trials). Typical optimal values:
+    <code>num_leaves≈63</code>, <code>learning_rate≈0.05</code>, <code>n_estimators≈500</code>.
+  </p>
+</div>
+
+<div class="model-card-wiki xgboost">
+  <h4>XGBoost <span class="tag tag-green">Gradient Boosted Trees</span></h4>
+  <p>
+    <a href="https://xgboost.readthedocs.io/" target="_blank">XGBoost</a> (DMLC) is another gradient-boosted
+    tree library with a different regularisation scheme: it uses <code>min_child_weight</code>
+    and separate L1/L2 penalties on leaf weights. Its predictions are <strong>complementary</strong>
+    to LightGBM — they tend to disagree most on uncertain games near 50%, making them valuable
+    ensemble partners.
+  </p>
+  <p>
+    XGBoost typically achieves the best <strong>single-model Brier score</strong> in this system.
+    Hyperparameters are also Optuna-tuned. Typical: <code>max_depth≈6</code>,
+    <code>learning_rate≈0.05</code>, <code>n_estimators≈500</code>.
+  </p>
+</div>
+
+<div class="model-card-wiki catboost">
+  <h4>CatBoost <span class="tag tag-orange">Gradient Boosted Trees</span></h4>
+  <p>
+    <a href="https://catboost.ai/" target="_blank">CatBoost</a> (Yandex) uses
+    <strong>ordered boosting</strong> and <strong>symmetric (oblivious) decision trees</strong>.
+    Ordered boosting trains each tree on a random permutation of the data, reducing prediction
+    shift (a form of target leakage in traditional boosting). Symmetric trees — where every node
+    at the same depth uses the same split condition — tend to generalise well on tabular data
+    and produce low-variance predictions.
+  </p>
+  <p>
+    CatBoost provides a structurally different third tree model for the ensemble. Its
+    hyperparameters (depth, iterations, L2 leaf reg) are Optuna-tuned.
+  </p>
+</div>
+
+<div class="model-card-wiki mlp">
+  <h4>Neural Network (MLP) <span class="tag tag-purple">Deep Learning</span></h4>
+  <p>
+    A <strong>multi-layer perceptron</strong> (MLP) is a feed-forward neural network. The system
+    uses three hidden layers (128 → 64 → 32 neurons) with ReLU activation functions and an Adam
+    optimiser. Features are z-score normalised before training.
+  </p>
+  <p>
+    Neural networks capture non-linear patterns that are fundamentally different from tree-based
+    splits. Their error surface is shaped differently, providing valuable <strong>model
+    diversity</strong> for stacking. Regularisation is applied via L2 weight decay
+    (<code>alpha=0.001</code>).
+  </p>
+</div>
+
+<div class="model-card-wiki stacked">
+  <h4>Stacked Ensemble <span class="tag tag-pink">Production Default</span></h4>
+  <p>
+    The stacked ensemble is the default production model and <strong>never sees raw
+    features</strong>. Instead, it takes the calibrated probability outputs of all five base
+    models as its five inputs and trains a logistic regression <strong>meta-learner</strong>
+    to find the optimal blend:
+  </p>
+  <div class="diagram"> Logistic prob  ─┐
+ LightGBM prob  ─┤
+ XGBoost prob   ─┼──▶  Logistic meta-learner (<span class="hl">C=0.5</span>)  ──▶  <span class="hl3">P(home win)</span>
+ CatBoost prob  ─┤
+ MLP prob       ─┘</div>
+  <p>
+    Because each base model makes different errors, the meta-learner learns to up-weight
+    whichever model is most confident in each probability range. The meta-learner is fit on
+    the same held-out calibration split used for Platt scaling, so base-model probabilities
+    are out-of-sample relative to the meta-learner. The slight regularisation
+    (<code>C=0.5</code>) prevents overfitting to the calibration set.
+  </p>
+</div>
+
+
+<!-- ================================================================== -->
+<h2 id="training">Training Pipeline</h2>
+
+<h3 id="t-cv">Expanding-Window Cross-Validation</h3>
+<p>
+  The system uses an <strong>expanding-window</strong> protocol to ensure all evaluation is
+  fully out-of-sample and respects the temporal ordering of baseball seasons:
+</p>
+<div class="diagram">Season:  2000  2001  2002  2003  2004  ...  2024  2025
+         ├────────────────────────────────────────────────┤
+Fold 1:  [<span class="hl">Train: 2000-2001</span>]  [<span class="hl2">Eval: 2002</span>]
+Fold 2:  [<span class="hl">Train: 2000-2002</span>]  ........  [<span class="hl2">Eval: 2003</span>]
+Fold 3:  [<span class="hl">Train: 2000-2003</span>]  ............  [<span class="hl2">Eval: 2004</span>]
+  ...
+Fold 24: [<span class="hl">Train: 2000-2024</span>]  ............................  [<span class="hl2">Eval: 2025</span>]</div>
+<p>
+  For each fold, the training data is further split: the last 20% of training rows (by time)
+  are held out as a <strong>calibration set</strong> for Platt or isotonic calibration. The
+  model never sees the evaluation season during training or calibration.
+</p>
+
+<h3 id="t-calibration">Probability Calibration</h3>
+
+<div class="info-box">
+  <strong>Why calibrate?</strong> A raw model might output "70%" but actually be correct only
+  60% of the time at that confidence level. Calibration adjusts the probabilities so that when
+  the model says 70%, games actually have a ~70% home win rate.
+</div>
+
+<p>The system supports two calibration methods:</p>
+
+<h4>Platt Calibration (Sigmoid)</h4>
+<p>
+  Fits a logistic regression on the base model's log-odds output:
+  <code>P(win) = 1 / (1 + exp(-A × logit(raw) - B))</code>. Best suited for models
+  whose errors are roughly sigmoid-shaped (logistic regression, MLP). Uses a held-out
+  calibration set to fit A and B.
+</p>
+
+<h4>Isotonic Calibration (Non-Parametric)</h4>
+<p>
+  Fits a piecewise-constant, monotonically increasing function from raw probabilities to
+  calibrated probabilities. Makes <strong>no assumptions</strong> about the shape of the
+  calibration curve, so it works better for tree models (LightGBM, XGBoost, CatBoost) whose
+  probability surfaces can have arbitrary shapes. Requires at least 500 calibration samples
+  to avoid overfitting.
+</p>
+
+<p>
+  The system automatically applies <strong>isotonic calibration for tree models</strong> and
+  <strong>Platt calibration for logistic regression and MLP</strong>.
+</p>
+
+<h3 id="t-timeweight">Time-Weighted Training</h3>
+<p>
+  Baseball evolves: the 2023 shift ban, pitch clock, and larger bases changed the game
+  significantly. To adapt, the system applies <strong>exponential decay sample weights</strong>
+  with a rate of 0.12 per season:
+</p>
+<pre><code>weight(season) = exp(-0.12 × (max_season - season))
+
+Example (training for 2025 evaluation):
+  2024 weight = 1.00    2023 weight = 0.89
+  2022 weight = 0.79    2020 weight = 0.55
+  2015 weight = 0.30    2010 weight = 0.17
+  2005 weight = 0.09    2000 weight = 0.05</code></pre>
+<p>
+  This ensures the model adapts to recent rule changes and playing styles while still
+  benefiting from the large historical sample.
+</p>
+
+<h3 id="t-hpo">Optuna Hyperparameter Optimisation</h3>
+<p>
+  <a href="https://optuna.org/" target="_blank">Optuna</a> is a Bayesian hyperparameter
+  optimisation framework. The system runs a <strong>200-trial study</strong> for each tree model
+  (LightGBM, XGBoost, CatBoost), using the last 5 seasons of expanding-window CV as the
+  objective. The search space includes:
+</p>
+<table class="feature-table">
+  <thead><tr><th>Parameter</th><th>LightGBM Range</th><th>XGBoost Range</th><th>CatBoost Range</th></tr></thead>
+  <tbody>
+    <tr><td>Learning rate</td><td>0.01 – 0.15 (log)</td><td>0.01 – 0.15 (log)</td><td>0.01 – 0.15 (log)</td></tr>
+    <tr><td>Tree depth/leaves</td><td>num_leaves: 20 – 127</td><td>max_depth: 3 – 9</td><td>depth: 4 – 10</td></tr>
+    <tr><td>Estimators</td><td>200 – 1000</td><td>200 – 1000</td><td>200 – 1000</td></tr>
+    <tr><td>Subsample</td><td>0.5 – 1.0</td><td>0.5 – 1.0</td><td>—</td></tr>
+    <tr><td>Column sample</td><td>0.3 – 1.0</td><td>0.3 – 1.0</td><td>—</td></tr>
+    <tr><td>Regularisation</td><td>L1: 0.001–2.0, L2: 0.001–5.0</td><td>L1: 0.001–2.0, L2: 0.001–5.0</td><td>L2 leaf: 0.1–10.0</td></tr>
+    <tr><td>Time decay</td><td colspan="3">0.05 – 0.25 (shared across all models)</td></tr>
+    <tr><td>Calibration</td><td colspan="3">Platt or Isotonic (tuned as a hyperparameter)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="t-features">Dynamic Feature Selection</h3>
+<p>
+  Not all seasons have the same features available — short-window rolling stats (7 and 14-game)
+  were added later and are not present in older feature files. The training pipeline
+  <strong>automatically detects the intersection</strong> of available features across all season
+  DataFrames and trains using only those features. This ensures:
+</p>
+<ul>
+  <li>Training never fails due to missing columns in older seasons</li>
+  <li>Future feature additions do not break the pipeline</li>
+  <li>The actual feature list used is stored in model metadata for reproducibility</li>
+</ul>
+<p>
+  Additionally, <strong>12 redundant features</strong> (7 and 14-day variants that are highly
+  correlated with the 15-day versions) are automatically pruned to reduce noise for tree models.
+</p>
+
+
+<!-- ================================================================== -->
+<h2 id="evaluation">Evaluation &amp; Metrics</h2>
+
+<p>
+  All metrics are computed on fully out-of-sample data — the model has never seen the
+  evaluation season during training or calibration.
+</p>
+
+<h3 id="e-brier">Brier Score</h3>
+<p>
+  The Brier score measures the mean squared error of probability predictions:
+</p>
+<pre><code>Brier = (1/N) × Σ (predicted_prob - actual_outcome)²</code></pre>
+<p>
+  where <code>actual_outcome</code> is 1 (home win) or 0 (away win). A perfect predictor
+  scores 0.0; always predicting 0.5 scores 0.25. In baseball, with an inherent randomness
+  floor, <strong>scores around 0.24 are near the theoretical limit</strong> for pre-game
+  predictions.
+</p>
+
+<h3 id="e-logloss">Log Loss</h3>
+<p>
+  Log loss penalises confident wrong predictions more severely than Brier score:
+</p>
+<pre><code>LogLoss = -(1/N) × Σ [y × log(p) + (1-y) × log(1-p)]</code></pre>
+<p>
+  A confident 95% prediction on a game that is lost incurs a much larger log loss penalty
+  than a 55% prediction on the same game. This makes log loss more sensitive to
+  overconfidence.
+</p>
+
+<h3 id="e-accuracy">Accuracy</h3>
+<p>
+  The simplest metric: what percentage of games did the model correctly predict the winner?
+  The model "predicts" the home team if <code>P(home win) ≥ 0.5</code>. Baseball's inherent
+  randomness limits accuracy to roughly <strong>56–59%</strong> even for an excellent model.
+  For comparison, always picking the home team yields about 54%.
+</p>
+
+<h3 id="e-calibration">Calibration Error</h3>
+<p>
+  Games are grouped into 10 probability bins (quantiles). For each bin, the mean predicted
+  probability is compared to the actual win rate. The calibration error is the average
+  absolute difference across bins. A well-calibrated model has an error near 0 — meaning
+  that among games where it predicts 70%, approximately 70% are actually won.
+</p>
+
+<h3 id="e-results">Current Performance</h3>
+
+<table class="perf-table">
+  <thead><tr><th>Model</th><th>Mean Brier</th><th>Mean Accuracy</th><th>Cal. Error</th><th>Best Season</th></tr></thead>
+  <tbody>
+    <tr><td>Logistic Regression</td><td>0.2444</td><td>56.1%</td><td>0.0286</td><td>2019: 58.4%</td></tr>
+    <tr><td>LightGBM</td><td>0.2455</td><td>55.8%</td><td>0.0342</td><td>2019: 57.9%</td></tr>
+    <tr><td>XGBoost</td><td>0.2449</td><td>56.0%</td><td>0.0321</td><td>2019: 58.5%</td></tr>
+    <tr><td>CatBoost</td><td>0.2470</td><td>54.9%</td><td>0.0310</td><td>2010: 57.1%</td></tr>
+    <tr><td>MLP (Neural Network)</td><td>0.2464</td><td>55.1%</td><td>0.0306</td><td>2019: 59.2%</td></tr>
+    <tr><td>Avg. Ensemble</td><td>0.2445</td><td>56.1%</td><td>0.0289</td><td>2019: 58.5%</td></tr>
+    <tr><td class="best">Stacked Ensemble</td><td class="best">0.2446</td><td class="best">56.1%</td><td class="best">0.0286</td><td>2019: 58.5%</td></tr>
+  </tbody>
+</table>
+
+<div class="info-box">
+  <strong>Interpreting the results:</strong> A Brier score of 0.244 means the model's average
+  squared probability error is about 0.244. The theoretical floor for pre-game baseball
+  prediction is around 0.24, so the system is operating near the limit of what's achievable
+  without in-game or lineup information. The best single seasons (2019) reach 58–59% accuracy,
+  while weaker seasons (2003, 2011) drop to ~53–54% — reflecting the inherent unpredictability
+  of baseball.
+</div>
+
+
+<!-- ================================================================== -->
+<h2 id="predictions">Predictions &amp; Drift Monitoring</h2>
+
+<h3>Prediction Snapshots</h3>
+<p>
+  Every time predictions are generated, they are saved as an <strong>immutable snapshot</strong>
+  in Parquet format at:
+</p>
+<pre><code>data/processed/predictions/season=YYYY/snapshots/run_ts=&lt;ISO&gt;_&lt;model_type&gt;.parquet</code></pre>
+<p>Each snapshot records:</p>
+<ul>
+  <li><code>game_pk</code>, <code>home_team</code>, <code>away_team</code> — game identity</li>
+  <li><code>predicted_home_win_prob</code> — the model's probability estimate</li>
+  <li><code>run_ts_utc</code> — when the prediction was generated (auto-set, immutable)</li>
+  <li><code>model_version</code>, <code>git_commit</code> — exact code and model version</li>
+  <li><code>schedule_hash</code>, <code>feature_hash</code> — SHA256 checksums of input data for provenance</li>
+</ul>
+<p>
+  Snapshots are <strong>never modified or deleted</strong>. This enables longitudinal study
+  of how predictions change as the season unfolds and as models are retrained.
+</p>
+
+<h3>Drift Monitoring</h3>
+<p>
+  After each prediction run, the system computes <strong>drift metrics</strong> by comparing
+  the current snapshot to previous ones:
+</p>
+<ul>
+  <li><strong>Incremental diff:</strong> current vs. the immediately prior snapshot — detects sudden shifts from data updates or retraining</li>
+  <li><strong>Baseline diff:</strong> current vs. the first snapshot of the season — tracks cumulative drift over time</li>
+</ul>
+<p>Each diff produces per-game deltas and aggregate metrics:</p>
+<table class="feature-table">
+  <thead><tr><th>Metric</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>mean_abs_delta</code></td><td>Average absolute probability change across all games</td></tr>
+    <tr><td><code>p95_abs_delta</code></td><td>95th percentile of absolute changes</td></tr>
+    <tr><td><code>max_abs_delta</code></td><td>Largest single-game probability change</td></tr>
+    <tr><td><code>pct_gt_0p01</code></td><td>% of games with delta > 1 percentage point</td></tr>
+    <tr><td><code>pct_gt_0p05</code></td><td>% of games with delta > 5 percentage points</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ================================================================== -->
+<h2 id="errors">Error Handling</h2>
+
+<p>
+  The system defines a structured error taxonomy so that every failure is classified and
+  traceable. All domain errors inherit from <code>WinProbError</code>:
+</p>
+
+<table class="feature-table">
+  <thead><tr><th>Error Class</th><th>When It Fires</th></tr></thead>
+  <tbody>
+    <tr><td><code>IngestionError</code></td><td>Raw data download or parsing fails (e.g., Retrosheet unavailable, malformed API response)</td></tr>
+    <tr><td><code>APIError</code></td><td>MLB Stats API communication failure (timeouts, rate limits, unexpected status codes)</td></tr>
+    <tr><td><code>CoverageError</code></td><td>Crosswalk coverage falls below the 99% threshold</td></tr>
+    <tr><td><code>SchemaError</code></td><td>Data doesn't match expected schema (missing columns, wrong types)</td></tr>
+    <tr><td><code>DriftComputationError</code></td><td>Snapshot diff or metrics aggregation fails</td></tr>
+    <tr><td><code>SnapshotIntegrityError</code></td><td>Immutable prediction snapshot is corrupt or violates its schema</td></tr>
+  </tbody>
+</table>
+
+<p>
+  <strong>Silent failure is forbidden.</strong> Every <code>except</code> block in the codebase
+  logs the error with context. Feature computation failures gracefully degrade to league-average
+  defaults while logging a warning.
+</p>
+
+<p>
+  The web API includes a <strong>global exception handler</strong> that catches unhandled
+  errors, logs the full traceback, and returns a safe JSON error response to the client.
+</p>
+
+
+<!-- ================================================================== -->
+<h2 id="architecture">System Architecture</h2>
+
+<div class="diagram"><span class="hl">External Data Sources</span>
+ MLB Stats API ─────┐
+ Retrosheet ────────┤
+ FanGraphs ─────────┤──▶  <span class="hl2">Ingestion Scripts</span>  ──▶  data/raw/ + data/processed/
+ Statcast ──────────┤
+ Vegas Odds ────────┤
+ Open-Meteo Weather ┘
+
+<span class="hl2">Feature Engineering</span>
+ gamelogs + schedule + crosswalk + pitcher_stats + fangraphs + vegas + weather
+    └──▶  <span class="hl">build_feature_matrix()</span>  ──▶  features_YYYY.parquet (100+ features/game)
+
+<span class="hl2">Model Training</span>
+ features_YYYY.parquet  ──▶  <span class="hl">run_expanding_cv()</span>  ──▶  CV metrics + model artifacts
+                        ──▶  <span class="hl">train_production_model()</span>  ──▶  6 production models
+
+<span class="hl2">Prediction &amp; Serving</span>
+ features + model  ──▶  <span class="hl">_predict_proba()</span>  ──▶  P(home win) per game
+                   ──▶  <span class="hl3">write_snapshot()</span>  ──▶  immutable Parquet
+                   ──▶  <span class="hl3">compute_drift()</span>  ──▶  drift metrics
+
+<span class="hl2">Web Dashboard</span>
+ FastAPI + Jinja2 templates  ──▶  Game browser, 2026 season, SHAP, admin
+ Real-time API endpoints     ──▶  /api/games, /api/upsets, /api/cv-summary</div>
+
+<p>
+  The system is designed for <strong>durability and auditability</strong>. All raw data is
+  preserved alongside processed outputs. Model artifacts include full metadata (training
+  seasons, hyperparameters, feature list, checksums). Prediction snapshots are immutable
+  and support longitudinal study across multiple seasons of model evolution.
+</p>
+
+<div class="warn-box">
+  <strong>Provenance guarantee:</strong> Every prediction can be traced back through the
+  model artifact (which records its training seasons and feature version), to the feature
+  files (which record their input data checksums), to the raw data files (which record
+  their source URLs and SHA256 hashes).
+</div>
+
+</main>
+</div>
+
+<script>
+const tocLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+const sections = Array.from(tocLinks).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+
+function updateActive() {
+  let current = '';
+  for (const s of sections) {
+    if (s.getBoundingClientRect().top <= 120) current = s.id;
+  }
+  tocLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', updateActive, { passive: true });
+updateActive();
+</script>
+
+</body>
+</html>

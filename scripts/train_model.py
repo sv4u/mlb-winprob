@@ -110,24 +110,29 @@ def main() -> None:
         )
 
         all_rows = [row for rows in cv_results.values() for row in rows]
-        summary_df = pd.DataFrame(all_rows).sort_values(["season", "model"])
+        if not all_rows:
+            print("WARNING: CV produced no results — check feature file columns.")
+        summary_df = pd.DataFrame(all_rows)
 
-        print("\n=== Mean CV metrics by model ===")
-        print(
-            summary_df.groupby("model")[["brier", "accuracy", "cal_err"]]
-            .mean()
-            .round(4)
-            .to_string()
-        )
+        if not summary_df.empty:
+            summary_df = summary_df.sort_values(["season", "model"])
 
-        print("\n=== Best / worst season by Brier ===")
-        for mt, grp in summary_df.groupby("model"):
-            best = grp.loc[grp["brier"].idxmin()]
-            worst = grp.loc[grp["brier"].idxmax()]
+            print("\n=== Mean CV metrics by model ===")
             print(
-                f"  {mt}: best {int(best.season)} ({best.brier:.4f}) "
-                f"| worst {int(worst.season)} ({worst.brier:.4f})"
+                summary_df.groupby("model")[["brier", "accuracy", "cal_err"]]
+                .mean()
+                .round(4)
+                .to_string()
             )
+
+            print("\n=== Best / worst season by Brier ===")
+            for mt, grp in summary_df.groupby("model"):
+                best = grp.loc[grp["brier"].idxmin()]
+                worst = grp.loc[grp["brier"].idxmax()]
+                print(
+                    f"  {mt}: best {int(best.season)} ({best.brier:.4f}) "
+                    f"| worst {int(worst.season)} ({worst.brier:.4f})"
+                )
 
         cv_path = args.model_dir / "cv_summary_v3.json"
         cv_path.write_text(json.dumps(all_rows, indent=2), encoding="utf-8")

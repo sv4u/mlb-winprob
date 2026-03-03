@@ -54,15 +54,25 @@ _DEF: dict[str, float] = {
     "pythag_home_only": 0.500,
     "win_pct_away_only": 0.500,
     "pythag_away_only": 0.500,
+    "run_std_30": 3.5,
+    "one_run_win_pct_30": 0.500,
     "sp_era": 4.50,
     "sp_k9": 8.50,
     "sp_bb9": 3.00,
+    "sp_whip": 1.30,
+    "sp_est_woba": 0.320,
     "bat_woba": 0.320,
     "bat_barrel_pct": 0.080,
     "bat_hard_pct": 0.370,
+    "bat_iso": 0.170,
+    "bat_babip": 0.300,
+    "bat_xwoba": 0.320,
     "pit_fip": 4.20,
     "pit_xfip": 4.20,
     "pit_k_pct": 0.220,
+    "pit_bb_pct": 0.085,
+    "pit_hr_fb": 0.110,
+    "pit_whip": 1.30,
 }
 
 # How many rest days to assign for the off-season gap
@@ -84,15 +94,25 @@ _HOME_COL_MAP: dict[str, str] = {
     "home_run_diff_ewm": "run_diff_ewm",
     "home_pythag_ewm": "pythag_ewm",
     "home_streak": "streak",
+    "home_run_std_30": "run_std_30",
+    "home_one_run_win_pct_30": "one_run_win_pct_30",
     "home_sp_era": "sp_era",
     "home_sp_k9": "sp_k9",
     "home_sp_bb9": "sp_bb9",
+    "home_sp_whip": "sp_whip",
+    "home_sp_est_woba": "sp_est_woba",
     "home_bat_woba": "bat_woba",
     "home_bat_barrel_pct": "bat_barrel_pct",
     "home_bat_hard_pct": "bat_hard_pct",
+    "home_bat_iso": "bat_iso",
+    "home_bat_babip": "bat_babip",
+    "home_bat_xwoba": "bat_xwoba",
     "home_pit_fip": "pit_fip",
     "home_pit_xfip": "pit_xfip",
     "home_pit_k_pct": "pit_k_pct",
+    "home_pit_bb_pct": "pit_bb_pct",
+    "home_pit_hr_fb": "pit_hr_fb",
+    "home_pit_whip": "pit_whip",
     "home_win_pct_home_only": "win_pct_home_only",
     "home_pythag_home_only": "pythag_home_only",
 }
@@ -112,15 +132,25 @@ _AWAY_COL_MAP: dict[str, str] = {
     "away_run_diff_ewm": "run_diff_ewm",
     "away_pythag_ewm": "pythag_ewm",
     "away_streak": "streak",
+    "away_run_std_30": "run_std_30",
+    "away_one_run_win_pct_30": "one_run_win_pct_30",
     "away_sp_era": "sp_era",
     "away_sp_k9": "sp_k9",
     "away_sp_bb9": "sp_bb9",
+    "away_sp_whip": "sp_whip",
+    "away_sp_est_woba": "sp_est_woba",
     "away_bat_woba": "bat_woba",
     "away_bat_barrel_pct": "bat_barrel_pct",
     "away_bat_hard_pct": "bat_hard_pct",
+    "away_bat_iso": "bat_iso",
+    "away_bat_babip": "bat_babip",
+    "away_bat_xwoba": "bat_xwoba",
     "away_pit_fip": "pit_fip",
     "away_pit_xfip": "pit_xfip",
     "away_pit_k_pct": "pit_k_pct",
+    "away_pit_bb_pct": "pit_bb_pct",
+    "away_pit_hr_fb": "pit_hr_fb",
+    "away_pit_whip": "pit_whip",
     "away_win_pct_away_only": "win_pct_away_only",
     "away_pythag_away_only": "pythag_away_only",
 }
@@ -264,6 +294,15 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
         h_home = _resolve(h, "win_pct_home_only")
         a_away = _resolve(a, "win_pct_away_only")
 
+        h_sp_whip = _resolve(h, "sp_whip")
+        a_sp_whip = _resolve(a, "sp_whip")
+        h_bat_iso = _resolve(h, "bat_iso")
+        a_bat_iso = _resolve(a, "bat_iso")
+        h_bat_xwoba = _resolve(h, "bat_xwoba")
+        a_bat_xwoba = _resolve(a, "bat_xwoba")
+        h_pit_whip = _resolve(h, "pit_whip")
+        a_pit_whip = _resolve(a, "pit_whip")
+
         row: dict = {
             "game_pk": int(g["game_pk"]),
             "date": pd.to_datetime(g["game_date_local"]).date(),
@@ -277,23 +316,35 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "home_elo": h_elo,
             "away_elo": a_elo,
             "elo_diff": h_elo - a_elo,
-            # Multi-window rolling — home
+            # Multi-window rolling — home (7/14 share the 15-game value pre-season)
+            "home_win_pct_7": _resolve(h, "win_pct_15"),
+            "home_win_pct_14": _resolve(h, "win_pct_15"),
             "home_win_pct_15": _resolve(h, "win_pct_15"),
             "home_win_pct_30": _resolve(h, "win_pct_30"),
             "home_win_pct_60": _resolve(h, "win_pct_60"),
+            "home_run_diff_7": _resolve(h, "run_diff_15"),
+            "home_run_diff_14": _resolve(h, "run_diff_15"),
             "home_run_diff_15": _resolve(h, "run_diff_15"),
             "home_run_diff_30": _resolve(h, "run_diff_30"),
             "home_run_diff_60": _resolve(h, "run_diff_60"),
+            "home_pythag_7": _resolve(h, "pythag_15"),
+            "home_pythag_14": _resolve(h, "pythag_15"),
             "home_pythag_15": _resolve(h, "pythag_15"),
             "home_pythag_30": h_p30,
             "home_pythag_60": _resolve(h, "pythag_60"),
             # Multi-window rolling — away
+            "away_win_pct_7": _resolve(a, "win_pct_15"),
+            "away_win_pct_14": _resolve(a, "win_pct_15"),
             "away_win_pct_15": _resolve(a, "win_pct_15"),
             "away_win_pct_30": _resolve(a, "win_pct_30"),
             "away_win_pct_60": _resolve(a, "win_pct_60"),
+            "away_run_diff_7": _resolve(a, "run_diff_15"),
+            "away_run_diff_14": _resolve(a, "run_diff_15"),
             "away_run_diff_15": _resolve(a, "run_diff_15"),
             "away_run_diff_30": _resolve(a, "run_diff_30"),
             "away_run_diff_60": _resolve(a, "run_diff_60"),
+            "away_pythag_7": _resolve(a, "pythag_15"),
+            "away_pythag_14": _resolve(a, "pythag_15"),
             "away_pythag_15": _resolve(a, "pythag_15"),
             "away_pythag_30": a_p30,
             "away_pythag_60": _resolve(a, "pythag_60"),
@@ -309,6 +360,11 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "home_pythag_home_only": _resolve(h, "pythag_home_only"),
             "away_win_pct_away_only": a_away,
             "away_pythag_away_only": _resolve(a, "pythag_away_only"),
+            # Run distribution / 1-run games
+            "home_run_std_30": _resolve(h, "run_std_30"),
+            "away_run_std_30": _resolve(a, "run_std_30"),
+            "home_one_run_win_pct_30": _resolve(h, "one_run_win_pct_30"),
+            "away_one_run_win_pct_30": _resolve(a, "one_run_win_pct_30"),
             # Streak and rest
             "home_streak": _resolve(h, "streak"),
             "away_streak": _resolve(a, "streak"),
@@ -321,6 +377,8 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "away_sp_k9": _resolve(a, "sp_k9"),
             "home_sp_bb9": _resolve(h, "sp_bb9"),
             "away_sp_bb9": _resolve(a, "sp_bb9"),
+            "home_sp_whip": h_sp_whip,
+            "away_sp_whip": a_sp_whip,
             # FanGraphs batting
             "home_bat_woba": _resolve(h, "bat_woba"),
             "away_bat_woba": _resolve(a, "bat_woba"),
@@ -328,6 +386,12 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "away_bat_barrel_pct": _resolve(a, "bat_barrel_pct"),
             "home_bat_hard_pct": _resolve(h, "bat_hard_pct"),
             "away_bat_hard_pct": _resolve(a, "bat_hard_pct"),
+            "home_bat_iso": h_bat_iso,
+            "away_bat_iso": a_bat_iso,
+            "home_bat_babip": _resolve(h, "bat_babip"),
+            "away_bat_babip": _resolve(a, "bat_babip"),
+            "home_bat_xwoba": h_bat_xwoba,
+            "away_bat_xwoba": a_bat_xwoba,
             # FanGraphs pitching
             "home_pit_fip": _resolve(h, "pit_fip"),
             "away_pit_fip": _resolve(a, "pit_fip"),
@@ -335,16 +399,55 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "away_pit_xfip": _resolve(a, "pit_xfip"),
             "home_pit_k_pct": _resolve(h, "pit_k_pct"),
             "away_pit_k_pct": _resolve(a, "pit_k_pct"),
+            "home_pit_bb_pct": _resolve(h, "pit_bb_pct"),
+            "away_pit_bb_pct": _resolve(a, "pit_bb_pct"),
+            "home_pit_hr_fb": _resolve(h, "pit_hr_fb"),
+            "away_pit_hr_fb": _resolve(a, "pit_hr_fb"),
+            "home_pit_whip": h_pit_whip,
+            "away_pit_whip": a_pit_whip,
             # Differential features
             "pythag_diff_30": h_p30 - a_p30,
             "pythag_diff_ewm": h_pewm - a_pewm,
             "home_away_split_diff": h_home - a_away,
             "sp_era_diff": _resolve(a, "sp_era") - _resolve(h, "sp_era"),
             "woba_diff": _resolve(h, "bat_woba") - _resolve(a, "bat_woba"),
-            "fip_diff": _resolve(h, "pit_fip") - _resolve(a, "pit_fip"),
+            "fip_diff": _resolve(a, "pit_fip") - _resolve(h, "pit_fip"),
+            "xwoba_diff": h_bat_xwoba - a_bat_xwoba,
+            "whip_diff": a_pit_whip - h_pit_whip,
+            "iso_diff": h_bat_iso - a_bat_iso,
+            # Lineup
+            "home_lineup_continuity": 4.5,
+            "away_lineup_continuity": 4.5,
+            # Statcast lineup-weighted (use team-level FG xwOBA as proxy)
+            "home_lineup_xwoba": h_bat_xwoba,
+            "away_lineup_xwoba": a_bat_xwoba,
+            "home_lineup_barrel_pct": _resolve(h, "bat_barrel_pct"),
+            "away_lineup_barrel_pct": _resolve(a, "bat_barrel_pct"),
+            # Statcast pitcher
+            "home_sp_est_woba": _resolve(h, "sp_est_woba"),
+            "away_sp_est_woba": _resolve(a, "sp_est_woba"),
+            # Bullpen (off-season defaults)
+            "home_bullpen_usage_15": 2.0,
+            "home_bullpen_usage_30": 2.0,
+            "away_bullpen_usage_15": 2.0,
+            "away_bullpen_usage_30": 2.0,
+            "home_bullpen_era_proxy_15": 4.5,
+            "home_bullpen_era_proxy_30": 4.5,
+            "away_bullpen_era_proxy_15": 4.5,
+            "away_bullpen_era_proxy_30": 4.5,
             # Park and context
             "park_run_factor": park_factors.get(h_code, 1.0),
             "season_progress": int(idx) / max(n_games - 1, 1),
+            # Contextual (defaults for scheduled games)
+            "day_night": 1.0,
+            "interleague": 0.0,
+            "day_of_week": pd.to_datetime(g["game_date_local"]).weekday() / 6.0,
+            # Vegas / weather (unavailable pre-season)
+            "vegas_implied_home_win": 0.5,
+            "vegas_line_movement": 0.0,
+            "game_temp_f": 72.0,
+            "game_wind_mph": 5.0,
+            "game_humidity": 50.0,
         }
         row["feature_hash"] = _feature_hash(row)
         rows.append(row)

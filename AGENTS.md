@@ -259,11 +259,13 @@ Implemented models (all available via `--model` / `--model-type` flags):
 - `logistic` — L2 logistic regression baseline
 - `lightgbm` — gradient boosted trees, Optuna-tuned
 - `xgboost` — gradient boosted trees, Optuna-tuned
+- `catboost` — gradient boosted trees, Optuna-tuned
+- `mlp` — multi-layer perceptron neural network
 - `stacked` — meta-learner (logistic) over calibrated base-model outputs (default production model)
 
 All models apply:
 
-- Platt calibration (sigmoid meta-layer) after training
+- Probability calibration after training: isotonic calibration (non-parametric monotonic mapping) for tree models (LightGBM, XGBoost, CatBoost); Platt calibration (sigmoid meta-layer) for linear and neural models (logistic, MLP). Optuna HPO may override the default per model.
 - Expanding-window cross-validation (train on seasons ≤ N-1, evaluate on N)
 - Time-weighted training (exponential decay sample weights for recency)
 
@@ -308,9 +310,9 @@ Agents must NOT:
 
 Implemented modules:
 
-1. Feature engineering pipeline (66 features, multi-window rolling, EWMA, Elo, home/away splits)
+1. Feature engineering pipeline (100+ features, multi-window rolling, EWMA, Elo, home/away splits, FanGraphs, Statcast, bullpen, weather, Vegas)
 2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
-3. Calibration engine (Platt calibration applied to all models)
+3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
 5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page
 6. CLI query tool (`scripts/query_game.py`)

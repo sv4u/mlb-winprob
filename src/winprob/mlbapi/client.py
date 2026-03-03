@@ -16,16 +16,19 @@ except Exception:  # pragma: no cover
     import json as jsonlib  # type: ignore[no-redef]
 
 
-class MLBAPIError(RuntimeError):
-    pass
+from winprob.errors import WinProbError
+
+
+class MLBAPIError(WinProbError):
+    """MLB Stats API communication failure."""
 
 
 class MLBRateLimitError(MLBAPIError):
-    pass
+    """HTTP 429 rate-limit response from the MLB Stats API."""
 
 
 class MLBNotFoundError(MLBAPIError):
-    pass
+    """HTTP 404 — requested resource does not exist."""
 
 
 @dataclass

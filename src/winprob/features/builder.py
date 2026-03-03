@@ -22,11 +22,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import unicodedata
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from winprob.features.elo import compute_elo_ratings
 from winprob.features.team_stats import build_team_rolling_stats
@@ -398,7 +401,8 @@ def build_feature_matrix(
         try:
             lineup_all = build_lineup_features(gamelogs_all).sort_index()
             lineup_season = lineup_all.iloc[season_mask].reset_index(drop=True)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Lineup feature computation failed for season %d: %s", season, exc)
             lineup_season = None
     else:
         lineup_season = None
@@ -431,8 +435,11 @@ def build_feature_matrix(
             sp_feats["away_sp_era"] = (1.0 - w_away) * sp_feats[
                 "away_sp_era"
             ] + w_away * pitcher_season["away_sp_era"].values
-        except Exception:
-            pass  # keep API-only stats if gamelog blend fails
+        except Exception as exc:
+            logger.warning(
+                "In-season pitcher ERA blend failed for season %d, "
+                "using API-only stats: %s", season, exc
+            )
 
     # --- FanGraphs advanced metrics (prior season) --------------------------
     fg_feats = _fangraphs_features(gl, fg_home_map or {}, fg_away_map or {})
@@ -502,7 +509,8 @@ def build_feature_matrix(
             bullpen_season = bullpen_all.iloc[season_mask].reset_index(drop=True)
             for col in bullpen_season.columns:
                 combined[col] = bullpen_season[col].values
-        except Exception:
+        except Exception as exc:
+            logger.warning("Bullpen feature computation failed for season %d: %s", season, exc)
             for c in [
                 "home_bullpen_usage_15",
                 "home_bullpen_usage_30",
@@ -560,7 +568,8 @@ def build_feature_matrix(
                 combined[col] = lineup_sc[col].values
             for col in pit_sc.columns:
                 combined[col] = pit_sc[col].values
-        except Exception:
+        except Exception as exc:
+            logger.warning("Statcast feature computation failed for season %d: %s", season, exc)
             combined["home_lineup_xwoba"] = combined.get("home_bat_xwoba", _LEAGUE_AVG_XWOBA)
             combined["away_lineup_xwoba"] = combined.get("away_bat_xwoba", _LEAGUE_AVG_XWOBA)
             combined["home_lineup_barrel_pct"] = combined.get(

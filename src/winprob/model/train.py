@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy.special import logit
+from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
@@ -118,6 +119,35 @@ _META_PARAMS: dict[str, Any] = {
 
 _TIME_DECAY: float = 0.12  # exponential decay rate per season
 
+# Features that are highly correlated with others (r > 0.95) and can be dropped
+# to reduce noise for tree models without losing predictive information.
+# Identified from correlation analysis of the 96-feature set.
+_REDUNDANT_FEATURES: frozenset[str] = frozenset({
+    "home_win_pct_14",
+    "away_win_pct_14",
+    "home_run_diff_14",
+    "away_run_diff_14",
+    "home_pythag_14",
+    "away_pythag_14",
+    "home_win_pct_7",
+    "away_win_pct_7",
+    "home_run_diff_7",
+    "away_run_diff_7",
+    "home_pythag_7",
+    "away_pythag_7",
+})
+
+
+def select_features(
+    feature_cols: list[str],
+    *,
+    drop_redundant: bool = True,
+) -> list[str]:
+    """Return a pruned feature list with correlated/redundant features removed."""
+    if not drop_redundant:
+        return feature_cols
+    return [c for c in feature_cols if c not in _REDUNDANT_FEATURES]
+
 
 # ---------------------------------------------------------------------------
 # Platt calibrator
@@ -131,16 +161,42 @@ class PlattCalibrator:
         self.base = base
         self._sigmoid = LogisticRegression(C=C, solver="lbfgs", max_iter=500)
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> "PlattCalibrator":
+    def fit(self, X: pd.DataFrame | np.ndarray, y: np.ndarray) -> "PlattCalibrator":
         raw = _raw_proba(self.base, X)
         log_odds = logit(np.clip(raw, 1e-7, 1 - 1e-7)).reshape(-1, 1)
         self._sigmoid.fit(log_odds, y)
         return self
 
-    def predict_proba(self, X: Any) -> np.ndarray:
+    def predict_proba(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         raw = _raw_proba(self.base, X)
         log_odds = logit(np.clip(raw, 1e-7, 1 - 1e-7)).reshape(-1, 1)
         return self._sigmoid.predict_proba(log_odds)
+
+    @property
+    def booster_(self) -> Any:
+        return getattr(self.base, "booster_", None)
+
+
+class IsotonicCalibrator:
+    """Isotonic calibration: non-parametric monotonic mapping from raw probs to calibrated probs.
+
+    Works better than Platt scaling when the relationship between raw scores
+    and true probabilities is not perfectly sigmoid (common with tree models).
+    """
+
+    def __init__(self, base: Any) -> None:
+        self.base = base
+        self._iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+
+    def fit(self, X: pd.DataFrame | np.ndarray, y: np.ndarray) -> "IsotonicCalibrator":
+        raw = _raw_proba(self.base, X)
+        self._iso.fit(raw, y)
+        return self
+
+    def predict_proba(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
+        raw = _raw_proba(self.base, X)
+        cal = self._iso.predict(raw)
+        return np.column_stack([1.0 - cal, cal])
 
     @property
     def booster_(self) -> Any:
@@ -224,18 +280,19 @@ def _build_mlp(params: dict[str, Any] | None = None) -> Pipeline:
 # ---------------------------------------------------------------------------
 
 
-def _raw_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
-    is_lgbm = hasattr(model, "booster_")
-    is_xgb = isinstance(model, xgb.XGBClassifier)
-    is_catb = isinstance(model, CatBoostClassifier)
-    is_mlp = hasattr(model, "named_steps") and "mlp" in getattr(model, "named_steps", {})
-    if (is_lgbm or is_xgb or is_catb or is_mlp) and not isinstance(X, pd.DataFrame):
-        X = pd.DataFrame(X, columns=FEATURE_COLS)
+def _raw_proba(
+    model: Any,
+    X: np.ndarray | pd.DataFrame,
+    feature_cols: list[str] | None = None,
+) -> np.ndarray:
+    if not isinstance(X, pd.DataFrame):
+        cols = feature_cols or FEATURE_COLS
+        X = pd.DataFrame(X, columns=cols)
     return model.predict_proba(X)[:, 1]
 
 
 def _predict_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
-    if isinstance(model, (PlattCalibrator, StackedEnsemble)):
+    if isinstance(model, (PlattCalibrator, IsotonicCalibrator, StackedEnsemble)):
         return model.predict_proba(X)[:, 1]
     return _raw_proba(model, X)
 
@@ -245,15 +302,35 @@ def _predict_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
+def _available_features(
+    dfs: dict[int, pd.DataFrame],
+) -> list[str]:
+    """Return FEATURE_COLS that exist in *every* season DataFrame."""
+    if not dfs:
+        return list(FEATURE_COLS)
+    common = set.intersection(*(set(df.columns) for df in dfs.values()))
+    avail = [c for c in FEATURE_COLS if c in common]
+    dropped = set(FEATURE_COLS) - set(avail)
+    if dropped:
+        logger.info(
+            "Dropped %d features missing from some seasons: %s",
+            len(dropped),
+            sorted(dropped),
+        )
+    return avail
+
+
 def _prep(
     df: pd.DataFrame,
     *,
+    feature_cols: list[str] | None = None,
     time_weighted: bool = True,
     time_decay: float = _TIME_DECAY,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return X, y, sample_weights from a feature DataFrame."""
-    clean = df.dropna(subset=FEATURE_COLS + ["home_win"])
-    X = clean[FEATURE_COLS].values.astype(float)
+) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+    """Return X (DataFrame), y, sample_weights from a feature DataFrame."""
+    cols = feature_cols or FEATURE_COLS
+    clean = df.dropna(subset=cols + ["home_win"])
+    X = clean[cols].astype(float)
     y = clean["home_win"].values.astype(float)
     if time_weighted and "season" in clean.columns:
         w = _season_weights(clean["season"], decay=time_decay)
@@ -264,40 +341,43 @@ def _prep(
 
 def _calibrate(
     base: Any,
-    X_cal: np.ndarray,
+    X_cal: pd.DataFrame | np.ndarray,
     y_cal: np.ndarray,
     platt_C: float = 1.0,
-) -> PlattCalibrator:
-    cal = PlattCalibrator(base, C=platt_C)
+    calibration: str = "platt",
+) -> PlattCalibrator | IsotonicCalibrator:
+    """Calibrate a fitted model. Use 'isotonic' for tree models with enough data."""
+    if calibration == "isotonic" and len(y_cal) >= 500:
+        cal: PlattCalibrator | IsotonicCalibrator = IsotonicCalibrator(base)
+    else:
+        cal = PlattCalibrator(base, C=platt_C)
     cal.fit(X_cal, y_cal)
     return cal
 
 
 def _fit_model(
     mt: str,
-    X: np.ndarray,
+    X: pd.DataFrame | np.ndarray,
     y: np.ndarray,
     w: np.ndarray,
     params: dict[str, Any] | None = None,
 ) -> Any:
+    X_df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
     if mt == "logistic":
         model = _build_lr()
-        model.fit(X, y, lr__sample_weight=w)
+        model.fit(X_df, y, lr__sample_weight=w)
     elif mt == "lightgbm":
         model = _build_lgbm(params)
-        X_df = pd.DataFrame(X, columns=FEATURE_COLS)
         model.fit(X_df, y, sample_weight=w)
     elif mt == "xgboost":
         model = _build_xgb(params)
-        X_df = pd.DataFrame(X, columns=FEATURE_COLS)
         model.fit(X_df, y, sample_weight=w)
     elif mt == "catboost":
         model = _build_catboost(params)
-        X_df = pd.DataFrame(X, columns=FEATURE_COLS)
         model.fit(X_df, y, sample_weight=w)
     elif mt == "mlp":
         model = _build_mlp(params)
-        model.fit(X, y, mlp__sample_weight=w)
+        model.fit(X_df, y, mlp__sample_weight=w)
     else:
         raise ValueError(f"Unknown model type: {mt}")
     return model
@@ -309,7 +389,7 @@ def _fit_model(
 
 
 # Keys in HPO result that are training globals, not model constructor params.
-_HPO_TRAINING_KEYS = frozenset({"time_decay", "platt_C"})
+_HPO_TRAINING_KEYS = frozenset({"time_decay", "platt_C", "calibration"})
 
 
 def _model_params_only(params: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -317,6 +397,22 @@ def _model_params_only(params: dict[str, Any] | None) -> dict[str, Any] | None:
     if params is None:
         return None
     return {k: v for k, v in params.items() if k not in _HPO_TRAINING_KEYS}
+
+
+_DEFAULT_CAL: dict[str, str] = {
+    "logistic": "platt",
+    "lightgbm": "isotonic",
+    "xgboost": "isotonic",
+    "catboost": "isotonic",
+    "mlp": "platt",
+}
+
+
+def _cal_method_for(mt: str, params: dict[str, Any] | None) -> str:
+    """Return the calibration method for *mt*, honouring HPO-tuned value if present."""
+    if params and "calibration" in params:
+        return str(params["calibration"])
+    return _DEFAULT_CAL.get(mt, "platt")
 
 
 def run_optuna_hpo(
@@ -330,14 +426,16 @@ def run_optuna_hpo(
     """Find optimal hyperparameters via Optuna on a subset of expanding seasons.
 
     The objective is mean Brier score on the last 5 seasons of the eval window.
-    Returns the best params dict (including time_decay, platt_C) and saves to
-    ``model_dir/hpo_{model_type}.json``. Callers should pass only model params
-    to _fit_model (e.g. pop _HPO_TRAINING_KEYS before passing to LGBM/XGB).
+    Returns the best params dict (including time_decay, platt_C, calibration)
+    and saves to ``model_dir/hpo_{model_type}.json``.  Callers must strip
+    _HPO_TRAINING_KEYS before passing params to model constructors; use
+    _cal_method_for() to read the tuned calibration preference.
     """
     import optuna
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+    feat_cols = _available_features(season_dfs)
     seasons = sorted(season_dfs)
     if eval_seasons is None:
         eval_seasons = seasons[-5:] if len(seasons) >= 5 else seasons[-3:]
@@ -345,6 +443,7 @@ def run_optuna_hpo(
     def _objective(trial: "optuna.Trial") -> float:
         time_decay = trial.suggest_float("time_decay", 0.05, 0.25)
         platt_C = trial.suggest_float("platt_C", 0.1, 10.0, log=True)
+        cal_method = trial.suggest_categorical("calibration", ["platt", "isotonic"])
 
         if model_type == "lightgbm":
             params = {
@@ -355,14 +454,14 @@ def run_optuna_hpo(
                 "boosting_type": trial.suggest_categorical("boosting_type", ["gbdt", "dart"]),
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
                 "num_leaves": trial.suggest_int("num_leaves", 20, 127),
-                "n_estimators": trial.suggest_int("n_estimators", 200, 800),
-                "min_child_samples": trial.suggest_int("min_child_samples", 10, 50),
+                "n_estimators": trial.suggest_int("n_estimators", 200, 1000),
+                "min_child_samples": trial.suggest_int("min_child_samples", 10, 80),
                 "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 1.0),
-                "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 2.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.3, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 2.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 5.0, log=True),
             }
-        else:  # xgboost
+        elif model_type == "xgboost":
             params = {
                 "objective": "binary:logistic",
                 "eval_metric": "logloss",
@@ -370,13 +469,27 @@ def run_optuna_hpo(
                 "random_state": 42,
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
                 "max_depth": trial.suggest_int("max_depth", 3, 9),
-                "n_estimators": trial.suggest_int("n_estimators", 200, 800),
+                "n_estimators": trial.suggest_int("n_estimators", 200, 1000),
                 "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 1.0),
-                "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 2.0),
-                "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.3, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 2.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 5.0, log=True),
+                "min_child_weight": trial.suggest_int("min_child_weight", 1, 30),
             }
+        elif model_type == "catboost":
+            params = {
+                "loss_function": "Logloss",
+                "random_seed": 42,
+                "verbose": False,
+                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
+                "depth": trial.suggest_int("depth", 4, 10),
+                "iterations": trial.suggest_int("iterations", 200, 1000),
+                "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.1, 10.0, log=True),
+                "random_strength": trial.suggest_float("random_strength", 0.0, 2.0),
+                "bagging_temperature": trial.suggest_float("bagging_temperature", 0.0, 1.0),
+            }
+        else:
+            return 1.0
 
         briers = []
         for eval_s in eval_seasons:
@@ -384,10 +497,12 @@ def run_optuna_hpo(
             if len(train_seasons) < 2:
                 continue
             train_df = pd.concat([season_dfs[s] for s in train_seasons], ignore_index=True)
-            X_train, y_train, w_train = _prep(train_df, time_decay=time_decay)
+            X_train, y_train, w_train = _prep(
+                train_df, feature_cols=feat_cols, time_decay=time_decay,
+            )
             eval_df = season_dfs[eval_s]
-            eval_clean = eval_df.dropna(subset=FEATURE_COLS + ["home_win"])
-            X_eval = eval_clean[FEATURE_COLS].values.astype(float)
+            eval_clean = eval_df.dropna(subset=feat_cols + ["home_win"])
+            X_eval = eval_clean[feat_cols].astype(float)
             y_eval = eval_clean["home_win"].values.astype(float)
 
             cal_size = max(int(0.2 * len(X_train)), 300)
@@ -396,7 +511,9 @@ def run_optuna_hpo(
 
             try:
                 model = _fit_model(model_type, X_fit, y_fit, w_fit, params)
-                cal_model = _calibrate(model, X_cal, y_cal, platt_C=platt_C)
+                cal_model = _calibrate(
+                    model, X_cal, y_cal, platt_C=platt_C, calibration=cal_method,
+                )
                 y_prob = _predict_proba(cal_model, X_eval)
                 er = evaluate(y_eval, y_prob)
                 briers.append(er.brier_score)
@@ -410,11 +527,12 @@ def run_optuna_hpo(
     best = study.best_params
     logger.info("Optuna HPO (%s): best Brier=%.4f params=%s", model_type, study.best_value, best)
 
-    # Merge with defaults; keep training keys (time_decay, platt_C) in saved JSON
-    if model_type == "lightgbm":
-        model_defaults = _LGB_PARAMS
-    else:
-        model_defaults = _XGB_PARAMS
+    _default_map = {
+        "lightgbm": _LGB_PARAMS,
+        "xgboost": _XGB_PARAMS,
+        "catboost": _CATB_PARAMS,
+    }
+    model_defaults = _default_map.get(model_type, {})
     final = {**model_defaults, **best}
 
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -453,14 +571,15 @@ def run_expanding_cv(
     if not raw_season_dfs:
         raise RuntimeError(f"No feature files found in {features_dir}")
 
-    # Only keep seasons whose feature matrix has all FEATURE_COLS (e.g. drop stale 2026)
-    required = set(FEATURE_COLS) | {"home_win"}
-    season_dfs = {s: df for s, df in raw_season_dfs.items() if required.issubset(df.columns)}
+    # Keep seasons that have home_win and at least some features
+    season_dfs = {
+        s: df for s, df in raw_season_dfs.items() if "home_win" in df.columns
+    }
     if not season_dfs:
-        raise RuntimeError(
-            f"No feature files with all required columns in {features_dir}. "
-            f"Required: {len(required)} columns."
-        )
+        raise RuntimeError(f"No feature files with 'home_win' column in {features_dir}")
+
+    feat_cols = _available_features(season_dfs)
+    logger.info("CV using %d features (of %d FEATURE_COLS)", len(feat_cols), len(FEATURE_COLS))
 
     seasons = sorted(season_dfs)
     results: dict[str, list[dict]] = {mt: [] for mt in model_types}
@@ -471,10 +590,10 @@ def run_expanding_cv(
 
         train_seasons = seasons[:i]
         train_df = pd.concat([season_dfs[s] for s in train_seasons], ignore_index=True)
-        X_train, y_train, w_train = _prep(train_df, time_decay=decay)
+        X_train, y_train, w_train = _prep(train_df, feature_cols=feat_cols, time_decay=decay)
 
-        eval_clean = season_dfs[eval_season].dropna(subset=FEATURE_COLS + ["home_win"])
-        X_eval = eval_clean[FEATURE_COLS].values.astype(float)
+        eval_clean = season_dfs[eval_season].dropna(subset=feat_cols + ["home_win"])
+        X_eval = eval_clean[feat_cols].astype(float)
         y_eval = eval_clean["home_win"].values.astype(float)
 
         if len(X_train) < 100 or len(X_eval) == 0:
@@ -485,51 +604,47 @@ def run_expanding_cv(
         X_cal, y_cal = X_train[-cal_size:], y_train[-cal_size:]
 
         fitted_models: dict[str, Any] = {}
+        _params_map = {
+            "lightgbm": lgb_params,
+            "xgboost": xgb_params,
+            "catboost": catboost_params,
+            "mlp": mlp_params,
+        }
 
         for mt in model_types:
             if mt == "stacked":
                 continue
-            params = (
-                lgb_params
-                if mt == "lightgbm"
-                else (
-                    xgb_params
-                    if mt == "xgboost"
-                    else (
-                        catboost_params
-                        if mt == "catboost"
-                        else (mlp_params if mt == "mlp" else None)
-                    )
-                )
-            )
+            params = _params_map.get(mt)
             model = _fit_model(mt, X_fit, y_fit, w_fit, _model_params_only(params))
-            cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C)
+            cal_method = _cal_method_for(mt, params)
+            cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C, calibration=cal_method)
             fitted_models[mt] = cal
 
             y_prob = _predict_proba(cal, X_eval)
             er = evaluate(y_eval, y_prob)
 
-            hp: dict[str, Any] = _model_params_only(params) or {
+            _hp_defaults = {
                 "logistic": _LR_PARAMS,
                 "lightgbm": _LGB_PARAMS,
                 "xgboost": _XGB_PARAMS,
                 "catboost": _CATB_PARAMS,
                 "mlp": _MLP_PARAMS,
-            }.get(mt, {})
+            }
+            hp: dict[str, Any] = _model_params_only(params) or _hp_defaults.get(mt, {})
             meta = ModelMetadata(
                 model_version=_FEATURE_VERSION,
                 model_type=mt,
                 training_seasons=train_seasons,
                 hyperparameters=hp,
                 feature_set_version=_FEATURE_VERSION,
-                feature_cols=FEATURE_COLS,
+                feature_cols=feat_cols,
                 train_brier=float(er.brier_score),
                 train_n_games=len(X_fit),
             )
             save_model(cal, meta, model_dir=model_dir)
             results[mt].append(_result_row(mt, eval_season, len(X_train), er))
 
-        # Stacked ensemble
+        # Stacked ensemble with calibrated output
         base_keys = [
             k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in fitted_models
         ]
@@ -545,6 +660,17 @@ def run_expanding_cv(
             y_prob_stack = meta_lr.predict_proba(eval_preds)[:, 1]
             er = evaluate(y_eval, y_prob_stack)
             results["stacked"].append(_result_row("stacked", eval_season, len(X_train), er))
+
+            # Also evaluate a simple weighted average for comparison
+            avg_prob = np.mean(
+                [_predict_proba(fitted_models[k], X_eval) for k in base_keys], axis=0
+            )
+            er_avg = evaluate(y_eval, avg_prob)
+            if "avg_ensemble" not in results:
+                results["avg_ensemble"] = []
+            results["avg_ensemble"].append(
+                _result_row("avg_ensemble", eval_season, len(X_train), er_avg)
+            )
 
         status = " | ".join(
             f"{mt}: brier={results[mt][-1]['brier']:.4f} acc={results[mt][-1]['accuracy']:.4f}"
@@ -591,10 +717,20 @@ def train_production_model(
     decay = time_decay if time_decay is not None else _TIME_DECAY
     cal_C = platt_C if platt_C is not None else 1.0
 
-    frames = [pd.read_parquet(f) for f in sorted(features_dir.glob("features_*.parquet"))]
-    all_data = pd.concat(frames, ignore_index=True)
-    X_all, y_all, w_all = _prep(all_data, time_decay=decay)
-    seasons = sorted({int(f.stem.split("_")[1]) for f in features_dir.glob("features_*.parquet")})
+    season_frames: dict[int, pd.DataFrame] = {
+        int(f.stem.split("_")[1]): pd.read_parquet(f)
+        for f in sorted(features_dir.glob("features_*.parquet"))
+    }
+    feat_cols = _available_features(season_frames)
+    logger.info(
+        "Production training using %d features (of %d FEATURE_COLS)",
+        len(feat_cols),
+        len(FEATURE_COLS),
+    )
+
+    all_data = pd.concat(season_frames.values(), ignore_index=True)
+    X_all, y_all, w_all = _prep(all_data, feature_cols=feat_cols, time_decay=decay)
+    seasons = sorted(season_frames)
 
     cal_size = max(int(0.15 * len(X_all)), 500)
     X_fit, y_fit, w_fit = X_all[:-cal_size], y_all[:-cal_size], w_all[:-cal_size]
@@ -602,39 +738,37 @@ def train_production_model(
 
     trained: dict[str, Any] = {}
     base_models: dict[str, Any] = {}
+    _params_map = {
+        "lightgbm": lgb_params,
+        "xgboost": xgb_params,
+        "catboost": catboost_params,
+        "mlp": mlp_params,
+    }
 
     for mt in model_types:
         if mt == "stacked":
             continue
-        params = (
-            lgb_params
-            if mt == "lightgbm"
-            else (
-                xgb_params
-                if mt == "xgboost"
-                else (
-                    catboost_params if mt == "catboost" else (mlp_params if mt == "mlp" else None)
-                )
-            )
-        )
+        params = _params_map.get(mt)
         model = _fit_model(mt, X_fit, y_fit, w_fit, _model_params_only(params))
-        cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C)
+        cal_method = _cal_method_for(mt, params)
+        cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C, calibration=cal_method)
         base_models[mt] = cal
 
-        hp: dict[str, Any] = _model_params_only(params) or {
+        _hp_defaults = {
             "logistic": _LR_PARAMS,
             "lightgbm": _LGB_PARAMS,
             "xgboost": _XGB_PARAMS,
             "catboost": _CATB_PARAMS,
             "mlp": _MLP_PARAMS,
-        }.get(mt, {})
+        }
+        hp: dict[str, Any] = _model_params_only(params) or _hp_defaults.get(mt, {})
         meta = ModelMetadata(
             model_version=_FEATURE_VERSION,
             model_type=mt,
             training_seasons=seasons,
             hyperparameters=hp,
             feature_set_version=_FEATURE_VERSION,
-            feature_cols=FEATURE_COLS,
+            feature_cols=feat_cols,
             train_brier=0.0,
             train_n_games=len(X_fit),
         )
@@ -642,8 +776,6 @@ def train_production_model(
         trained[mt] = cal
         print(f"  {mt} production model saved")
 
-    # For stacked: supplement base_models with any already-saved artifacts so
-    # that `--models stacked --skip-cv` works without retraining base models.
     if "stacked" in model_types:
         from winprob.model.artifacts import latest_artifact as _latest
 
@@ -654,7 +786,9 @@ def train_production_model(
                     base_models[_bk], _ = load_model(_art)
                     print(f"  loaded existing {_bk} artifact for stacking")
 
-    base_keys = [k for k in ["logistic", "lightgbm", "xgboost", "catboost"] if k in base_models]
+    base_keys = [
+        k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in base_models
+    ]
     if "stacked" in model_types and len(base_keys) >= 2:
         cal_preds = np.column_stack([_predict_proba(base_models[k], X_cal) for k in base_keys])
         meta_lr = LogisticRegression(**_META_PARAMS)
@@ -670,7 +804,7 @@ def train_production_model(
             training_seasons=seasons,
             hyperparameters={"meta": _META_PARAMS},
             feature_set_version=_FEATURE_VERSION,
-            feature_cols=FEATURE_COLS,
+            feature_cols=feat_cols,
             train_brier=0.0,
             train_n_games=len(X_cal),
         )

@@ -261,7 +261,7 @@ def gather_model_status() -> dict[str, Any]:
                     {
                         "name": d.name,
                         "model_type": meta.get("model_type", d.name.split("_")[0]),
-                        "version": meta.get("version", "unknown"),
+                        "version": meta.get("model_version", meta.get("version", "unknown")),
                         "training_seasons": meta.get("training_seasons"),
                         "trained_at": meta.get("trained_at"),
                     }

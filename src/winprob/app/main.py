@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import traceback
 from pathlib import Path
 from typing import Annotated
 
@@ -29,7 +31,20 @@ from winprob.app.data_cache import (
     startup,
 )
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="MLB Win Probability", version="3.0")
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all handler that logs the full traceback and returns a safe JSON error."""
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc)
+    logger.debug("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+    return JSONResponse(
+        {"error": "Internal server error", "detail": str(exc)},
+        status_code=500,
+    )
 
 _BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -39,15 +54,18 @@ _static.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 
+_DEFAULT_MODEL_TYPE = "stacked"
+
+
 def _reload_app() -> None:
     """Re-run startup() to pick up new data/models after a pipeline completes."""
-    model_type = os.environ.get("WINPROB_MODEL_TYPE", "stacked")
+    model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     startup(model_type)
 
 
 @app.on_event("startup")
 async def _startup() -> None:
-    model_type = os.environ.get("WINPROB_MODEL_TYPE", "logistic")
+    model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     startup(model_type)
 
 
@@ -65,11 +83,14 @@ def api_version() -> dict:
     }
 
 
-@app.get("/api/seasons")
-def api_seasons() -> list[int]:
+@app.get("/api/seasons", response_model=None)
+def api_seasons() -> list[int] | JSONResponse:
     """List all available seasons."""
-    df = get_features()
-    return sorted(df["season"].dropna().unique().astype(int).tolist())
+    try:
+        df = get_features()
+        return sorted(df["season"].dropna().unique().astype(int).tolist())
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
 
 
 @app.get("/api/teams")
@@ -292,6 +313,12 @@ async def page_season_2026(request: Request):
         "season_2026.html",
         _ctx(request, total_games=total, first_date=first_date),
     )
+
+
+@app.get("/wiki", response_class=HTMLResponse)
+async def page_wiki(request: Request):
+    """Technical wiki describing models, data sources, and training pipeline."""
+    return templates.TemplateResponse("wiki.html", _ctx(request))
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

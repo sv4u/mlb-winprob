@@ -6,21 +6,24 @@ Research-grade pre-game win probability model for MLB regular season games, 2000
 
 | Model               | Mean Brier | Mean Accuracy | Cal. Error | Best season |
 | ------------------- | ---------- | ------------- | ---------- | ----------- |
-| Logistic regression  | 0.2443     | 56.2%         | 0.030      | 2019: 58.4% |
-| LightGBM (Optuna)   | 0.2448     | 55.9%         | 0.029      | 2019: 58.7% |
-| XGBoost (Optuna)     | **0.2442** | 56.4%         | 0.029      | 2019: 59.2% |
-| CatBoost             | 0.2445     | 56.1%         | 0.029      | 2019: 58.9% |
-| MLP (Neural Network) | 0.2450     | 55.8%         | 0.031      | 2019: 58.0% |
-| Stacked ensemble     | **0.2441** | 56.3%         | 0.029      | 2019: 59.1% |
+| Logistic regression  | 0.2444     | 56.1%         | 0.029      | 2019: 58.4% |
+| LightGBM (Optuna)   | 0.2455     | 55.8%         | 0.034      | 2019: 57.9% |
+| XGBoost (Optuna)     | 0.2449     | 56.0%         | 0.032      | 2019: 58.5% |
+| CatBoost (Optuna)    | 0.2470     | 54.9%         | 0.031      | 2010: 57.1% |
+| MLP (Neural Network) | 0.2464     | 55.1%         | 0.031      | 2019: 59.2% |
+| Avg. ensemble        | 0.2445     | 56.1%         | 0.029      | 2019: 58.5% |
+| Stacked ensemble     | **0.2446** | **56.1%**     | **0.029**  | 2019: 58.5% |
 
 All metrics are fully out-of-sample: train on seasons < N, evaluate on season N.
 The stacked ensemble (blending all five base models) is the default production model.
+Tree models use **isotonic calibration**; logistic and MLP use **Platt calibration**.
+The training pipeline dynamically selects features available across all seasons.
 
 ---
 
 ## Models
 
-The system trains six models on 118 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **Platt calibration** (a sigmoid meta-layer fitted on a held-out calibration set) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30).
+The system trains six models on 100+ pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **probability calibration** (isotonic for tree models, Platt sigmoid for linear/neural) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Features are dynamically selected based on availability across seasons.
 
 ### Logistic Regression
 
@@ -83,14 +86,15 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 
 | Technique | What it does |
 | --- | --- |
-| **Platt calibration** | Fits a sigmoid on the base model's log-odds output using a held-out calibration set. Corrects systematic over- or under-confidence so that predicted 65% games actually win ~65% of the time. |
+| **Probability calibration** | **Isotonic calibration** (non-parametric monotonic mapping) for tree models (LightGBM, XGBoost, CatBoost); **Platt calibration** (sigmoid) for logistic and MLP. Both use a held-out calibration set so predicted 65% games actually win ~65% of the time. |
 | **Time-weighted training** | Exponential decay (`rate=0.12` per season) gives recent seasons more influence. This adapts the model to baseball rule changes — the 2023 shift ban, pitch clock, and larger bases shift team-level stats in ways that older seasons do not reflect. |
-| **Optuna HPO** | Bayesian hyperparameter search (60 trials per model type) over a 3-season expanding-window objective. Searches `learning_rate`, `num_leaves`/`max_depth`, `n_estimators`, `subsample`, `colsample_bytree`, L1/L2 regularisation. |
+| **Optuna HPO** | Bayesian hyperparameter search (200 trials per model type) over a 5-season expanding-window objective. Searches `learning_rate`, tree depth, `n_estimators`, `subsample`, `colsample_bytree`, L1/L2 regularisation, and calibration method. Supports LightGBM, XGBoost, and CatBoost. |
 | **Expanding-window CV** | For evaluation season N, the model is trained on all seasons before N. No future data ever leaks into training or calibration. |
+| **Dynamic feature selection** | The pipeline automatically detects the intersection of available features across all season DataFrames and trains using only those features, ensuring robustness to missing columns in older seasons. |
 
 ---
 
-## Features (118 total)
+## Features (100+ total)
 
 ### Team performance (27 features)
 
@@ -644,6 +648,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `http://localhost:8087/` | All-seasons games browser (2000–2026) |
 | `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, and Elo power rankings |
 | `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
+| `http://localhost:8087/wiki` | Technical wiki: models, data sources, features, training pipeline |
 | `http://localhost:8087/dashboard` | Admin dashboard: retrain models, update data, system status |
 
 ### Features
@@ -654,6 +659,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 - **Biggest upsets** — all-time or by season, filterable by home/away team and minimum favourite probability
 - **CV accuracy chart** — out-of-sample accuracy trend across all 6 model types
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
+- **Technical wiki** — comprehensive documentation of all models, baseball statistics, data sources, feature engineering, training pipeline, calibration, evaluation metrics, prediction snapshots, drift monitoring, error handling, and system architecture
 - **Admin dashboard** — "Update Data" and "Retrain Models" buttons with async background execution, real-time log streaming, pipeline status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
 
 ### API endpoints
@@ -703,6 +709,7 @@ mlb-winprob/
 │   │   └── snapshot.py
 │   ├── drift/           # Drift monitoring
 │   │   └── compute.py
+│   ├── errors.py        # Structured error taxonomy (WinProbError hierarchy)
 │   └── app/             # FastAPI web dashboard
 │       ├── main.py          # Routes and API endpoints
 │       ├── data_cache.py    # In-memory feature and model cache
@@ -711,6 +718,7 @@ mlb-winprob/
 │           ├── index.html        # All-seasons games browser
 │           ├── game.html         # Individual game detail + SHAP
 │           ├── season_2026.html  # 2026 season schedule + predictions
+│           ├── wiki.html         # Technical wiki (models, data, training)
 │           └── dashboard.html    # Admin dashboard (retrain, ingest, status)
 ├── scripts/
 │   ├── ingest_schedule.py              # MLB Stats API schedule ingestion

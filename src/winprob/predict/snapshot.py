@@ -9,11 +9,16 @@ Snapshot schema (per AGENTS.md §5):
 from __future__ import annotations
 
 import hashlib
+import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
+
+from winprob.errors import SnapshotIntegrityError
+
+logger = logging.getLogger(__name__)
 
 
 def _git_commit() -> str:
@@ -79,6 +84,13 @@ def write_snapshot(
     Path
         The written parquet file path.
     """
+    required = {"game_pk", "home_team", "away_team", "predicted_home_win_prob"}
+    missing = required - set(predictions.columns)
+    if missing:
+        raise SnapshotIntegrityError(
+            f"Prediction DataFrame missing required columns: {sorted(missing)}"
+        )
+
     run_ts = datetime.now(timezone.utc).isoformat()
     out_dir = snapshot_dir / f"season={season}" / "snapshots"
     out_dir.mkdir(parents=True, exist_ok=True)
