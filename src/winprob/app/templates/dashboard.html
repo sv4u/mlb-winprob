@@ -36,8 +36,8 @@
     .stat-card .value { font-size: 1.5rem; font-weight: 700; }
     .stat-card .sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
 
-    .pipeline-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
-    @media (max-width: 768px) { .pipeline-row { grid-template-columns: 1fr; } }
+    .pipeline-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; }
+    @media (max-width: 1024px) { .pipeline-row { grid-template-columns: 1fr; } }
 
     .pipeline-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -46,7 +46,8 @@
     .pipeline-card::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
     }
-    .pipeline-card.ingest::before { background: var(--accent); }
+    .pipeline-card.ingest::before { background: var(--orange); }
+    .pipeline-card.update::before { background: var(--accent); }
     .pipeline-card.retrain::before { background: var(--accent2); }
     .pipeline-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
     .pipeline-card .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
@@ -71,7 +72,8 @@
     }
     .btn:hover { opacity: 0.85; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-ingest { background: var(--accent); }
+    .btn-ingest { background: var(--orange); }
+    .btn-update { background: var(--accent); }
     .btn-retrain { background: var(--accent2); }
 
     .log-box {
@@ -154,17 +156,33 @@
 
   <h2 class="section-title">Pipeline Controls</h2>
   <div class="pipeline-row">
+    <div class="pipeline-card update">
+      <h3>
+        Update Season
+        <span class="status-badge status-idle" id="update-badge">idle</span>
+      </h3>
+      <p class="desc">
+        Refresh the current season's schedule, gamelogs, crosswalk, and feature matrices.
+        Non-destructive — only overwrites the current year. Auto-reloads on completion.
+      </p>
+      <div class="pipeline-meta" id="update-meta"></div>
+      <button class="btn btn-update" id="btn-update" onclick="startPipeline('update')">Update Season</button>
+      <div class="log-box" id="update-log"></div>
+    </div>
+
     <div class="pipeline-card ingest">
       <h3>
-        Update Data
+        Full Reingest
         <span class="status-badge status-idle" id="ingest-badge">idle</span>
       </h3>
       <p class="desc">
-        Refresh the current season's schedule, gamelogs, crosswalk, and feature matrices
-        from MLB Stats API and Retrosheet. The server auto-reloads when complete.
+        <strong style="color:var(--orange)">Destructive:</strong> clears all processed data
+        and re-ingests every season (2000–present) from scratch. This is a heavy operation.
       </p>
       <div class="pipeline-meta" id="ingest-meta"></div>
-      <button class="btn btn-ingest" id="btn-ingest" onclick="startPipeline('ingest')">Update Data</button>
+      <button class="btn btn-ingest" id="btn-ingest"
+        onclick="startDestructive('ingest', 'This will DELETE all processed data and re-ingest every season from scratch. Continue?')">Full
+        Reingest</button>
       <div class="log-box" id="ingest-log"></div>
     </div>
 
@@ -174,11 +192,13 @@
         <span class="status-badge status-idle" id="retrain-badge">idle</span>
       </h3>
       <p class="desc">
-        Train all 6 production models (logistic, LightGBM, XGBoost, CatBoost, MLP, stacked)
-        on the latest data. The server auto-reloads with new models when complete.
+        <strong style="color:var(--accent2)">Destructive:</strong> removes all existing model
+        artifacts, then trains all 6 production models from scratch. Auto-reloads on completion.
       </p>
       <div class="pipeline-meta" id="retrain-meta"></div>
-      <button class="btn btn-retrain" id="btn-retrain" onclick="startPipeline('retrain')">Retrain Models</button>
+      <button class="btn btn-retrain" id="btn-retrain"
+        onclick="startDestructive('retrain', 'This will DELETE all trained models and retrain from scratch. Continue?')">Retrain
+        Models</button>
       <div class="log-box" id="retrain-log"></div>
     </div>
   </div>
@@ -225,12 +245,12 @@ async function fetchStatus() {
     const res = await fetch('/api/admin/status');
     const s = await res.json();
     renderOverview(s);
-    renderPipeline('ingest', s.pipelines.ingest);
-    renderPipeline('retrain', s.pipelines.retrain);
+    const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.update.status === 'running' || s.pipelines.retrain.status === 'running';
+    renderPipeline('ingest', s.pipelines.ingest, anyRunning);
+    renderPipeline('update', s.pipelines.update, anyRunning);
+    renderPipeline('retrain', s.pipelines.retrain, anyRunning);
     renderModels(s.models.production_models);
     renderCV(s.models.cv_summary);
-
-    const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.retrain.status === 'running';
     if (anyRunning && !pollTimer) {
       pollTimer = setInterval(fetchStatus, 2000);
     } else if (!anyRunning && pollTimer) {
@@ -276,10 +296,10 @@ function renderOverview(s) {
   }
 }
 
-function renderPipeline(kind, p) {
+  function renderPipeline(kind, p, anyRunning) {
   setBadge(kind + '-badge', p.status);
   const btn = document.getElementById('btn-' + kind);
-  btn.disabled = p.status === 'running';
+  btn.disabled = anyRunning;
 
   let meta = '';
   if (p.started_at) meta += '<span>Started: ' + fmtDate(p.started_at) + '</span>';
@@ -355,6 +375,11 @@ async function startPipeline(kind) {
     pollTimer = setInterval(fetchStatus, 2000);
   }
 }
+
+  function startDestructive(kind, message) {
+    if (!confirm(message)) return;
+    startPipeline(kind);
+  }
 
 fetchStatus();
 </script>

@@ -25,6 +25,7 @@ _MAX_LOG_LINES = 500
 
 class PipelineKind(str, Enum):
     INGEST = "ingest"
+    UPDATE = "update"
     RETRAIN = "retrain"
 
 
@@ -76,6 +77,7 @@ class PipelineState:
 
 _states: dict[PipelineKind, PipelineState] = {
     PipelineKind.INGEST: PipelineState(kind=PipelineKind.INGEST),
+    PipelineKind.UPDATE: PipelineState(kind=PipelineKind.UPDATE),
     PipelineKind.RETRAIN: PipelineState(kind=PipelineKind.RETRAIN),
 }
 
@@ -84,13 +86,101 @@ def get_state(kind: PipelineKind) -> PipelineState:
     return _states[kind]
 
 
-def _ingest_commands() -> list[tuple[str, str]]:
-    """Return (description, shell-command) pairs for the ingest pipeline."""
+def conflicting_pipeline() -> PipelineKind | None:
+    """Return the first pipeline that is currently RUNNING, or None."""
+    for k, s in _states.items():
+        if s.status == PipelineStatus.RUNNING:
+            return k
+    return None
+
+
+def _clean_processed_data(state: PipelineState) -> None:
+    """Remove all processed data except immutable/protected artifacts."""
     import shutil
+
+    preserve = {
+        "team_id_map_retro_to_mlb.csv",
+        "predictions",
+        "drift",
+        "vegas",
+        "statcast_player",
+    }
+    if not _PROCESSED_DIR.exists():
+        state.append_log("  No processed data directory — nothing to clean.")
+        return
+    for item in sorted(_PROCESSED_DIR.iterdir()):
+        if item.name in preserve:
+            state.append_log(f"  Preserved: {item.name}")
+            continue
+        if item.is_dir():
+            shutil.rmtree(item)
+            state.append_log(f"  Removed directory: {item.name}/")
+        elif item.is_file():
+            item.unlink()
+            state.append_log(f"  Removed file: {item.name}")
+
+
+def _clean_models(state: PipelineState) -> None:
+    """Remove all model artifacts under data/models/."""
+    import shutil
+
+    if not _MODEL_DIR.exists():
+        state.append_log("  No models directory — nothing to clean.")
+        return
+    for item in sorted(_MODEL_DIR.iterdir()):
+        if item.is_dir():
+            shutil.rmtree(item)
+            state.append_log(f"  Removed model: {item.name}/")
+        elif item.is_file():
+            item.unlink()
+            state.append_log(f"  Removed file: {item.name}")
+
+
+def _python_bin() -> str:
+    import shutil
+
+    return shutil.which("python") or "python"
+
+
+def _ingest_commands() -> list[tuple[str, str]]:
+    """Full re-ingestion of all seasons (2000–current year)."""
     from datetime import datetime as dt
 
+    python = _python_bin()
+    year = dt.now(timezone.utc).year
+    seasons = " ".join(str(s) for s in range(2000, year + 1))
+
+    return [
+        (
+            f"Ingest schedules & gamelogs (2000–{year})",
+            f"{python} scripts/ingest_all.py --seasons {seasons} --refresh-mlbapi --refresh-retro",
+        ),
+        (
+            f"Ingest pitcher stats (2000–{year})",
+            f"{python} scripts/ingest_pitcher_stats.py --seasons {seasons} --refresh",
+        ),
+        (
+            f"Ingest FanGraphs metrics (2000–{year})",
+            f"{python} scripts/ingest_fangraphs.py --seasons {seasons}",
+        ),
+        (
+            f"Ingest weather data (2000–{year})",
+            f"{python} scripts/ingest_weather.py --seasons {seasons}",
+        ),
+        (
+            f"Build feature matrices (2000–{year})",
+            f"{python} scripts/build_features.py --seasons {seasons}",
+        ),
+        ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
+    ]
+
+
+def _update_commands() -> list[tuple[str, str]]:
+    """Update current season only (non-destructive)."""
+    from datetime import datetime as dt
+
+    python = _python_bin()
     year = str(dt.now(timezone.utc).year)
-    python = shutil.which("python") or "python"
 
     return [
         (
@@ -102,16 +192,26 @@ def _ingest_commands() -> list[tuple[str, str]]:
             f"{python} scripts/ingest_retrosheet_gamelogs.py --seasons {year} --refresh",
         ),
         ("Rebuild crosswalk", f"{python} scripts/build_crosswalk.py --seasons {year}"),
+        (
+            "Refresh pitcher stats",
+            f"{python} scripts/ingest_pitcher_stats.py --seasons {year} --refresh",
+        ),
+        (
+            "Refresh FanGraphs metrics",
+            f"{python} scripts/ingest_fangraphs.py --seasons {year}",
+        ),
+        (
+            "Refresh weather data",
+            f"{python} scripts/ingest_weather.py --seasons {year}",
+        ),
         ("Rebuild feature matrix", f"{python} scripts/build_features.py --seasons {year}"),
-        ("Rebuild 2026 pre-season features", f"{python} scripts/build_features_2026.py"),
+        ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
     ]
 
 
 def _retrain_commands() -> list[tuple[str, str]]:
-    """Return (description, shell-command) pairs for the retrain pipeline."""
-    import shutil
-
-    python = shutil.which("python") or "python"
+    """Retrain all production models from scratch."""
+    python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
     return [
         ("Train all production models", f"{python} scripts/train_model.py --models {models}"),
@@ -151,14 +251,29 @@ async def run_pipeline(
     """
     state = get_state(kind)
 
-    if state.status == PipelineStatus.RUNNING:
-        logger.warning("Pipeline %s already running — ignoring duplicate request", kind.value)
+    blocker = conflicting_pipeline()
+    if blocker is not None:
+        logger.warning(
+            "Pipeline %s blocked — %s is already running", kind.value, blocker.value
+        )
         return
 
     state.reset()
-    commands = _ingest_commands() if kind == PipelineKind.INGEST else _retrain_commands()
 
     try:
+        if kind == PipelineKind.INGEST:
+            state.append_log(">>> Clearing all processed data…")
+            _clean_processed_data(state)
+        elif kind == PipelineKind.RETRAIN:
+            state.append_log(">>> Clearing all model artifacts…")
+            _clean_models(state)
+
+        if kind == PipelineKind.INGEST:
+            commands = _ingest_commands()
+        elif kind == PipelineKind.UPDATE:
+            commands = _update_commands()
+        else:
+            commands = _retrain_commands()
         for desc, cmd in commands:
             state.append_log(f">>> {desc}")
             logger.info("[%s] %s", kind.value, desc)
@@ -167,11 +282,10 @@ async def run_pipeline(
                 state.finish(ok=False, error=f"Step '{desc}' exited with code {rc}")
                 return
 
-        marker = (
-            _PROCESSED_DIR / ".last_ingest"
-            if kind == PipelineKind.INGEST
-            else _MODEL_DIR / ".last_retrain"
-        )
+        if kind == PipelineKind.RETRAIN:
+            marker = _MODEL_DIR / ".last_retrain"
+        else:
+            marker = _PROCESSED_DIR / ".last_ingest"
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 

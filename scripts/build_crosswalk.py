@@ -74,7 +74,14 @@ def main() -> None:
                 }
             )
 
-    cov = pd.DataFrame(rows).sort_values("season")
+    if not rows:
+        logger.warning("No seasons produced crosswalk results — writing empty coverage report")
+        cov = pd.DataFrame(
+            columns=["season", "coverage_pct", "matched", "missing", "ambiguous"]
+        )
+    else:
+        cov = pd.DataFrame(rows).sort_values("season")
+
     cov.to_parquet(out_dir / "crosswalk_coverage_report.parquet", index=False)
     cov.to_csv(out_dir / "crosswalk_coverage_report.csv", index=False)
 

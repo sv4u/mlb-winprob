@@ -314,7 +314,7 @@ Implemented modules:
 2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
 3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
-5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page
+5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page, technical wiki, and admin dashboard (update season, full reingest, retrain with cleanup)
 6. CLI query tool (`scripts/query_game.py`)
 7. Daily automation (`scripts/update_daily.sh` + cron)
 

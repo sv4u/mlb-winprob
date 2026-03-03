@@ -238,7 +238,7 @@ Open:
 
 - `http://localhost:8087` — all-seasons games browser
 - `http://localhost:8087/season/2026` — 2026 schedule and predictions
-- `http://localhost:8087/dashboard` — admin dashboard (retrain, ingest, system status)
+- `http://localhost:8087/dashboard` — admin dashboard (update season, full reingest, retrain, system status)
 
 ### CLI query tool
 
@@ -649,7 +649,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, and Elo power rankings |
 | `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
 | `http://localhost:8087/wiki` | Technical wiki: models, data sources, features, training pipeline |
-| `http://localhost:8087/dashboard` | Admin dashboard: retrain models, update data, system status |
+| `http://localhost:8087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
 
 ### Features
 
@@ -660,7 +660,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 - **CV accuracy chart** — out-of-sample accuracy trend across all 6 model types
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
 - **Technical wiki** — comprehensive documentation of all models, baseball statistics, data sources, feature engineering, training pipeline, calibration, evaluation metrics, prediction snapshots, drift monitoring, error handling, and system architecture
-- **Admin dashboard** — "Update Data" and "Retrain Models" buttons with async background execution, real-time log streaming, pipeline status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
+- **Admin dashboard** — three pipeline controls: "Update Season" (non-destructive current-year refresh), "Full Reingest" (clears all processed data and re-ingests every season from scratch), and "Retrain Models" (clears all model artifacts and retrains from scratch). Destructive actions require confirmation. All pipelines run async with real-time log streaming, status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
 
 ### API endpoints
 
@@ -673,8 +673,9 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `GET /api/upsets?season=&home=&away=&min_prob=`   | Biggest upsets, filterable by team               |
 | `GET /api/cv-summary`                             | Model CV results by season                       |
 | `GET /api/admin/status`                           | Full system status (data, models, pipelines)     |
-| `POST /api/admin/ingest`                          | Kick off data-ingest pipeline (async)            |
-| `POST /api/admin/retrain`                         | Kick off model-retrain pipeline (async)          |
+| `POST /api/admin/ingest`                          | Full re-ingestion: clear all data + re-ingest all seasons (async) |
+| `POST /api/admin/update`                          | Update current season only — non-destructive (async) |
+| `POST /api/admin/retrain`                         | Clear all models + retrain from scratch (async)  |
 
 ---
 
@@ -719,7 +720,7 @@ mlb-winprob/
 │           ├── game.html         # Individual game detail + SHAP
 │           ├── season_2026.html  # 2026 season schedule + predictions
 │           ├── wiki.html         # Technical wiki (models, data, training)
-│           └── dashboard.html    # Admin dashboard (retrain, ingest, status)
+│           └── dashboard.html    # Admin dashboard (update, reingest, retrain, status)
 ├── scripts/
 │   ├── ingest_schedule.py              # MLB Stats API schedule ingestion
 │   ├── ingest_retrosheet_gamelogs.py   # Retrosheet game log ingestion

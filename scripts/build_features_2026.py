@@ -245,7 +245,22 @@ def _feature_hash(row: dict) -> str:
 
 
 def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
-    """Build and save features_2026.parquet. Returns the resulting DataFrame."""
+    """Build and save features_2026.parquet. Returns the resulting DataFrame.
+
+    Skips if build_features.py already produced a features_2026.parquet with
+    real game outcomes (non-null home_win), since those are strictly better
+    than the pre-season defaults this script generates.
+    """
+    if out_path.exists():
+        existing = pd.read_parquet(out_path, columns=["home_win"])
+        n_real = int(existing["home_win"].notna().sum())
+        if n_real > 0:
+            log.info(
+                "features_2026.parquet already has %d games with real outcomes — skipping pre-season build",
+                n_real,
+            )
+            return pd.read_parquet(out_path)
+
     if not _SCHEDULE.exists():
         raise FileNotFoundError(
             f"2026 schedule not found at {_SCHEDULE}. Run ingest_schedule.py first."

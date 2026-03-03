@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from winprob.app.admin import (
     PipelineKind,
     PipelineStatus,
+    conflicting_pipeline,
     gather_data_status,
     gather_model_status,
     get_state,
@@ -343,6 +344,7 @@ def api_admin_status() -> dict:
         "models": gather_model_status(),
         "pipelines": {
             "ingest": get_state(PipelineKind.INGEST).to_dict(),
+            "update": get_state(PipelineKind.UPDATE).to_dict(),
             "retrain": get_state(PipelineKind.RETRAIN).to_dict(),
         },
     }
@@ -350,19 +352,29 @@ def api_admin_status() -> dict:
 
 @app.post("/api/admin/ingest")
 async def api_admin_ingest() -> dict:
-    """Kick off the data-ingest pipeline in the background."""
-    state = get_state(PipelineKind.INGEST)
-    if state.status == PipelineStatus.RUNNING:
-        return {"ok": False, "message": "Ingest pipeline is already running."}
+    """Full re-ingestion: clears all processed data and re-ingests every season."""
+    blocker = conflicting_pipeline()
+    if blocker is not None:
+        return {"ok": False, "message": f"Cannot start ingest — {blocker.value} pipeline is running."}
     asyncio.create_task(run_pipeline(PipelineKind.INGEST, on_success=_reload_app))
-    return {"ok": True, "message": "Ingest pipeline started."}
+    return {"ok": True, "message": "Full re-ingestion started."}
+
+
+@app.post("/api/admin/update")
+async def api_admin_update() -> dict:
+    """Update current season data only (non-destructive)."""
+    blocker = conflicting_pipeline()
+    if blocker is not None:
+        return {"ok": False, "message": f"Cannot start update — {blocker.value} pipeline is running."}
+    asyncio.create_task(run_pipeline(PipelineKind.UPDATE, on_success=_reload_app))
+    return {"ok": True, "message": "Season update started."}
 
 
 @app.post("/api/admin/retrain")
 async def api_admin_retrain() -> dict:
-    """Kick off the model-retrain pipeline in the background."""
-    state = get_state(PipelineKind.RETRAIN)
-    if state.status == PipelineStatus.RUNNING:
-        return {"ok": False, "message": "Retrain pipeline is already running."}
+    """Clear all model artifacts and retrain from scratch."""
+    blocker = conflicting_pipeline()
+    if blocker is not None:
+        return {"ok": False, "message": f"Cannot start retrain — {blocker.value} pipeline is running."}
     asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app))
     return {"ok": True, "message": "Retrain pipeline started."}
