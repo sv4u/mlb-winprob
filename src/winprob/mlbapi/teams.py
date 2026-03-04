@@ -33,7 +33,7 @@ async def get_teams_df(client: MLBAPIClient, *, season: int, sport_id: int = 1) 
         )
     if not rows:
         return pd.DataFrame(columns=_TEAMS_COLS)
-    df = pd.DataFrame(rows).dropna(subset=["mlb_team_id"])
+    df = pd.DataFrame(rows).dropna(subset=["mlb_team_id", "abbrev"])
     if df.empty:
         return pd.DataFrame(columns=_TEAMS_COLS)
     df["mlb_team_id"] = df["mlb_team_id"].astype(int)
@@ -41,7 +41,12 @@ async def get_teams_df(client: MLBAPIClient, *, season: int, sport_id: int = 1) 
 
 
 def build_team_maps(df: pd.DataFrame) -> TeamMaps:
-    id_to_abbrev = {int(r.mlb_team_id): str(r.abbrev) for r in df.itertuples(index=False)}
-    abbrev_to_id = {str(r.abbrev): int(r.mlb_team_id) for r in df.itertuples(index=False)}
-    id_to_name = {int(r.mlb_team_id): str(r.name) for r in df.itertuples(index=False)}
+    """Build bidirectional lookup maps from a teams DataFrame."""
+    if df.empty:
+        return TeamMaps({}, {}, {})
+    drop_cols = [c for c in ["mlb_team_id", "abbrev", "name"] if c in df.columns]
+    valid = df.dropna(subset=drop_cols) if drop_cols else df
+    id_to_abbrev = {int(r.mlb_team_id): str(r.abbrev) for r in valid.itertuples(index=False)}
+    abbrev_to_id = {str(r.abbrev): int(r.mlb_team_id) for r in valid.itertuples(index=False)}
+    id_to_name = {int(r.mlb_team_id): str(r.name) for r in valid.itertuples(index=False)}
     return TeamMaps(id_to_abbrev, abbrev_to_id, id_to_name)

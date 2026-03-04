@@ -66,6 +66,19 @@ def _metrics_from_diff(
     diff: pd.DataFrame, *, run_ts: str, model_version: str, season: int
 ) -> DriftMetrics:
     ad = diff["abs_delta"]
+    if ad.empty:
+        return DriftMetrics(
+            run_ts_utc=run_ts,
+            model_version=model_version,
+            season=season,
+            n_games=0,
+            mean_abs_delta=0.0,
+            p95_abs_delta=0.0,
+            max_abs_delta=0.0,
+            pct_gt_0p01=0.0,
+            pct_gt_0p02=0.0,
+            pct_gt_0p05=0.0,
+        )
     return DriftMetrics(
         run_ts_utc=run_ts,
         model_version=model_version,
@@ -137,8 +150,9 @@ def compute_drift(
 
     # Append to season-level run_metrics
     _append_run_metrics(inc_metrics, drift_dir / f"run_metrics_{season}.parquet")
+    _append_run_metrics(base_metrics, drift_dir / f"baseline_metrics_{season}.parquet")
 
-    # Append to global run_metrics (deduplicated by season + run_ts_utc)
+    # Append to global run_metrics (deduplicated by season + run_ts_utc + model_version)
     _append_global_metrics(inc_metrics, drift_dir / "global_run_metrics.parquet")
 
     return {"incremental": inc_metrics, "baseline": base_metrics}
@@ -159,7 +173,9 @@ def _append_global_metrics(metrics: DriftMetrics, path: Path) -> None:
     if path.exists():
         existing = pd.read_parquet(path)
         combined = pd.concat([existing, new_row], ignore_index=True)
-        combined = combined.drop_duplicates(subset=["season", "run_ts_utc"], keep="last")
+        combined = combined.drop_duplicates(
+            subset=["season", "run_ts_utc", "model_version"], keep="last"
+        )
     else:
         combined = new_row
     combined.to_parquet(path, index=False)

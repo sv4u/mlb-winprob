@@ -16,10 +16,10 @@ except Exception:  # pragma: no cover
     import json as jsonlib  # type: ignore[no-redef]
 
 
-from winprob.errors import WinProbError
+from winprob.errors import APIError
 
 
-class MLBAPIError(WinProbError):
+class MLBAPIError(APIError):
     """MLB Stats API communication failure."""
 
 
@@ -44,6 +44,8 @@ class TokenBucket:
     async def acquire(self, tokens: float = 1.0) -> None:
         if tokens <= 0:
             return
+        if tokens > self.capacity:
+            raise ValueError(f"Requested {tokens} tokens exceeds bucket capacity {self.capacity}")
         async with self._lock:
             while True:
                 now = time.monotonic()
@@ -189,7 +191,9 @@ class MLBAPIClient:
                             last_err = MLBAPIError(f"{resp.status} for {url}")
                             continue
 
-                        resp.raise_for_status()
+                        # Non-retryable client errors (400, 401, 403, etc.)
+                        if resp.status >= 400:
+                            raise MLBAPIError(f"{resp.status} for {url} params={dict(params)}")
                         payload = await resp.json()
                         meta = {
                             "ts_unix": time.time(),

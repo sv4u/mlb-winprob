@@ -289,7 +289,15 @@ def _pitcher_api_features(
 
 
 def _hash_feature_row(row: pd.Series) -> str:
-    vals = {c: (float(row[c]) if pd.notna(row.get(c)) else None) for c in FEATURE_COLS}
+    def _safe_val(v: object) -> float | None:
+        if pd.isna(v):
+            return None
+        fv = float(v)  # type: ignore[arg-type]
+        if not np.isfinite(fv):
+            return None
+        return fv
+
+    vals = {c: _safe_val(row.get(c)) for c in FEATURE_COLS}
     return hashlib.sha256(json.dumps(vals, sort_keys=True).encode()).hexdigest()
 
 
@@ -645,12 +653,21 @@ def build_feature_matrix(
         pd.to_numeric(cw_matched["dh_game_num"], errors="coerce").fillna(0).astype(int)
     )
 
+    pre_merge_count = len(combined)
     merged = combined.merge(
         cw_matched,
         left_on=["date", "home_team", "visiting_team", "game_num"],
         right_on=["date", "home_retro", "away_retro", "dh_game_num"],
         how="inner",
     )
+    dropped = pre_merge_count - len(merged)
+    if dropped > 0:
+        logger.warning(
+            "Season %d: %d/%d games dropped in crosswalk join",
+            season,
+            dropped,
+            pre_merge_count,
+        )
     merged["season"] = season
     merged = merged.rename(columns={"mlb_game_pk": "game_pk"})
 

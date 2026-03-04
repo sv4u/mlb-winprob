@@ -57,47 +57,53 @@ def _compute_streak(win_arr: np.ndarray) -> np.ndarray:
 
 def _split_rolling(
     grp: pd.DataFrame,
-    is_home_mask: np.ndarray,
+    mask: np.ndarray,
     window: int = _SPLIT_WINDOW,
 ) -> tuple[pd.Series, pd.Series]:
-    """Compute home-only rolling win% and Pythagorean for every row in *grp*.
+    """Compute venue-specific rolling win% and Pythagorean for every row in *grp*.
+
+    Parameters
+    ----------
+    grp : DataFrame
+        All games for one team (both home and away), sorted chronologically.
+    mask : ndarray of bool
+        Boolean mask selecting the subset of games to compute rolling stats
+        on (e.g. home-only or away-only).
 
     Strategy
     --------
-    1. Extract the subsequence of home-only games for this team.
+    1. Extract the subsequence matching *mask* for this team.
     2. Compute rolling stats on that subsequence, shifted by 1 (no leakage).
     3. Forward-fill the result back into the full game sequence so that each
-       game (whether home or away) carries the most recent home rolling stat.
+       game carries the most recent rolling stat from the selected venue.
 
     Returns
     -------
     win_pct_series, pythag_series  — aligned on grp.index
     """
-    home_mask = is_home_mask.astype(bool)
+    venue_mask = np.asarray(mask, dtype=bool)
 
-    # Fill placeholders for the full sequence
     win_pct_full = pd.Series(np.nan, index=grp.index)
     pythag_full = pd.Series(np.nan, index=grp.index)
 
-    home_idx = grp.index[home_mask]
-    if len(home_idx) == 0:
+    venue_idx = grp.index[venue_mask]
+    if len(venue_idx) == 0:
         return win_pct_full.fillna(_NEUTRAL_WIN_PCT), pythag_full.fillna(_NEUTRAL_PYTHAG)
 
-    home_grp = grp.loc[home_idx]
-    roll_win = home_grp["win"].rolling(window, min_periods=1).sum().shift(1)
-    roll_rs = home_grp["rs"].rolling(window, min_periods=1).sum().shift(1)
-    roll_ra = home_grp["ra"].rolling(window, min_periods=1).sum().shift(1)
-    n = home_grp["win"].rolling(window, min_periods=1).count().shift(1)
+    venue_grp = grp.loc[venue_idx]
+    roll_win = venue_grp["win"].rolling(window, min_periods=1).sum().shift(1)
+    roll_rs = venue_grp["rs"].rolling(window, min_periods=1).sum().shift(1)
+    roll_ra = venue_grp["ra"].rolling(window, min_periods=1).sum().shift(1)
+    n = venue_grp["win"].rolling(window, min_periods=1).count().shift(1)
 
-    home_wp = (roll_win / n).fillna(_NEUTRAL_WIN_PCT)
-    home_py = pd.Series(_pythag(roll_rs.fillna(0), roll_ra.fillna(0)), index=home_idx).where(
+    wp = (roll_win / n).fillna(_NEUTRAL_WIN_PCT)
+    py = pd.Series(_pythag(roll_rs.fillna(0), roll_ra.fillna(0)), index=venue_idx).where(
         n.notna() & (n > 0), other=_NEUTRAL_PYTHAG
     )
 
-    win_pct_full.loc[home_idx] = home_wp.values
-    pythag_full.loc[home_idx] = home_py.values
+    win_pct_full.loc[venue_idx] = wp.values
+    pythag_full.loc[venue_idx] = py.values
 
-    # Forward-fill: each game uses the most recent home-game rolling stat
     win_pct_full = win_pct_full.ffill().fillna(_NEUTRAL_WIN_PCT)
     pythag_full = pythag_full.ffill().fillna(_NEUTRAL_PYTHAG)
     return win_pct_full, pythag_full
@@ -201,11 +207,18 @@ def build_team_rolling_stats(
             rest[k] = min(float(delta), 10.0)
         rows["rest_days"] = rest.tolist()
 
-        # Home/away splits (vectorized forward-fill approach)
-        is_home = grp["is_home"].values
-        wp_split, py_split = _split_rolling(grp, is_home)
-        rows["win_pct_split"] = wp_split.values.tolist()
-        rows["pythag_split"] = py_split.values.tolist()
+        # Home/away splits: compute both venue-specific rolling stats per team,
+        # then select the one matching each row's venue context so the home side
+        # gets home-only splits and the away side gets away-only splits.
+        is_home = grp["is_home"].values.astype(bool)
+        wp_home_split, py_home_split = _split_rolling(grp, is_home)
+        wp_away_split, py_away_split = _split_rolling(grp, ~is_home)
+        rows["win_pct_split"] = np.where(
+            is_home, wp_home_split.values, wp_away_split.values
+        ).tolist()
+        rows["pythag_split"] = np.where(
+            is_home, py_home_split.values, py_away_split.values
+        ).tolist()
 
         # Run distribution: scoring variance (std of RS) and 1-run game win %
         w30 = 30

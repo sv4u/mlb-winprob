@@ -13,7 +13,7 @@ import pandas as pd
 
 _WINDOWS = [15, 30]
 _NEUTRAL_USAGE = 2.0  # typical relievers per game
-_NEUTRAL_ERA_PROXY = 4.5
+_NEUTRAL_ERA_PROXY = 2.5  # ~4.5 ERA × 5 IP / 9 ≈ 2.5 ER per game
 
 
 def build_bullpen_features(gamelogs: pd.DataFrame) -> pd.DataFrame:
@@ -44,6 +44,29 @@ def build_bullpen_features(gamelogs: pd.DataFrame) -> pd.DataFrame:
             out[f"w{w}"] = grp[val_col].rolling(w, min_periods=1).mean().shift(1)
         return out
 
+    # Build a unified team-level view so bullpen fatigue accumulates across
+    # home and away games (a road-trip workload carries into home games).
+    home_view = pd.DataFrame(
+        {
+            "gl_idx": gl.index,
+            "team": gl["home_team"].values,
+            "relievers": gl["home_relievers"].values,
+            "er": gl["home_er"].values,
+            "side": "home",
+        }
+    )
+    away_view = pd.DataFrame(
+        {
+            "gl_idx": gl.index,
+            "team": gl["visiting_team"].values,
+            "relievers": gl["away_relievers"].values,
+            "er": gl["visiting_er"].values,
+            "side": "away",
+        }
+    )
+    combined = pd.concat([home_view, away_view], ignore_index=True)
+    combined = combined.sort_values("gl_idx")
+
     home_usage_15 = pd.Series(_NEUTRAL_USAGE, index=gl.index)
     home_usage_30 = pd.Series(_NEUTRAL_USAGE, index=gl.index)
     away_usage_15 = pd.Series(_NEUTRAL_USAGE, index=gl.index)
@@ -53,21 +76,21 @@ def build_bullpen_features(gamelogs: pd.DataFrame) -> pd.DataFrame:
     away_era_15 = pd.Series(_NEUTRAL_ERA_PROXY, index=gl.index)
     away_era_30 = pd.Series(_NEUTRAL_ERA_PROXY, index=gl.index)
 
-    for _team, grp in gl.groupby("home_team", sort=False):
-        r = _roll_team(grp, "home_relievers", _WINDOWS)
-        e = _roll_team(grp, "home_er", _WINDOWS)
-        home_usage_15.loc[grp.index] = r["w15"]
-        home_usage_30.loc[grp.index] = r["w30"]
-        home_era_15.loc[grp.index] = e["w15"]
-        home_era_30.loc[grp.index] = e["w30"]
-
-    for _team, grp in gl.groupby("visiting_team", sort=False):
-        r = _roll_team(grp, "away_relievers", _WINDOWS)
-        e = _roll_team(grp, "visiting_er", _WINDOWS)
-        away_usage_15.loc[grp.index] = r["w15"]
-        away_usage_30.loc[grp.index] = r["w30"]
-        away_era_15.loc[grp.index] = e["w15"]
-        away_era_30.loc[grp.index] = e["w30"]
+    for _team, grp in combined.groupby("team", sort=False):
+        r = _roll_team(grp, "relievers", _WINDOWS)
+        e = _roll_team(grp, "er", _WINDOWS)
+        home_rows = grp[grp["side"] == "home"]
+        away_rows = grp[grp["side"] == "away"]
+        if not home_rows.empty:
+            home_usage_15.loc[home_rows["gl_idx"].values] = r.loc[home_rows.index, "w15"].values
+            home_usage_30.loc[home_rows["gl_idx"].values] = r.loc[home_rows.index, "w30"].values
+            home_era_15.loc[home_rows["gl_idx"].values] = e.loc[home_rows.index, "w15"].values
+            home_era_30.loc[home_rows["gl_idx"].values] = e.loc[home_rows.index, "w30"].values
+        if not away_rows.empty:
+            away_usage_15.loc[away_rows["gl_idx"].values] = r.loc[away_rows.index, "w15"].values
+            away_usage_30.loc[away_rows["gl_idx"].values] = r.loc[away_rows.index, "w30"].values
+            away_era_15.loc[away_rows["gl_idx"].values] = e.loc[away_rows.index, "w15"].values
+            away_era_30.loc[away_rows["gl_idx"].values] = e.loc[away_rows.index, "w30"].values
 
     out = pd.DataFrame(
         {

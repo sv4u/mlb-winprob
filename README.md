@@ -792,6 +792,42 @@ mlb-winprob/
 
 ---
 
+## Changelog (v3.1 — Code Review Fixes)
+
+Fixes from the comprehensive code review (22 new tests added, 228 total passing):
+
+### Critical
+
+- **team_stats.py**: `away_win_pct_away_only` now correctly computes away-only rolling stats (was using home-only stats for the away side)
+- **lineup.py**: Lineup continuity now tracks across home/away venue transitions (was fragmenting tracking by venue)
+- **train.py**: Stacked meta-learner uses disjoint calibration split — first half calibrates base models, second half trains the meta-learner (fixes data leakage)
+
+### High
+
+- **train.py**: Production model now computes real `eval_brier` instead of hardcoded `0.0`; metadata field renamed from `train_brier` to `eval_brier` (legacy auto-migration on load)
+- **compute.py**: Global drift dedup now includes `model_version`; baseline metrics are now persisted; empty diffs produce zero metrics instead of NaN
+- **client.py**: Non-retryable 4xx errors (400, 401, 403) raise immediately instead of retrying; TokenBucket rejects requests exceeding capacity
+- **bullpen.py**: Bullpen fatigue now tracks across home and away games (was fragmenting by venue); ER fill value corrected to game-level scale (2.5, not ERA-scale 4.5)
+- **weather.py**: Game-hour estimation now uses longitude-based timezone offset instead of hardcoded UTC hour 19
+- **data_cache.py**: Added threading lock for thread-safe cache reads/writes during hot reloads
+
+### Medium
+
+- **standings.py**: Null rank values no longer crash `int()` conversion
+- **teams.py**: NaN abbreviations are filtered out; empty DataFrames handled gracefully
+- **builder.py**: Feature hash handles `inf`/`-inf` values; crosswalk join drop count is logged
+- **snapshot.py**: Collision detection prevents overwriting immutable snapshots; deduplicates hashing with `util/hashing.py`
+- **errors.py**: `APIError` now defined and exported; `MLBAPIError` inherits from it
+- **artifacts.py**: Legacy `train_brier` metadata migrated to `eval_brier` on load
+- **run_predictions.py**: Uses model's trained `feature_cols` from metadata (not the global `FEATURE_COLS`); adds `catboost` and `mlp` to `--model-type` choices
+
+### Low
+
+- **hashing.py**: Uses POSIX paths for cross-platform determinism; added docstrings
+- **ingest_all.py**: Replaced deprecated `datetime.utcnow()` and `get_event_loop()`; uses `sys.executable` for subprocess calls
+
+---
+
 ## Attribution
 
 Game log data from **Retrosheet** (retrosheet.org).

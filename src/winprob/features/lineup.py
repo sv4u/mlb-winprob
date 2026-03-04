@@ -53,9 +53,9 @@ def build_lineup_continuity(gamelogs: pd.DataFrame) -> pd.DataFrame:
     home_continuity = np.full(len(gl), _NEUTRAL_CONTINUITY, dtype=float)
     away_continuity = np.full(len(gl), _NEUTRAL_CONTINUITY, dtype=float)
 
-    # Iterate chronologically; for each team track previous game's starters
-    home_team_prev: dict[str, set] = {}
-    away_team_prev: dict[str, set] = {}
+    # Iterate chronologically; for each team track most recent game's starters
+    # regardless of venue so a home→away transition is captured correctly.
+    team_prev: dict[str, set] = {}
 
     for i in range(len(gl)):
         h_team = str(gl.iloc[i]["home_team"])
@@ -63,15 +63,15 @@ def build_lineup_continuity(gamelogs: pd.DataFrame) -> pd.DataFrame:
         h_set = home_sets.iloc[i]
         a_set = away_sets.iloc[i]
 
-        if h_team in home_team_prev:
-            overlap = len(h_set & home_team_prev[h_team])
+        if h_team in team_prev:
+            overlap = len(h_set & team_prev[h_team])
             home_continuity[i] = float(overlap)
-        if a_team in away_team_prev:
-            overlap = len(a_set & away_team_prev[a_team])
+        if a_team in team_prev:
+            overlap = len(a_set & team_prev[a_team])
             away_continuity[i] = float(overlap)
 
-        home_team_prev[h_team] = h_set
-        away_team_prev[a_team] = a_set
+        team_prev[h_team] = h_set
+        team_prev[a_team] = a_set
 
     out = pd.DataFrame(
         {

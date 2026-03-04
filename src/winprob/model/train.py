@@ -607,7 +607,13 @@ def run_expanding_cv(
 
         cal_size = max(int(0.2 * len(X_train)), 500)
         X_fit, y_fit, w_fit = X_train[:-cal_size], y_train[:-cal_size], w_train[:-cal_size]
-        X_cal, y_cal = X_train[-cal_size:], y_train[-cal_size:]
+        X_cal_full, y_cal_full = X_train[-cal_size:], y_train[-cal_size:]
+
+        # Split calibration data: first half calibrates base models, second
+        # half trains the meta-learner to prevent data leakage.
+        cal_mid = len(X_cal_full) // 2
+        X_cal, y_cal = X_cal_full.iloc[:cal_mid], y_cal_full[:cal_mid]
+        X_meta, y_meta = X_cal_full.iloc[cal_mid:], y_cal_full[cal_mid:]
 
         fitted_models: dict[str, Any] = {}
         _params_map = {
@@ -644,22 +650,22 @@ def run_expanding_cv(
                 hyperparameters=hp,
                 feature_set_version=_FEATURE_VERSION,
                 feature_cols=feat_cols,
-                train_brier=float(er.brier_score),
+                eval_brier=float(er.brier_score),
                 train_n_games=len(X_fit),
             )
             save_model(cal, meta, model_dir=model_dir)
             results[mt].append(_result_row(mt, eval_season, len(X_train), er))
 
-        # Stacked ensemble with calibrated output
+        # Stacked ensemble: train meta-learner on X_meta (unseen by calibrators)
         base_keys = [
             k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in fitted_models
         ]
         if "stacked" in model_types and len(base_keys) >= 2:
-            cal_preds = np.column_stack(
-                [_predict_proba(fitted_models[k], X_cal) for k in base_keys]
+            meta_preds = np.column_stack(
+                [_predict_proba(fitted_models[k], X_meta) for k in base_keys]
             )
             meta_lr = LogisticRegression(**_META_PARAMS)
-            meta_lr.fit(cal_preds, y_cal)
+            meta_lr.fit(meta_preds, y_meta)
             eval_preds = np.column_stack(
                 [_predict_proba(fitted_models[k], X_eval) for k in base_keys]
             )
@@ -740,7 +746,13 @@ def train_production_model(
 
     cal_size = max(int(0.15 * len(X_all)), 500)
     X_fit, y_fit, w_fit = X_all[:-cal_size], y_all[:-cal_size], w_all[:-cal_size]
-    X_cal, y_cal = X_all[-cal_size:], y_all[-cal_size:]
+    X_cal_full, y_cal_full = X_all[-cal_size:], y_all[-cal_size:]
+
+    # Split calibration data: first half calibrates base models, second
+    # half trains the meta-learner to prevent data leakage.
+    cal_mid = len(X_cal_full) // 2
+    X_cal, y_cal = X_cal_full.iloc[:cal_mid], y_cal_full[:cal_mid]
+    X_meta, y_meta = X_cal_full.iloc[cal_mid:], y_cal_full[cal_mid:]
 
     trained: dict[str, Any] = {}
     base_models: dict[str, Any] = {}
@@ -760,6 +772,9 @@ def train_production_model(
         cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C, calibration=cal_method)
         base_models[mt] = cal
 
+        y_prob_fit = _predict_proba(cal, X_fit)
+        er_fit = evaluate(y_fit, y_prob_fit)
+
         _hp_defaults = {
             "logistic": _LR_PARAMS,
             "lightgbm": _LGB_PARAMS,
@@ -775,7 +790,7 @@ def train_production_model(
             hyperparameters=hp,
             feature_set_version=_FEATURE_VERSION,
             feature_cols=feat_cols,
-            train_brier=0.0,
+            eval_brier=float(er_fit.brier_score),
             train_n_games=len(X_fit),
         )
         save_model(cal, meta, model_dir=model_dir)
@@ -796,14 +811,17 @@ def train_production_model(
         k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in base_models
     ]
     if "stacked" in model_types and len(base_keys) >= 2:
-        cal_preds = np.column_stack([_predict_proba(base_models[k], X_cal) for k in base_keys])
+        # Train meta-learner on X_meta (unseen by calibrators)
+        meta_preds = np.column_stack([_predict_proba(base_models[k], X_meta) for k in base_keys])
         meta_lr = LogisticRegression(**_META_PARAMS)
-        meta_lr.fit(cal_preds, y_cal)
+        meta_lr.fit(meta_preds, y_meta)
         ensemble = StackedEnsemble(
             base_models={k: base_models[k] for k in base_keys},
             meta_lr=meta_lr,
             base_keys=base_keys,
         )
+        y_prob_stack = ensemble.predict_proba(X_fit)[:, 1]
+        er_stack = evaluate(y_fit, y_prob_stack)
         meta = ModelMetadata(
             model_version=_FEATURE_VERSION,
             model_type="stacked",
@@ -811,8 +829,8 @@ def train_production_model(
             hyperparameters={"meta": _META_PARAMS},
             feature_set_version=_FEATURE_VERSION,
             feature_cols=feat_cols,
-            train_brier=0.0,
-            train_n_games=len(X_cal),
+            eval_brier=float(er_stack.brier_score),
+            train_n_games=len(X_fit),
         )
         save_model(ensemble, meta, model_dir=model_dir)
         trained["stacked"] = ensemble

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -26,10 +27,11 @@ async def _run(cmd: str) -> int:
 
 
 async def run_stage(stage: str, season: int, cmd: str) -> TaskResult:
-    start = asyncio.get_event_loop().time()
+    loop = asyncio.get_running_loop()
+    start = loop.time()
     try:
         rc = await _run(cmd)
-        dur = asyncio.get_event_loop().time() - start
+        dur = loop.time() - start
         if rc != 0:
             return TaskResult(
                 stage=stage,
@@ -41,7 +43,7 @@ async def run_stage(stage: str, season: int, cmd: str) -> TaskResult:
             )
         return TaskResult(stage=stage, season=season, status="success", duration_seconds=dur)
     except Exception as e:
-        dur = asyncio.get_event_loop().time() - start
+        dur = loop.time() - start
         return TaskResult(
             stage=stage,
             season=season,
@@ -59,7 +61,7 @@ async def main() -> None:
     ap.add_argument("--refresh-retro", action="store_true")
     args = ap.parse_args()
 
-    current_year = datetime.utcnow().year
+    current_year = datetime.now(timezone.utc).year
     seasons = args.seasons or list(range(2000, current_year + 1))
     # Include the current year only when explicitly requested or when it is
     # within the historical default range; always include it so ingestion can
@@ -73,14 +75,14 @@ async def main() -> None:
 
     async def schedule_task(season: int) -> TaskResult:
         async with mlb_sem:
-            cmd = f"python scripts/ingest_schedule.py --seasons {season}" + (
+            cmd = f"{sys.executable} scripts/ingest_schedule.py --seasons {season}" + (
                 " --refresh-mlbapi" if args.refresh_mlbapi else ""
             )
             return await run_stage("schedule", season, cmd)
 
     async def retro_task(season: int) -> TaskResult:
         async with retro_sem:
-            cmd = f"python scripts/ingest_retrosheet_gamelogs.py --seasons {season}" + (
+            cmd = f"{sys.executable} scripts/ingest_retrosheet_gamelogs.py --seasons {season}" + (
                 " --refresh" if args.refresh_retro else ""
             )
             return await run_stage("retrosheet_gamelogs", season, cmd)
@@ -92,7 +94,7 @@ async def main() -> None:
         await run_stage(
             "crosswalk",
             -1,
-            "python scripts/build_crosswalk.py --seasons " + " ".join(map(str, seasons)),
+            f"{sys.executable} scripts/build_crosswalk.py --seasons " + " ".join(map(str, seasons)),
         )
     )
 

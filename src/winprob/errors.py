@@ -5,7 +5,7 @@ entire family with a single ``except WinProbError`` clause.  Each subclass
 maps directly to an entry in the AGENTS.md error taxonomy:
 
 - IngestionError — raw data download or parsing failures
-- APIError — MLB Stats API communication failures (re-exported from mlbapi)
+- APIError — MLB Stats API communication failures (alias for MLBAPIError)
 - CoverageError — crosswalk coverage below required threshold
 - SchemaError — unexpected column sets, types, or missing mandatory fields
 - DriftComputationError — snapshot diff or metrics computation failures
@@ -21,6 +21,10 @@ class WinProbError(Exception):
 
 class IngestionError(WinProbError):
     """Failure during data ingestion (download, parse, or persist)."""
+
+
+class APIError(WinProbError):
+    """MLB Stats API communication failure (canonical name per AGENTS.md §9)."""
 
 
 class CoverageError(WinProbError):

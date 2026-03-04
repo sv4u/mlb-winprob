@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from winprob.model.artifacts import latest_artifact, load_model
-from winprob.model.train import FEATURE_COLS, _predict_proba
+from winprob.model.train import _predict_proba
 from winprob.predict.snapshot import write_snapshot
 
 
@@ -25,8 +25,8 @@ def main() -> None:
     )
     ap.add_argument(
         "--model-type",
-        choices=["logistic", "lightgbm", "xgboost", "stacked"],
-        default="xgboost",
+        choices=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
+        default="stacked",
         help="Which model type to use for predictions",
     )
     ap.add_argument(
@@ -57,10 +57,11 @@ def main() -> None:
 
     print(f"Loading model from {artifact_dir}")
     model, meta = load_model(artifact_dir)
+    feat_cols = meta.feature_cols
 
     feat_df = pd.read_parquet(features_path)
-    clean = feat_df.dropna(subset=FEATURE_COLS)
-    X_df = clean[FEATURE_COLS].astype(float)
+    clean = feat_df.dropna(subset=feat_cols)
+    X_df = clean[feat_cols].astype(float)
     y_prob = _predict_proba(model, X_df)
 
     predictions = clean[["game_pk", "home_retro", "away_retro", "feature_hash"]].copy()

@@ -61,8 +61,23 @@ _NEUTRAL_HUMIDITY: float = 0.50
 _REQUEST_DELAY_S: float = 0.2
 
 
+def _game_hour_utc(lat: float, lon: float) -> int:
+    """Estimate the UTC hour of a typical 7 PM local game start from longitude.
+
+    Rough timezone offset: each 15 degrees of longitude ≈ 1 hour from UTC.
+    East coast (~-75°) → UTC-5 → 7 PM local = 24:00 UTC → hour 0 (next day)
+    Central (~-90°)    → UTC-6 → 7 PM local = 01:00 UTC next day → hour 1
+    Mountain (~-105°)  → UTC-7 → 7 PM local = 02:00 UTC next day → hour 2
+    Pacific (~-120°)   → UTC-8 → 7 PM local = 03:00 UTC next day → hour 3
+    """
+    local_hour = 19  # 7 PM local game time
+    utc_offset = round(lon / 15.0)
+    utc_hour = (local_hour - utc_offset) % 24
+    return utc_hour
+
+
 def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | None:
-    """Fetch one day hourly data; return temp (F), wind (mph), humidity (0-1) at 19:00 UTC as proxy for game time."""
+    """Fetch one day hourly data; return temp (F), wind (mph), humidity (0-1) at estimated game time."""
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -78,8 +93,8 @@ def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | No
         times = h.get("time", [])
         if not times:
             return None
-        # Use 19:00 (7 PM) if available, else first hour
-        idx = 19 if len(times) > 19 else 0
+        target_hour = _game_hour_utc(lat, lon)
+        idx = target_hour if len(times) > target_hour else 0
         temp_c = h["temperature_2m"][idx]
         humidity_pct = h["relative_humidity_2m"][idx]
         wind_kmh = h["windspeed_10m"][idx]

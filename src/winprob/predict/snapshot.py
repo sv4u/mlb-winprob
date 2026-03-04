@@ -8,7 +8,6 @@ Snapshot schema (per AGENTS.md §5):
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import subprocess
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 
 from winprob.errors import SnapshotIntegrityError
+from winprob.util.hashing import sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +36,10 @@ def _git_commit() -> str:
 
 
 def _file_hash(path: Path) -> str:
-    """SHA-256 of a single file."""
+    """SHA-256 of a single file, or ``"missing"`` if the file does not exist."""
     if not path.exists():
         return "missing"
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    return sha256_file(path)
 
 
 def write_snapshot(
@@ -100,7 +96,7 @@ def write_snapshot(
     snap["model_version"] = f"{model_type}_{model_version}"
     snap["schedule_hash"] = _file_hash(schedule_file)
     if "feature_hash" not in snap.columns:
-        snap["feature_hash"] = ""
+        snap["feature_hash"] = _file_hash(feature_file)
     snap["lineup_param_hash"] = None  # placeholder for future lineup module
     snap["starter_param_hash"] = None  # placeholder for future pitcher module
     snap["git_commit"] = _git_commit()
@@ -127,5 +123,9 @@ def write_snapshot(
 
     ts_safe = run_ts.replace(":", "-").replace("+", "p")
     out_path = out_dir / f"run_ts={ts_safe}_{model_type}.parquet"
+    if out_path.exists():
+        raise SnapshotIntegrityError(
+            f"Snapshot file already exists (immutability violation): {out_path}"
+        )
     snap[cols].to_parquet(out_path, index=False)
     return out_path

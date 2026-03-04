@@ -268,6 +268,7 @@ All models apply:
 - Probability calibration after training: isotonic calibration (non-parametric monotonic mapping) for tree models (LightGBM, XGBoost, CatBoost); Platt calibration (sigmoid meta-layer) for linear and neural models (logistic, MLP). Optuna HPO may override the default per model.
 - Expanding-window cross-validation (train on seasons ≤ N-1, evaluate on N)
 - Time-weighted training (exponential decay sample weights for recency)
+- Stacked ensemble uses a disjoint calibration/meta-learner split: first half of held-out data calibrates base models, second half trains the meta-learner to prevent data leakage.
 
 Model artifacts must include:
 
@@ -275,6 +276,7 @@ Model artifacts must include:
 - training_seasons
 - hyperparameters
 - feature_set_version
+- eval_brier (formerly train_brier; legacy artifacts are auto-migrated on load)
 
 ------------------------------------------------------------------------
 
@@ -282,12 +284,12 @@ Model artifacts must include:
 
 All failures must classify into:
 
-- IngestionError
-- APIError
-- CoverageError
-- SchemaError
-- DriftComputationError
-- SnapshotIntegrityError
+- IngestionError — raw data download or parsing failures
+- APIError — MLB Stats API communication failures (canonical base class in errors.py; MLBAPIError in mlbapi/client.py)
+- CoverageError — crosswalk coverage below required threshold
+- SchemaError — unexpected column sets, types, or missing mandatory fields
+- DriftComputationError — snapshot diff or metrics computation failures
+- SnapshotIntegrityError — immutable snapshot corruption or schema violations
 
 Silent failure is forbidden.
 

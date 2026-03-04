@@ -14,16 +14,21 @@ _MODEL_DIR_DEFAULT = Path("data/models")
 
 @dataclass
 class ModelMetadata:
-    """Provenance record saved alongside every model artifact."""
+    """Provenance record saved alongside every model artifact.
+
+    Supports all six model types: logistic, lightgbm, xgboost, catboost,
+    mlp, and stacked.
+    """
 
     model_version: str
-    model_type: str  # "logistic" | "lightgbm"
+    model_type: str
     training_seasons: list[int]
     hyperparameters: dict[str, Any]
     feature_set_version: str
     feature_cols: list[str]
-    train_brier: float
+    eval_brier: float
     train_n_games: int
+    train_brier: float | None = None  # legacy compat for old artifacts
 
 
 def save_model(
@@ -51,12 +56,18 @@ def save_model(
 def load_model(artifact_dir: Path) -> tuple[Any, ModelMetadata]:
     """Load a model and its metadata from *artifact_dir*.
 
+    Handles legacy metadata that used ``train_brier`` instead of
+    ``eval_brier`` by mapping the old field name.
+
     Returns
     -------
     tuple[model, ModelMetadata]
     """
     model = joblib.load(artifact_dir / "model.joblib")
     raw = json.loads((artifact_dir / "metadata.json").read_text(encoding="utf-8"))
+    # Legacy compat: old artifacts have train_brier but not eval_brier
+    if "eval_brier" not in raw and "train_brier" in raw:
+        raw["eval_brier"] = raw.pop("train_brier")
     meta = ModelMetadata(**raw)
     return model, meta
 
@@ -72,9 +83,9 @@ def latest_artifact(
     Parameters
     ----------
     model_type:
-        ``"logistic"`` or ``"lightgbm"``.
+        One of: logistic, lightgbm, xgboost, catboost, mlp, stacked.
     version:
-        Model version prefix to match (e.g. ``"v1"``).
+        Model version prefix to match (e.g. ``"v3"``).
     """
     pattern = f"{model_type}_{version}_train*"
     candidates = sorted(model_dir.glob(pattern))

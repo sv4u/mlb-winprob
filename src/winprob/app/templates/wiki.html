@@ -589,10 +589,11 @@ NewElo = OldElo + K × (Actual - Expected)</code></pre>
  MLP prob       ─┘</div>
   <p>
     Because each base model makes different errors, the meta-learner learns to up-weight
-    whichever model is most confident in each probability range. The meta-learner is fit on
-    the same held-out calibration split used for Platt scaling, so base-model probabilities
-    are out-of-sample relative to the meta-learner. The slight regularisation
-    (<code>C=0.5</code>) prevents overfitting to the calibration set.
+    whichever model is most confident in each probability range. The held-out calibration
+    data is split in half: the first half calibrates base models, the second half trains
+    the meta-learner on genuinely unseen calibrated predictions. This disjoint split
+    prevents data leakage between calibration and meta-learning. The slight regularisation
+    (<code>C=0.5</code>) prevents overfitting to the meta-learner set.
   </p>
 </div>
 
@@ -614,8 +615,9 @@ Fold 3:  [<span class="hl">Train: 2000-2003</span>]  ............  [<span class=
 Fold 24: [<span class="hl">Train: 2000-2024</span>]  ............................  [<span class="hl2">Eval: 2025</span>]</div>
 <p>
   For each fold, the training data is further split: the last 20% of training rows (by time)
-  are held out as a <strong>calibration set</strong> for Platt or isotonic calibration. The
-  model never sees the evaluation season during training or calibration.
+  are held out. This held-out portion is split in half — the first half is used for Platt or
+  isotonic <strong>calibration</strong> of base models, and the second half trains the stacked
+  meta-learner. The model never sees the evaluation season during training or calibration.
 </p>
 
 <h3 id="t-calibration">Probability Calibration</h3>
