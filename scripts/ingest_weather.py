@@ -1,8 +1,12 @@
 """Backfill weather cache from gamelogs using Open-Meteo historical API.
 
 Reads Retrosheet gamelogs, collects unique (park_id, date), fetches weather
-for each (with rate limiting), and writes data/processed/weather/by_park_date.parquet.
-Merge with existing cache if present.
+for each park-season in a single batched API call (one request per park per
+season), and writes data/processed/weather/by_park_date.parquet.
+
+Batch strategy reduces ~140 000 individual API calls to ~780 for a full
+26-season reingest, staying well within Open-Meteo free-tier limits
+(10 000 calls/day, 5 000/hour, 600/minute).
 """
 
 from __future__ import annotations
@@ -17,11 +21,12 @@ from winprob.external.weather import (
     _NEUTRAL_HUMIDITY,
     _NEUTRAL_TEMP_F,
     _NEUTRAL_WIND_MPH,
-    fetch_weather_uncached,
+    fetch_park_season,
 )
 
 
 def main() -> None:
+    """Ingest historical weather for all game (park, date) pairs."""
     ap = argparse.ArgumentParser(description="Ingest historical weather for games from Open-Meteo")
     ap.add_argument("--processed-dir", type=Path, default=Path("data/processed"))
     ap.add_argument(
@@ -42,7 +47,7 @@ def main() -> None:
     if cache_path.exists():
         existing_df = pd.read_parquet(cache_path)
         existing_df["game_date"] = pd.to_datetime(existing_df["game_date"]).dt.strftime("%Y-%m-%d")
-    existing_keys = set()
+    existing_keys: set[tuple[str, str]] = set()
     if existing_df is not None:
         existing_keys = set(zip(existing_df["park_id"].astype(str), existing_df["game_date"]))
 
@@ -53,7 +58,7 @@ def main() -> None:
         print("No gamelogs found.")
         return
 
-    rows = []
+    park_season_dates: dict[tuple[str, int], set[str]] = {}
     for s in seasons:
         path = retro_dir / f"gamelogs_{s}.parquet"
         if not path.exists():
@@ -61,12 +66,36 @@ def main() -> None:
         gl = pd.read_parquet(path, columns=["date", "park_id"])
         gl["date"] = pd.to_datetime(gl["date"]).dt.strftime("%Y-%m-%d")
         gl["park_id"] = gl["park_id"].astype(str)
-        for (game_date, park_id), _ in gl.groupby(["date", "park_id"]):
-            key = (park_id, game_date)
-            if key in existing_keys or park_id not in PARK_LATLON:
+        for _, row in gl[["date", "park_id"]].drop_duplicates().iterrows():
+            park_id = str(row["park_id"])
+            game_date = str(row["date"])
+            if (park_id, game_date) in existing_keys:
                 continue
-            existing_keys.add(key)
-            w = fetch_weather_uncached(park_id, game_date)
+            if park_id not in PARK_LATLON:
+                continue
+            park_season_dates.setdefault((park_id, s), set()).add(game_date)
+
+    total_api_calls = len(park_season_dates)
+    if total_api_calls == 0:
+        print("All weather data already cached — nothing to fetch.")
+        return
+
+    total_dates = sum(len(dates) for dates in park_season_dates.values())
+    print(
+        f"Fetching weather: {total_api_calls} API calls "
+        f"(batched from {total_dates} unique park-dates across {len(seasons)} seasons)"
+    )
+
+    rows: list[dict[str, object]] = []
+    completed = 0
+    for (park_id, season), dates in sorted(park_season_dates.items()):
+        completed += 1
+        print(f"  [{completed}/{total_api_calls}] {park_id} {season} ({len(dates)} dates)…", end="")
+
+        results = fetch_park_season(park_id, season, dates)
+        fetched = 0
+        for game_date in sorted(dates):
+            w = results.get(game_date)
             if w is None:
                 w = {
                     "temp_f": _NEUTRAL_TEMP_F,
@@ -82,6 +111,8 @@ def main() -> None:
                     "humidity": w["humidity"],
                 }
             )
+            fetched += 1
+        print(f" {fetched} dates OK ({len(results)} from API)")
 
     if rows:
         new_df = pd.DataFrame(rows)

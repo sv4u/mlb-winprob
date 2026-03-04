@@ -4,16 +4,26 @@ Uses the free Open-Meteo Historical Weather API (no key). Caches results under
 weather_dir by (park_id, date). Park coordinates are from a static map; missing
 parks get neutral defaults. Use scripts/ingest_weather.py to backfill cache from
 gamelogs.
+
+Rate-limit strategy:
+  - Open-Meteo free tier: 600 calls/min, 5 000/hour, 10 000/day.
+  - Batch fetching: one API call covers an entire date range per park, reducing
+    ~140 000 individual calls to ~780 for a full 26-season reingest.
+  - Exponential backoff with jitter on 429 responses (up to 5 retries).
+  - Respects Retry-After header when present.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import random
 import time
+from http.client import HTTPResponse
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import pandas as pd
 
@@ -58,7 +68,11 @@ _OPENMETEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 _NEUTRAL_TEMP_F: float = 72.0
 _NEUTRAL_WIND_MPH: float = 8.0
 _NEUTRAL_HUMIDITY: float = 0.50
-_REQUEST_DELAY_S: float = 0.2
+
+_REQUEST_DELAY_S: float = 0.5
+_MAX_RETRIES: int = 5
+_BACKOFF_BASE_S: float = 2.0
+_BACKOFF_MAX_S: float = 120.0
 
 
 def _game_hour_utc(lat: float, lon: float) -> int:
@@ -76,6 +90,41 @@ def _game_hour_utc(lat: float, lon: float) -> int:
     return utc_hour
 
 
+def _retry_delay(attempt: int, retry_after: float | None = None) -> float:
+    """Compute delay before the next retry using exponential backoff with jitter."""
+    if retry_after is not None and retry_after > 0:
+        return min(retry_after, _BACKOFF_MAX_S)
+    delay = min(_BACKOFF_BASE_S * (2**attempt), _BACKOFF_MAX_S)
+    jitter = random.uniform(0, delay * 0.25)  # noqa: S311
+    return delay + jitter
+
+
+def _openmeteo_request(url: str, *, timeout: float = 30.0) -> dict:
+    """Make an HTTP request with retry-on-429 and exponential backoff."""
+    last_err: Exception | None = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp: HTTPResponse
+            with urlopen(Request(url), timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except HTTPError as e:
+            if e.code == 429:
+                retry_after_hdr = e.headers.get("Retry-After") if e.headers else None
+                retry_after = float(retry_after_hdr) if retry_after_hdr else None
+                wait = _retry_delay(attempt, retry_after)
+                logger.info(
+                    "Open-Meteo 429 (attempt %d/%d), waiting %.1fs before retry",
+                    attempt + 1,
+                    _MAX_RETRIES + 1,
+                    wait,
+                )
+                time.sleep(wait)
+                last_err = e
+                continue
+            raise
+    raise last_err or RuntimeError("Open-Meteo request failed after retries")
+
+
 def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | None:
     """Fetch one day hourly data; return temp (F), wind (mph), humidity (0-1) at estimated game time."""
     params = {
@@ -87,8 +136,7 @@ def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | No
     }
     try:
         url = f"{_OPENMETEO_URL}?{urlencode(params)}"
-        with urlopen(Request(url), timeout=15) as r:
-            data = json.loads(r.read().decode())
+        data = _openmeteo_request(url)
         h = data.get("hourly", {})
         times = h.get("time", [])
         if not times:
@@ -98,6 +146,8 @@ def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | No
         temp_c = h["temperature_2m"][idx]
         humidity_pct = h["relative_humidity_2m"][idx]
         wind_kmh = h["windspeed_10m"][idx]
+        if temp_c is None or humidity_pct is None or wind_kmh is None:
+            return None
         temp_f = (float(temp_c) * 9 / 5) + 32
         wind_mph = float(wind_kmh) * 0.621371
         return {
@@ -106,8 +156,113 @@ def _fetch_openmeteo(lat: float, lon: float, date: str) -> dict[str, float] | No
             "humidity": float(humidity_pct) / 100.0,
         }
     except Exception as e:
-        logger.warning("Open-Meteo fetch failed for %s @ %s: %s", (lat, lon), date, e)
+        logger.warning("Open-Meteo fetch failed for (%s, %s) @ %s: %s", lat, lon, date, e)
         return None
+
+
+def fetch_date_range(
+    lat: float,
+    lon: float,
+    start_date: str,
+    end_date: str,
+    game_dates: set[str] | None = None,
+) -> dict[str, dict[str, float]]:
+    """Fetch weather for a date range in a single API call; return {date: {temp_f, wind_mph, humidity}}.
+
+    If game_dates is provided, only extract data for those specific dates from
+    the response (the API still returns the full range, but we only parse dates
+    we care about).
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start_date,
+        "end_date": end_date,
+        "hourly": "temperature_2m,relative_humidity_2m,windspeed_10m",
+    }
+    try:
+        url = f"{_OPENMETEO_URL}?{urlencode(params)}"
+        data = _openmeteo_request(url, timeout=60.0)
+    except Exception as e:
+        logger.warning(
+            "Open-Meteo batch fetch failed for (%s, %s) %s→%s: %s",
+            lat,
+            lon,
+            start_date,
+            end_date,
+            e,
+        )
+        return {}
+
+    h = data.get("hourly", {})
+    times = h.get("time", [])
+    temps = h.get("temperature_2m", [])
+    humidities = h.get("relative_humidity_2m", [])
+    winds = h.get("windspeed_10m", [])
+    if not times:
+        return {}
+
+    target_hour = _game_hour_utc(lat, lon)
+    results: dict[str, dict[str, float]] = {}
+
+    date_to_indices: dict[str, list[int]] = {}
+    for i, t in enumerate(times):
+        day = t[:10]
+        date_to_indices.setdefault(day, []).append(i)
+
+    for day, indices in date_to_indices.items():
+        if game_dates is not None and day not in game_dates:
+            continue
+        idx = None
+        for i in indices:
+            hour = int(times[i][11:13])
+            if hour == target_hour:
+                idx = i
+                break
+        if idx is None:
+            idx = indices[0]
+        tc = temps[idx] if idx < len(temps) else None
+        hp = humidities[idx] if idx < len(humidities) else None
+        wk = winds[idx] if idx < len(winds) else None
+        if tc is None or hp is None or wk is None:
+            continue
+        results[day] = {
+            "temp_f": (float(tc) * 9 / 5) + 32,
+            "wind_mph": float(wk) * 0.621371,
+            "humidity": float(hp) / 100.0,
+        }
+
+    return results
+
+
+def fetch_park_season(
+    park_id: str,
+    season: int,
+    game_dates: set[str],
+) -> dict[str, dict[str, float]]:
+    """Fetch weather for all game_dates at a park in one API call per season.
+
+    Returns {date_str: {temp_f, wind_mph, humidity}}.
+    """
+    coords = PARK_LATLON.get(park_id.strip())
+    if not coords:
+        return {}
+    if not game_dates:
+        return {}
+
+    sorted_dates = sorted(game_dates)
+    start = sorted_dates[0]
+    end = sorted_dates[-1]
+
+    time.sleep(_REQUEST_DELAY_S)
+
+    return fetch_date_range(
+        coords[0],
+        coords[1],
+        start,
+        end,
+        game_dates=game_dates,
+    )
 
 
 def fetch_weather_uncached(park_id: str, game_date: str) -> dict[str, float] | None:
@@ -128,7 +283,6 @@ def get_weather_for_game(park_id: str, game_date: str, weather_dir: Path) -> dic
     weather_dir.mkdir(parents=True, exist_ok=True)
     cache_file = weather_dir / "by_park_date.parquet"
 
-    # In-memory cache for this run (optional): we could load full cache and write back
     if cache_file.exists():
         cache_df = pd.read_parquet(cache_file)
         row = cache_df[(cache_df["park_id"] == park_id) & (cache_df["game_date"] == game_date)]
