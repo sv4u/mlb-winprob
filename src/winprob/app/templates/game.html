@@ -100,7 +100,7 @@
 
     <!-- Key stats -->
     <div class="card">
-      <h2>Key Statistics</h2>
+      <h2>Key Statistics <span class="timing-badge" id="timing-game" style="display:none"></span></h2>
       <div class="table-wrap">
         <table>
           <thead>
@@ -163,8 +163,11 @@ function fmt(v, f, key) {
 }
 
 async function load() {
+  const start = performance.now();
   const r = await fetch(`/api/games/${gamePk}`);
+  const serverMs = r.headers.get("X-Process-Time-Ms");
   const g = await r.json();
+  showTiming('timing-game', serverMs, performance.now() - start);
   if (g.error) { document.body.innerHTML = `<div style="padding:2rem;color:#e74c3c">${g.error}</div>`; return; }
 
   document.getElementById('header-sub').textContent = `${g.away_name} @ ${g.home_name} — ${g.date}`;

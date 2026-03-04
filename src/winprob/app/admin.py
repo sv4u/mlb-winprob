@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -44,6 +45,7 @@ class PipelineState:
     status: PipelineStatus = PipelineStatus.IDLE
     started_at: str | None = None
     finished_at: str | None = None
+    elapsed_seconds: float | None = None
     log_lines: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -51,6 +53,7 @@ class PipelineState:
         self.status = PipelineStatus.RUNNING
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.finished_at = None
+        self.elapsed_seconds = None
         self.log_lines = []
         self.error = None
 
@@ -58,6 +61,12 @@ class PipelineState:
         self.status = PipelineStatus.SUCCESS if ok else PipelineStatus.FAILED
         self.finished_at = datetime.now(timezone.utc).isoformat()
         self.error = error
+        if self.started_at:
+            start = datetime.fromisoformat(self.started_at)
+            end = datetime.fromisoformat(self.finished_at)
+            self.elapsed_seconds = (end - start).total_seconds()
+        else:
+            self.elapsed_seconds = None
 
     def append_log(self, line: str) -> None:
         if len(self.log_lines) < _MAX_LOG_LINES:
@@ -69,6 +78,7 @@ class PipelineState:
             "status": self.status.value,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "elapsed_seconds": self.elapsed_seconds,
             "error": self.error,
             "log_tail": self.log_lines[-80:],
             "log_line_count": len(self.log_lines),
@@ -275,7 +285,11 @@ async def run_pipeline(
         for desc, cmd in commands:
             state.append_log(f">>> {desc}")
             logger.info("[%s] %s", kind.value, desc)
+            step_t0 = time.monotonic()
             rc = await _stream_process(cmd, state)
+            step_ms = (time.monotonic() - step_t0) * 1000
+            state.append_log(f"    [{step_ms / 1000:.1f}s]")
+            logger.info("[%s] %s completed in %.1fs", kind.value, desc, step_ms / 1000)
             if rc != 0:
                 state.finish(ok=False, error=f"Step '{desc}' exited with code {rc}")
                 return

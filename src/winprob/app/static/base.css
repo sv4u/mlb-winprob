@@ -338,3 +338,22 @@ th[data-sort].sort-desc::after { content: '▼'; opacity: 0.85; color: var(--acc
   .site-header .logo { font-size: 1.05rem; }
   .bar-wrap { max-width: 60px; }
 }
+
+/* ── Timing badges ───────────────────────────────────────────────── */
+.timing-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--muted);
+  background: rgba(79, 142, 247, 0.08);
+  border: 1px solid rgba(79, 142, 247, 0.15);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  opacity: 0;
+  animation: timing-fade-in 0.3s ease-out forwards;
+}
+@keyframes timing-fade-in {
+  to { opacity: 1; }
+}

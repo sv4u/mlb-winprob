@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -120,6 +121,7 @@ def switch_model(model_type: str) -> None:
     """
     global _features, _model, _meta, _feature_cols, _active_model_type
 
+    t0 = time.monotonic()
     logger.info("Switching active model to '%s' …", model_type)
     from winprob.model.artifacts import latest_artifact, load_model
     from winprob.model.train import _predict_proba
@@ -155,10 +157,12 @@ def switch_model(model_type: str) -> None:
             _active_model_type = prev_active
             raise
 
+    elapsed_ms = (time.monotonic() - t0) * 1000
     logger.info(
-        "Model switched to '%s' — %d games re-scored.",
+        "Model switched to '%s' — %d games re-scored in %.0fms.",
         model_type,
         int(_features["prob"].notna().sum()) if _features is not None else 0,
+        elapsed_ms,
     )
 
 
@@ -166,6 +170,7 @@ def startup(model_type: str = "logistic") -> None:
     """Load features and model into memory.  Called once at application startup."""
     global _features, _model, _meta, _feature_cols, _git_commit, _active_model_type
 
+    t0 = time.monotonic()
     _git_commit = _resolve_git_commit()
     _active_model_type = model_type
 
@@ -205,11 +210,13 @@ def startup(model_type: str = "logistic") -> None:
             missing = [c for c in _feature_cols if c not in _features.columns]
             logger.warning("Feature columns missing from data: %s", missing)
 
+        elapsed_ms = (time.monotonic() - t0) * 1000
         logger.info(
-            "Loaded %d games (%.0f with probabilities), model=%s",
+            "Loaded %d games (%.0f with probabilities), model=%s in %.0fms",
             len(_features),
             _features["prob"].notna().sum(),
             model_type,
+            elapsed_ms,
         )
 
 

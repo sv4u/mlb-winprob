@@ -259,6 +259,7 @@
     <label>Season
       <select id="f-season"><option value="">All</option></select>
     </label>
+    <span class="timing-badge" id="timing-init" style="display:none"></span>
     <label>Home team
       <select id="f-home"><option value="">Any</option></select>
     </label>
@@ -278,6 +279,7 @@
   <!-- Results table -->
   <div id="table-wrap"></div>
   <div class="pagination" id="pagination"></div>
+  <span class="timing-badge" id="timing-data" style="display:none"></span>
 
 </div>
 
@@ -288,10 +290,8 @@ const $ = id => document.getElementById(id);
 let currentTab = 'games', currentPage = 0, pageSize = 50, totalRows = 0;
 
   // ── API helper with error handling ─────────────────────────────────────────
-async function api(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`API error ${r.status}: ${r.statusText}`);
-  return r.json();
+  async function api(url, timingId) {
+    return timedFetch(url, timingId || null);
 }
 
   function showError(msg) {
@@ -315,7 +315,7 @@ async function init() {
   let seasons = [], teams = [], cv = [];
   try {
     [seasons, teams, cv] = await Promise.all([
-      api('/api/seasons'), api('/api/teams'), api('/api/cv-summary')
+      api('/api/seasons', 'timing-init'), api('/api/teams'), api('/api/cv-summary')
     ]);
   } catch (e) {
     showError('Failed to load data from server. Is the server running?');
@@ -418,7 +418,7 @@ async function loadGames() {
   if (away)   url += `&away=${away}`;
   if (date)   url += `&date=${date}`;
 
-  const data = await api(url);
+  const data = await api(url, 'timing-data');
   totalRows = data.total;
   $('sc-total').textContent = data.total.toLocaleString();
 
@@ -467,7 +467,7 @@ async function loadUpsets() {
   if (home) url += `&home=${home}`;
   if (away) url += `&away=${away}`;
 
-  const data = await api(url);
+  const data = await api(url, 'timing-data');
 
   if (!data.length) {
     $('table-wrap').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No upsets match the selected filters.</p>';

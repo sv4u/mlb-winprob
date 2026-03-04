@@ -211,6 +211,49 @@ function api(url) {
   });
 }
 
+/* ── Timing utilities ──────────────────────────────────────────────── */
+
+/**
+ * Fetch a URL and return { data, serverMs, clientMs }.
+ *
+ * @param {string} url           API endpoint to fetch.
+ * @param {string|null} timingId Optional element ID where timing badge is shown.
+ * @returns {Promise<*>}         The parsed JSON response data.
+ */
+function timedFetch(url, timingId) {
+  var start = performance.now();
+  return fetch(url).then(function (r) {
+    if (!r.ok) throw new Error("API error " + r.status + ": " + r.statusText);
+    var serverMs = r.headers.get("X-Process-Time-Ms");
+    return r.json().then(function (data) {
+      var clientMs = performance.now() - start;
+      if (timingId) {
+        showTiming(timingId, serverMs, clientMs);
+      }
+      return data;
+    });
+  });
+}
+
+/**
+ * Display timing information in an element.
+ *
+ * @param {string|HTMLElement} elOrId  Element or element ID.
+ * @param {string|null} serverMs      Server processing time from X-Process-Time-Ms header.
+ * @param {number|null} clientMs      Client-side total time from performance.now().
+ */
+function showTiming(elOrId, serverMs, clientMs) {
+  var el =
+    typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
+  if (!el) return;
+  var parts = [];
+  if (clientMs != null) parts.push(Math.round(clientMs) + "ms");
+  if (serverMs != null) parts.push("server " + parseFloat(serverMs).toFixed(0) + "ms");
+  el.textContent = parts.join(" · ");
+  el.classList.add("timing-badge");
+  el.style.display = parts.length ? "" : "none";
+}
+
 /* ── Auto-init on DOMContentLoaded ─────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", function () {
   initAllSortables();

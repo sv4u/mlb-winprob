@@ -64,7 +64,9 @@
 
 <div class="container">
 
-  <h2 class="section-title">System Overview</h2>
+  <h2 class="section-title">System Overview
+    <span class="timing-badge" id="timing-status" style="display:none"></span>
+  </h2>
   <div class="stat-cards">
     <div class="stat-card">
       <div class="label">Total Games</div>
@@ -211,8 +213,7 @@ function setBadge(id, status) {
 
 async function fetchStatus() {
   try {
-    const res = await fetch('/api/admin/status');
-    const s = await res.json();
+    const s = await timedFetch('/api/admin/status', 'timing-status');
     renderOverview(s);
     const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.update.status === 'running' || s.pipelines.retrain.status === 'running';
     renderPipeline('ingest', s.pipelines.ingest, anyRunning);
@@ -273,6 +274,11 @@ function renderOverview(s) {
   let meta = '';
   if (p.started_at) meta += '<span>Started: ' + fmtDate(p.started_at) + '</span>';
   if (p.finished_at) meta += '<span>Finished: ' + fmtDate(p.finished_at) + '</span>';
+    if (p.elapsed_seconds != null) {
+      var secs = p.elapsed_seconds;
+      var durStr = secs < 60 ? secs.toFixed(1) + 's' : Math.floor(secs / 60) + 'm ' + Math.round(secs % 60) + 's';
+      meta += '<span>Duration: ' + durStr + '</span>';
+    }
   if (p.error) meta += '<span style="color:var(--red)">Error: ' + p.error + '</span>';
   document.getElementById(kind + '-meta').innerHTML = meta;
 

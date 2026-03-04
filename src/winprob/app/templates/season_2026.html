@@ -109,7 +109,9 @@
 
   <!-- Standings summary -->
   <div class="standings-summary" id="standings-summary">
-    <h3>Predicted Standings <a href="/standings">View full standings &rarr;</a></h3>
+    <h3>Predicted Standings <a href="/standings">View full standings &rarr;</a>
+      <span class="timing-badge" id="timing-standings-summary" style="display:none"></span>
+    </h3>
     <div class="summary-leader-cards" id="summary-leaders"></div>
     <div class="summary-grid" id="summary-divisions"></div>
   </div>
@@ -136,6 +138,7 @@
 
       <div id="table-wrap"></div>
       <div class="pagination" id="pagination"></div>
+      <span class="timing-badge" id="timing-games" style="display:none"></span>
     </div>
 
     <!-- Right: Elo power rankings -->
@@ -154,10 +157,8 @@ const pageSize = 50;
 let totalRows = 0;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-async function api(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`API error ${r.status}`);
-  return r.json();
+  async function api(url, timingId) {
+    return timedFetch(url, timingId || null);
 }
 
 function setLoading(on) {
@@ -194,7 +195,7 @@ function dateBadge(dateStr) {
 // ── Standings summary ─────────────────────────────────────────────────────
 async function loadStandingsSummary() {
   try {
-    const data = await api('/api/standings?season=2026');
+    const data = await api('/api/standings?season=2026', 'timing-standings-summary');
     renderSummaryLeaders(data.league_leaders);
     renderSummaryDivisions(data.divisions);
   } catch (e) {
@@ -292,7 +293,7 @@ async function loadGames(page = 0) {
     if (home) url += `&home=${home}`;
     if (away) url += `&away=${away}`;
 
-    const data = await api(url);
+    const data = await api(url, 'timing-games');
     let games = data.games;
 
     // Client-side date range filter (API doesn't support from/to yet)

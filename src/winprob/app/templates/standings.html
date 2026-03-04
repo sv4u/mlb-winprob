@@ -87,6 +87,7 @@
     <div id="standings-area">
       <div class="loading"><div class="spinner"></div><p style="margin-top:0.75rem">Loading standings&hellip;</p></div>
     </div>
+    <span class="timing-badge" id="timing-standings" style="display:none"></span>
   </div>
 
   <!-- Batting stats tab -->
@@ -94,6 +95,7 @@
     <div id="batting-area">
       <div class="loading"><div class="spinner"></div><p style="margin-top:0.75rem">Loading batting stats&hellip;</p></div>
     </div>
+    <span class="timing-badge" id="timing-team-stats" style="display:none"></span>
   </div>
 
   <!-- Pitching stats tab -->
@@ -122,10 +124,8 @@ function showTab(name) {
 }
 
 // ── API helper ────────────────────────────────────────────────────────────
-async function api(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`API error ${r.status}`);
-  return r.json();
+  async function api(url, timingId) {
+    return timedFetch(url, timingId || null);
 }
 
 function deltaHtml(val, decimals = 0, invert = false) {
@@ -139,7 +139,7 @@ function deltaHtml(val, decimals = 0, invert = false) {
 // ── Standings ─────────────────────────────────────────────────────────────
 async function loadStandings() {
   try {
-    const data = await api('/api/standings?season=2026');
+    const data = await api('/api/standings?season=2026', 'timing-standings');
     renderLeaders(data.league_leaders);
     renderDivisions(data.divisions);
   } catch (e) {
@@ -260,7 +260,7 @@ function renderDivisions(divisions) {
 // ── Team Stats ────────────────────────────────────────────────────────────
 async function loadTeamStats() {
   try {
-    const data = await api('/api/team-stats?season=2026');
+    const data = await api('/api/team-stats?season=2026', 'timing-team-stats');
     renderBatting(data.teams);
     renderPitching(data.teams);
   } catch (e) {

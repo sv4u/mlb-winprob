@@ -34,6 +34,7 @@ from winprob.app.data_cache import (
     startup,
     switch_model,
 )
+from winprob.app.timing import TimingMiddleware, timed_operation
 from winprob.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
@@ -45,6 +46,7 @@ from winprob.standings import (
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MLB Win Probability", version="3.0")
+app.add_middleware(TimingMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -139,41 +141,46 @@ def api_games(
         limit,
         offset,
     )
-    df = get_features()
-    if season:
-        df = df[df["season"] == season]
-    if home:
-        df = df[df["home_retro"] == home.upper()]
-    if away:
-        df = df[df["away_retro"] == away.upper()]
-    if date:
-        df = df[df["date"].astype(str) == date]
+    with timed_operation("games_query"):
+        df = get_features()
+        if season:
+            df = df[df["season"] == season]
+        if home:
+            df = df[df["home_retro"] == home.upper()]
+        if away:
+            df = df[df["away_retro"] == away.upper()]
+        if date:
+            df = df[df["date"].astype(str) == date]
 
-    valid_sorts = {"date", "prob", "season", "game_pk"}
-    sort_col = sort if sort in valid_sorts else "date"
-    ascending = order.lower() != "desc"
-    df = df.sort_values(sort_col, ascending=ascending)
+        valid_sorts = {"date", "prob", "season", "game_pk"}
+        sort_col = sort if sort in valid_sorts else "date"
+        ascending = order.lower() != "desc"
+        df = df.sort_values(sort_col, ascending=ascending)
 
-    total = len(df)
-    page = df.iloc[offset : offset + limit]
+        total = len(df)
+        page = df.iloc[offset : offset + limit]
 
-    rows = []
-    for _, r in page.iterrows():
-        rows.append(
-            {
-                "game_pk": int(r.get("game_pk", 0) or 0),
-                "date": str(r.get("date", ""))[:10],
-                "season": int(r.get("season", 0) or 0),
-                "home_retro": str(r.get("home_retro", "")),
-                "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
-                "away_retro": str(r.get("away_retro", "")),
-                "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
-                "prob_home": round(float(r["prob"]), 4) if pd.notna(r.get("prob")) else None,
-                "home_win": (int(r["home_win"]) if pd.notna(r.get("home_win")) else None),
-                "home_elo": round(float(r["home_elo"]), 1) if pd.notna(r.get("home_elo")) else None,
-                "away_elo": round(float(r["away_elo"]), 1) if pd.notna(r.get("away_elo")) else None,
-            }
-        )
+        rows = []
+        for _, r in page.iterrows():
+            rows.append(
+                {
+                    "game_pk": int(r.get("game_pk", 0) or 0),
+                    "date": str(r.get("date", ""))[:10],
+                    "season": int(r.get("season", 0) or 0),
+                    "home_retro": str(r.get("home_retro", "")),
+                    "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+                    "away_retro": str(r.get("away_retro", "")),
+                    "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
+                    "prob_home": round(float(r["prob"]), 4) if pd.notna(r.get("prob")) else None,
+                    "home_win": (int(r["home_win"]) if pd.notna(r.get("home_win")) else None),
+                    "home_elo": round(float(r["home_elo"]), 1)
+                    if pd.notna(r.get("home_elo"))
+                    else None,
+                    "away_elo": round(float(r["away_elo"]), 1)
+                    if pd.notna(r.get("away_elo"))
+                    else None,
+                }
+            )
 
     return {"total": total, "offset": offset, "limit": limit, "games": rows}
 
@@ -192,30 +199,27 @@ def api_game_detail(game_pk: int) -> dict | JSONResponse:
 
     # SHAP attribution
     shap_vals: dict[str, float] = {}
-    try:
-        base = getattr(model, "base", model)
-        x = row[feature_cols].values.astype(float)
-        if hasattr(base, "named_steps"):  # logistic
-            scaler = base.named_steps["scaler"]
-            lr = base.named_steps["lr"]
-            coef = lr.coef_[0]
-            z = (x - scaler.mean_) / scaler.scale_
-            shap_arr = coef * z
-            shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
-        elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
-            import shap
+    with timed_operation("shap_attribution"):
+        try:
+            base = getattr(model, "base", model)
+            x = row[feature_cols].values.astype(float)
+            if hasattr(base, "named_steps"):  # logistic
+                scaler = base.named_steps["scaler"]
+                lr = base.named_steps["lr"]
+                coef = lr.coef_[0]
+                z = (x - scaler.mean_) / scaler.scale_
+                shap_arr = coef * z
+                shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
+            elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
+                import shap
 
-            X_df = pd.DataFrame([x], columns=feature_cols)
-            explainer = shap.TreeExplainer(base)
-            sv = explainer.shap_values(X_df)
-            arr = sv[1][0] if isinstance(sv, list) else sv[0]
-            shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
-    except Exception as exc:
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "SHAP attribution failed for game_pk=%d: %s", game_pk, exc
-        )
+                X_df = pd.DataFrame([x], columns=feature_cols)
+                explainer = shap.TreeExplainer(base)
+                sv = explainer.shap_values(X_df)
+                arr = sv[1][0] if isinstance(sv, list) else sv[0]
+                shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
+        except Exception as exc:
+            logger.warning("SHAP attribution failed for game_pk=%d: %s", game_pk, exc)
 
     # Top SHAP factors (sorted by absolute value)
     top_factors = sorted(
@@ -254,39 +258,40 @@ def api_upsets(
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
 ) -> list[dict]:
     """Return the biggest upsets (heavy favorites that lost)."""
-    df = get_features()
-    if season:
-        df = df[df["season"] == season]
-    if home:
-        df = df[df["home_retro"] == home.upper()]
-    if away:
-        df = df[df["away_retro"] == away.upper()]
-    has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
-    has_result["fav_home"] = has_result["prob"] >= 0.5
-    has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
-    has_result.loc[~has_result["fav_home"], "fav_prob"] = (
-        1 - has_result.loc[~has_result["fav_home"], "prob"]
-    )
-    has_result = has_result[has_result["fav_prob"] >= min_prob]
-    has_result["upset"] = (has_result["fav_home"] & (has_result["home_win"] == 0)) | (
-        ~has_result["fav_home"] & (has_result["home_win"] == 1)
-    )
-    upsets = has_result[has_result["upset"]].nlargest(limit, "fav_prob")
-    result = []
-    for _, r in upsets.iterrows():
-        result.append(
-            {
-                "game_pk": int(r.get("game_pk", 0) or 0),
-                "date": str(r.get("date", ""))[:10],
-                "season": int(r.get("season", 0) or 0),
-                "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
-                "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
-                "prob_home": round(float(r["prob"]), 4),
-                "fav_prob": round(float(r["fav_prob"]), 4),
-                "fav_team": "home" if r["fav_home"] else "away",
-                "winner": "home" if r["home_win"] == 1 else "away",
-            }
+    with timed_operation("upsets_query"):
+        df = get_features()
+        if season:
+            df = df[df["season"] == season]
+        if home:
+            df = df[df["home_retro"] == home.upper()]
+        if away:
+            df = df[df["away_retro"] == away.upper()]
+        has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
+        has_result["fav_home"] = has_result["prob"] >= 0.5
+        has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
+        has_result.loc[~has_result["fav_home"], "fav_prob"] = (
+            1 - has_result.loc[~has_result["fav_home"], "prob"]
         )
+        has_result = has_result[has_result["fav_prob"] >= min_prob]
+        has_result["upset"] = (has_result["fav_home"] & (has_result["home_win"] == 0)) | (
+            ~has_result["fav_home"] & (has_result["home_win"] == 1)
+        )
+        upsets = has_result[has_result["upset"]].nlargest(limit, "fav_prob")
+        result = []
+        for _, r in upsets.iterrows():
+            result.append(
+                {
+                    "game_pk": int(r.get("game_pk", 0) or 0),
+                    "date": str(r.get("date", ""))[:10],
+                    "season": int(r.get("season", 0) or 0),
+                    "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+                    "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
+                    "prob_home": round(float(r["prob"]), 4),
+                    "fav_prob": round(float(r["fav_prob"]), 4),
+                    "fav_team": "home" if r["fav_home"] else "away",
+                    "winner": "home" if r["home_win"] == 1 else "away",
+                }
+            )
     return result
 
 
@@ -320,13 +325,15 @@ async def api_standings(
     from winprob.mlbapi.client import MLBAPIClient
     from winprob.mlbapi.standings import fetch_standings
 
-    df = get_features()
-    pred_df = compute_predicted_standings(df, season=season)
+    with timed_operation("predicted_standings"):
+        df = get_features()
+        pred_df = compute_predicted_standings(df, season=season)
 
     actual_df = pd.DataFrame()
     try:
-        async with MLBAPIClient() as client:
-            actual_df = await fetch_standings(client, season=season)
+        async with timed_operation("mlb_api_standings"):
+            async with MLBAPIClient() as client:
+                actual_df = await fetch_standings(client, season=season)
     except Exception as exc:
         logger.warning("Could not fetch live standings for season=%d: %s", season, exc)
 
@@ -408,19 +415,19 @@ async def api_team_stats(
     from winprob.mlbapi.standings import fetch_all_team_stats, fetch_standings
 
     try:
-        async with MLBAPIClient() as client:
-            standings = await fetch_standings(client, season=season)
-            if standings.empty:
-                return {"season": season, "teams": []}
-            # Don't fetch individual team stats if season hasn't started
-            total_games = standings["wins"].sum() + standings["losses"].sum()
-            if total_games == 0:
-                return {"season": season, "teams": [], "message": "Season has not started yet."}
-            full = await fetch_all_team_stats(
-                client,
-                standings_df=standings,
-                season=season,
-            )
+        async with timed_operation("mlb_api_team_stats"):
+            async with MLBAPIClient() as client:
+                standings = await fetch_standings(client, season=season)
+                if standings.empty:
+                    return {"season": season, "teams": []}
+                total_games = standings["wins"].sum() + standings["losses"].sum()
+                if total_games == 0:
+                    return {"season": season, "teams": [], "message": "Season has not started yet."}
+                full = await fetch_all_team_stats(
+                    client,
+                    standings_df=standings,
+                    season=season,
+                )
     except Exception as exc:
         logger.warning("Could not fetch team stats for season=%d: %s", season, exc)
         return {"season": season, "teams": [], "error": str(exc)}
@@ -574,7 +581,8 @@ def api_switch_model(body: _SwitchModelRequest) -> dict:
         return {"ok": False, "message": f"Unknown model type '{model_type}'."}
     try:
         logger.info("API request to switch model to '%s'", model_type)
-        switch_model(model_type)
+        with timed_operation("model_switch"):
+            switch_model(model_type)
         os.environ["WINPROB_MODEL_TYPE"] = model_type
         return {"ok": True, "model_type": model_type, "message": f"Switched to {model_type}."}
     except Exception as exc:
