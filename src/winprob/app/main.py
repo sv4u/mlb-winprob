@@ -598,7 +598,15 @@ async def page_sitemap(request: Request):
 async def xml_sitemap(request: Request) -> Response:
     """XML sitemap for search engine crawlers."""
     base = str(request.base_url).rstrip("/")
-    paths = ["/", "/season/2026", "/standings", "/wiki", "/dashboard", "/sitemap"]
+    paths = [
+        "/",
+        "/season/2026",
+        "/standings",
+        "/tools/ev-calculator",
+        "/wiki",
+        "/dashboard",
+        "/sitemap",
+    ]
     urls = "\n".join(f"  <url><loc>{base}{p}</loc></url>" for p in paths)
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -615,6 +623,12 @@ async def page_wiki(request: Request):
     if not is_ready():
         return _init_page(request)
     return templates.TemplateResponse("wiki.html", _ctx(request))
+
+
+@app.get("/tools/ev-calculator", response_class=HTMLResponse)
+async def page_ev_calculator(request: Request):
+    """Expected value calculator for sports betting analysis."""
+    return templates.TemplateResponse("ev_calculator.html", _ctx(request))
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

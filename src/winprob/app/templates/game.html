@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Game Detail — MLB Win Probability</title>
   <link rel="stylesheet" href="/static/base.css" />
+  <link rel="stylesheet" href="/static/ev-calculator.css" />
   <style>
     h2{font-size:1.1rem;margin-bottom:1rem;color:var(--muted)}
     .matchup{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
@@ -44,6 +45,7 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/tools/ev-calculator">EV Calculator</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap">Sitemap</a>
@@ -116,9 +118,108 @@
     </div>
   </div>
 
+  <!-- EV Calculator widget -->
+  <div class="card ev-calc-embedded">
+    <h2>EV Calculator
+      <span style="font-size:0.75rem;font-weight:400;color:var(--muted);margin-left:0.5rem">
+        <a href="/tools/ev-calculator" style="font-size:0.75rem">Open full calculator →</a>
+      </span>
+    </h2>
+    <div class="ev-field" style="margin-bottom:1rem">
+      <label>Bet Side</label>
+      <div class="ev-side-row">
+        <button type="button" class="ev-side-btn active-home" data-ev-side="home" data-ev-prefix="gev" data-ev-prob=""
+          id="gev-side-home">
+          <span id="gev-side-home-label">Home</span>
+        </button>
+        <button type="button" class="ev-side-btn" data-ev-side="away" data-ev-prefix="gev" data-ev-prob=""
+          id="gev-side-away">
+          <span id="gev-side-away-label">Away</span>
+        </button>
+      </div>
+    </div>
+    <div class="ev-calc">
+      <div class="ev-input-group">
+        <div class="ev-field">
+          <label>Odds Format</label>
+          <div class="ev-format-row">
+            <button type="button" class="ev-format-btn active" data-ev-format="american"
+              data-ev-prefix="gev">American</button>
+            <button type="button" class="ev-format-btn" data-ev-format="decimal" data-ev-prefix="gev">Decimal</button>
+            <button type="button" class="ev-format-btn" data-ev-format="fractional"
+              data-ev-prefix="gev">Fractional</button>
+          </div>
+        </div>
+        <div class="ev-field">
+          <label for="gev-odds">Odds</label>
+          <input type="text" id="gev-odds" value="-110" placeholder="-110" autocomplete="off" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-prob">Win Probability (%)</label>
+          <input type="number" id="gev-prob" value="50" min="0.1" max="99.9" step="0.1" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-bet">Bet Amount ($)</label>
+          <input type="number" id="gev-bet" value="10" min="0.01" step="0.01" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-bankroll">Bankroll ($) <span style="font-weight:400;opacity:0.6">— optional</span></label>
+          <input type="number" id="gev-bankroll" placeholder="e.g. 1000" min="0" step="1" />
+        </div>
+      </div>
+      <div class="ev-results">
+        <div class="ev-primary">
+          <div class="ev-primary-label">Expected Value per Bet</div>
+          <div class="ev-primary-value" id="gev-ev-value">—</div>
+          <div class="ev-primary-verdict" id="gev-ev-verdict"></div>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Implied Probability</span>
+          <span class="ev-metric-value" id="gev-metric-implied-prob">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Your Edge</span>
+          <span class="ev-metric-value" id="gev-metric-edge">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">ROI per Bet</span>
+          <span class="ev-metric-value" id="gev-metric-roi">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Break-even Probability</span>
+          <span class="ev-metric-value" id="gev-metric-breakeven">—</span>
+        </div>
+        <div class="ev-kelly-section">
+          <div class="ev-kelly-header">
+            <span class="ev-kelly-title">Kelly Criterion</span>
+            <span class="ev-kelly-pct" id="gev-kelly-pct">—</span>
+          </div>
+          <div class="ev-slider-wrap">
+            <span style="font-size:0.75rem;color:var(--muted)">10%</span>
+            <input type="range" id="gev-kelly-slider" min="10" max="100" value="100" step="5" />
+            <span style="font-size:0.75rem;color:var(--muted)">100%</span>
+            <span class="ev-slider-label" id="gev-kelly-slider-label">100%</span>
+          </div>
+          <div class="ev-kelly-nobet" id="gev-kelly-nobet" style="display:none"></div>
+          <div class="ev-kelly-results" id="gev-kelly-stats">
+            <div class="ev-kelly-stat">
+              <div class="ev-kelly-stat-label">Stake % of Bankroll</div>
+              <div class="ev-kelly-stat-value" id="gev-kelly-stake-pct">—</div>
+            </div>
+            <div class="ev-kelly-stat">
+              <div class="ev-kelly-stat-label">Recommended Wager</div>
+              <div class="ev-kelly-stat-value" id="gev-kelly-wager">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="/static/base.js"></script>
+<script src="/static/ev-calculator.js"></script>
 <script>
 const gamePk = {{ game_pk }};
 
@@ -242,6 +343,27 @@ async function load() {
     return `<tr><td>${label}</td><td style="${hStyle}">${fmt(hv,f,hk)}</td><td style="${aStyle}">${fmt(av,f,ak)}</td></tr>`;
   }).join('');
   initAllSortables();
+
+  // Auto-populate EV calculator with model probabilities
+  var homeProb = (ph * 100).toFixed(1);
+  var awayProb = (pa * 100).toFixed(1);
+
+  var sideHomeBtn = document.getElementById('gev-side-home');
+  var sideAwayBtn = document.getElementById('gev-side-away');
+  if (sideHomeBtn) {
+    sideHomeBtn.dataset.evProb = homeProb;
+    document.getElementById('gev-side-home-label').textContent = g.home_name || 'Home';
+  }
+  if (sideAwayBtn) {
+    sideAwayBtn.dataset.evProb = awayProb;
+    document.getElementById('gev-side-away-label').textContent = g.away_name || 'Away';
+  }
+
+  // Pre-fill with home team probability (default selected side)
+  var gevProb = document.getElementById('gev-prob');
+  if (gevProb) gevProb.value = homeProb;
+
+  initEVCalculator('gev');
 }
 
 load();

@@ -1,0 +1,328 @@
+/* ===================================================================
+   EV Calculator — styles for standalone page and embedded widget
+   =================================================================== */
+
+/* ── Calculator container ─────────────────────────────────────────── */
+.ev-calc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+/* ── Input card ───────────────────────────────────────────────────── */
+.ev-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.ev-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ev-field label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.ev-field input,
+.ev-field select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  transition: border-color 0.15s;
+}
+.ev-field input:focus,
+.ev-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ev-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* Odds format toggle row */
+.ev-format-row {
+  display: flex;
+  gap: 0.35rem;
+}
+.ev-format-btn {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  transition: all 0.15s;
+  text-align: center;
+}
+.ev-format-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Home/Away side toggle */
+.ev-side-row {
+  display: flex;
+  gap: 0.35rem;
+}
+.ev-side-btn {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+  transition: all 0.15s;
+  text-align: center;
+}
+.ev-side-btn.active-home {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: var(--green);
+  color: var(--green);
+}
+.ev-side-btn.active-away {
+  background: rgba(231, 76, 60, 0.15);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* ── Results card ─────────────────────────────────────────────────── */
+.ev-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Primary EV result */
+.ev-primary {
+  text-align: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.ev-primary-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+.ev-primary-value {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.ev-primary-verdict {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+.ev-positive {
+  color: var(--green);
+}
+.ev-negative {
+  color: var(--red);
+}
+.ev-verdict-positive {
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--green);
+}
+.ev-verdict-negative {
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--red);
+}
+
+/* Metric rows */
+.ev-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(46, 51, 80, 0.5);
+}
+.ev-metric:last-child {
+  border-bottom: none;
+}
+.ev-metric-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.ev-metric-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ev-metric-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+/* ── Kelly section ────────────────────────────────────────────────── */
+.ev-kelly-section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+}
+.ev-kelly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.ev-kelly-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.ev-kelly-pct {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.ev-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.ev-slider-wrap input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+.ev-slider-wrap input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+}
+.ev-slider-wrap input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+}
+.ev-slider-label {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Kelly results */
+.ev-kelly-results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.ev-kelly-stat {
+  background: var(--card);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+}
+.ev-kelly-stat-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 0.15rem;
+}
+.ev-kelly-stat-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* No-bet state */
+.ev-kelly-nobet {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 0.5rem 0;
+  font-style: italic;
+}
+
+/* ── Bankroll field ───────────────────────────────────────────────── */
+.ev-bankroll-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.ev-bankroll-row label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ev-bankroll-row input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.85rem;
+  width: 100px;
+}
+.ev-bankroll-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Embedded variant (game page) ─────────────────────────────────── */
+.ev-calc-embedded .ev-calc {
+  grid-template-columns: 1fr;
+}
+.ev-calc-embedded .ev-primary {
+  padding: 0.75rem 0;
+}
+.ev-calc-embedded .ev-primary-value {
+  font-size: 1.8rem;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ev-calc {
+    grid-template-columns: 1fr;
+  }
+  .ev-primary-value {
+    font-size: 1.8rem;
+  }
+}
+@media (max-width: 480px) {
+  .ev-format-btn {
+    font-size: 0.72rem;
+    padding: 0.35rem 0.3rem;
+  }
+  .ev-kelly-results {
+    grid-template-columns: 1fr;
+  }
+}

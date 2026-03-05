@@ -650,7 +650,8 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `http://localhost:8087/` | All-seasons games browser (2000–2026) |
 | `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, standings summary, and Elo power rankings |
 | `http://localhost:8087/standings` | Predicted vs actual divisional standings, league leaders, team batting and pitching stats |
-| `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
+| `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution and embedded EV calculator |
+| `http://localhost:8087/tools/ev-calculator` | Expected value calculator for sports bets (American, decimal, fractional odds; edge, ROI, Kelly criterion) |
 | `http://localhost:8087/wiki` | Technical wiki: models, data sources, features, training pipeline |
 | `http://localhost:8087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
 | `http://localhost:8087/sitemap` | Complete index of all pages and API endpoints |
@@ -667,6 +668,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
 - **Technical wiki** — comprehensive documentation of all models, baseball statistics, data sources, feature engineering, training pipeline, calibration, evaluation metrics, prediction snapshots, drift monitoring, error handling, and system architecture
 - **Admin dashboard** — three pipeline controls: "Update Season" (non-destructive current-year refresh), "Full Reingest" (clears all processed data and re-ingests every season from scratch), and "Retrain Models" (clears all model artifacts and retrains from scratch). Destructive actions require confirmation. All pipelines run async with real-time log streaming, status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
+- **EV Calculator** — expected value calculator for sports bets. Supports American, decimal, and fractional odds with real-time computation of EV, implied probability, edge, ROI, break-even probability, and Kelly criterion with adjustable fraction slider. Available as a standalone page (`/tools/ev-calculator`) and as an embedded widget on each game detail page with auto-populated model probabilities and home/away team toggle
 - **Sitemap** — complete index of all pages and API endpoints with descriptions; also available as XML (`/sitemap.xml`) for search engine crawlers
 
 ### API endpoints

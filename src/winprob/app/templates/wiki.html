@@ -98,6 +98,7 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/tools/ev-calculator">EV Calculator</a>
     <a href="/wiki" class="active">Wiki</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap">Sitemap</a>
@@ -184,6 +185,13 @@
         <li><a href="#st-predicted">Predicted Standings</a></li>
         <li><a href="#st-live">Live API Data</a></li>
         <li><a href="#st-comparison">Comparison Metrics</a></li>
+      </ul>
+    </li>
+    <li><a href="#ev-calculator">EV Calculator</a>
+      <ul class="sub">
+        <li><a href="#ev-concepts">Core Concepts</a></li>
+        <li><a href="#ev-odds">Odds Formats</a></li>
+        <li><a href="#ev-kelly">Kelly Criterion</a></li>
       </ul>
     </li>
     <li><a href="#predictions">Predictions &amp; Drift</a></li>
@@ -862,6 +870,121 @@ Example (training for 2025 evaluation):
   <a href="/season/2026">2026 Season page</a>.
 </div>
 
+
+<!-- ================================================================== -->
+<h2 id="ev-calculator">EV Calculator</h2>
+<p>
+  The <a href="/tools/ev-calculator">EV Calculator</a> helps evaluate the expected profitability
+  of sports bets by combining your estimated win probability with the offered odds. It is available
+  as a standalone tool at <code>/tools/ev-calculator</code> and as an embedded widget on every
+  <a href="/game/1">game detail page</a>, where the model's predicted win probability is
+  auto-populated and a home/away toggle lets you quickly evaluate either side.
+</p>
+
+<h3 id="ev-concepts">Core Concepts</h3>
+<div class="table-wrap">
+  <table class="feature-table">
+    <thead>
+      <tr>
+        <th data-sort="string">Metric</th>
+        <th data-sort="string">Formula / Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Expected Value (EV)</strong></td>
+        <td><code>EV = (P(win) &times; net_profit) &minus; (P(loss) &times; stake)</code>. A positive EV means the bet
+          is profitable over the long run.</td>
+      </tr>
+      <tr>
+        <td><strong>Implied Probability</strong></td>
+        <td>The break-even win probability embedded in the odds. For &minus;110 American odds, implied probability is
+          52.4%.</td>
+      </tr>
+      <tr>
+        <td><strong>Edge</strong></td>
+        <td><code>Edge = your_probability &minus; implied_probability</code>. A positive edge means you believe the bet
+          is mispriced in your favor.</td>
+      </tr>
+      <tr>
+        <td><strong>ROI</strong></td>
+        <td><code>ROI = (EV / stake) &times; 100%</code>. The expected return on investment per bet, expressed as a
+          percentage.</td>
+      </tr>
+      <tr>
+        <td><strong>Break-even Probability</strong></td>
+        <td>The minimum win probability at which the bet has zero expected value &mdash; equal to the implied
+          probability from the odds.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3 id="ev-odds">Odds Formats</h3>
+<p>The calculator supports three standard odds formats, with real-time conversion between them:</p>
+<div class="table-wrap">
+  <table class="feature-table">
+    <thead>
+      <tr>
+        <th data-sort="string">Format</th>
+        <th data-sort="string">Example</th>
+        <th data-sort="string">Conversion to Decimal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>American</strong></td>
+        <td>&minus;110 (favorite), +150 (underdog)</td>
+        <td>Negative: <code>(100 / |odds|) + 1</code>; Positive: <code>(odds / 100) + 1</code></td>
+      </tr>
+      <tr>
+        <td><strong>Decimal</strong></td>
+        <td>1.91, 2.50</td>
+        <td>Already in decimal form &mdash; represents total payout per unit staked</td>
+      </tr>
+      <tr>
+        <td><strong>Fractional</strong></td>
+        <td>10/11, 3/2</td>
+        <td><code>(numerator / denominator) + 1</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<p>
+  Implied probability from decimal odds is simply <code>1 / decimal_odds</code>. When switching
+  between formats, the calculator preserves the odds value by converting through the decimal
+  representation.
+</p>
+
+<h3 id="ev-kelly">Kelly Criterion</h3>
+<p>
+  The <strong>Kelly criterion</strong> determines the optimal fraction of your bankroll to wager
+  in order to maximize long-term growth rate, given your estimated edge:
+</p>
+<pre><code>f* = (b &times; p &minus; q) / b</code></pre>
+<p>Where:</p>
+<ul>
+  <li><code>b</code> = decimal odds &minus; 1 (net profit per unit wagered)</li>
+  <li><code>p</code> = estimated win probability</li>
+  <li><code>q</code> = 1 &minus; p (loss probability)</li>
+</ul>
+<p>
+  Full Kelly can be volatile, so the calculator includes an adjustable <strong>fractional Kelly
+    slider</strong> (10%&ndash;100%) that scales the recommended stake to reduce variance. Common
+  practice is to use &frac14; to &frac12; Kelly. An optional bankroll field converts the
+  percentage into a dollar amount.
+</p>
+<p>
+  If the Kelly fraction is zero or negative, there is no edge and the calculator advises against
+  placing the bet.
+</p>
+
+<div class="info-box">
+  <strong>Where to use:</strong> The standalone <a href="/tools/ev-calculator">EV Calculator</a>
+  page accepts any odds and probability. On each <a href="/game/1">game detail page</a>, the
+  embedded calculator auto-fills the model's predicted win probability and lets you toggle
+  between betting on the home or away team.
+</div>
 
 <!-- ================================================================== -->
 <h2 id="predictions">Predictions &amp; Drift Monitoring</h2>

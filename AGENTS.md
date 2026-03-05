@@ -321,6 +321,7 @@ Implemented modules:
 7. Sitemap (HTML visual sitemap at `/sitemap` + XML sitemap at `/sitemap.xml`; linked from all page navigation)
 8. CLI query tool (`scripts/query_game.py`)
 9. Daily automation (`scripts/update_daily.sh` + cron)
+10. EV Calculator (expected value, implied probability, edge, ROI, break-even probability, Kelly criterion; standalone page at `/tools/ev-calculator` + embedded widget on game detail pages with auto-populated model probabilities)
 
 Planned modules:
 

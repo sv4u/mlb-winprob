@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EV Calculator — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <link rel="stylesheet" href="/static/ev-calculator.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <a href="/" class="logo">⚾ MLB Win Probability</a>
+    <span class="meta">EV Calculator</span>
+    <code class="git-hash">{{ git_commit }}</code>
+    <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+    <nav class="site-nav">
+      <a href="/">All Seasons</a>
+      <a href="/season/2026">2026 Season</a>
+      <a href="/standings">Standings</a>
+      <a href="/tools/ev-calculator" class="active">EV Calculator</a>
+      <a href="/wiki">Wiki</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/sitemap">Sitemap</a>
+      <div class="model-selector">
+        <span>Model:</span>
+        <select id="model-select">
+          <option value="logistic">Logistic</option>
+          <option value="lightgbm">LightGBM</option>
+          <option value="xgboost">XGBoost</option>
+          <option value="catboost">CatBoost</option>
+          <option value="mlp">MLP</option>
+          <option value="stacked">Stacked</option>
+        </select>
+        <span id="model-switching" class="switching" style="display:none">switching…</span>
+      </div>
+    </nav>
+  </header>
+
+  <div class="container-narrow">
+    <div class="card" style="margin-bottom:1rem">
+      <h1 style="font-size:1.25rem;margin-bottom:0.35rem">Expected Value Calculator</h1>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0">
+        Calculate the expected value, edge, ROI, and optimal Kelly stake for any sports bet.
+        Use your model-predicted win probabilities or enter your own estimate.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="ev-calc">
+        <!-- ── Inputs ─────────────────────────────────────────────── -->
+        <div class="ev-input-group">
+          <div class="ev-field">
+            <label>Odds Format</label>
+            <div class="ev-format-row">
+              <button type="button" class="ev-format-btn active" data-ev-format="american"
+                data-ev-prefix="ev">American</button>
+              <button type="button" class="ev-format-btn" data-ev-format="decimal" data-ev-prefix="ev">Decimal</button>
+              <button type="button" class="ev-format-btn" data-ev-format="fractional"
+                data-ev-prefix="ev">Fractional</button>
+            </div>
+          </div>
+          <div class="ev-field">
+            <label for="ev-odds">Odds</label>
+            <input type="text" id="ev-odds" value="-110" placeholder="-110" autocomplete="off" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-prob">Win Probability (%)</label>
+            <input type="number" id="ev-prob" value="50" min="0.1" max="99.9" step="0.1" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-bet">Bet Amount ($)</label>
+            <input type="number" id="ev-bet" value="10" min="0.01" step="0.01" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-bankroll">Bankroll ($) <span style="font-weight:400;opacity:0.6">— optional, for
+                Kelly</span></label>
+            <input type="number" id="ev-bankroll" placeholder="e.g. 1000" min="0" step="1" />
+          </div>
+        </div>
+
+        <!-- ── Results ────────────────────────────────────────────── -->
+        <div class="ev-results">
+          <div class="ev-primary">
+            <div class="ev-primary-label">Expected Value per Bet</div>
+            <div class="ev-primary-value" id="ev-ev-value">—</div>
+            <div class="ev-primary-verdict" id="ev-ev-verdict"></div>
+          </div>
+
+          <div class="ev-metric">
+            <span class="ev-metric-label">Implied Probability</span>
+            <span class="ev-metric-value" id="ev-metric-implied-prob">—</span>
+          </div>
+          <div class="ev-metric">
+            <span class="ev-metric-label">Your Edge</span>
+            <span class="ev-metric-value" id="ev-metric-edge">—</span>
+          </div>
+          <div class="ev-metric">
+            <span class="ev-metric-label">ROI per Bet</span>
+            <span class="ev-metric-value" id="ev-metric-roi">—</span>
+          </div>
+          <div class="ev-metric">
+            <span class="ev-metric-label">Break-even Probability</span>
+            <span class="ev-metric-value" id="ev-metric-breakeven">—</span>
+          </div>
+
+          <!-- Kelly criterion -->
+          <div class="ev-kelly-section">
+            <div class="ev-kelly-header">
+              <span class="ev-kelly-title">Kelly Criterion</span>
+              <span class="ev-kelly-pct" id="ev-kelly-pct">—</span>
+            </div>
+            <div class="ev-slider-wrap">
+              <span style="font-size:0.75rem;color:var(--muted)">10%</span>
+              <input type="range" id="ev-kelly-slider" min="10" max="100" value="100" step="5" />
+              <span style="font-size:0.75rem;color:var(--muted)">100%</span>
+              <span class="ev-slider-label" id="ev-kelly-slider-label">100%</span>
+            </div>
+            <div class="ev-kelly-nobet" id="ev-kelly-nobet" style="display:none"></div>
+            <div class="ev-kelly-results" id="ev-kelly-stats">
+              <div class="ev-kelly-stat">
+                <div class="ev-kelly-stat-label">Stake % of Bankroll</div>
+                <div class="ev-kelly-stat-value" id="ev-kelly-stake-pct">—</div>
+              </div>
+              <div class="ev-kelly-stat">
+                <div class="ev-kelly-stat-label">Recommended Wager</div>
+                <div class="ev-kelly-stat-value" id="ev-kelly-wager">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="card">
+      <h2 style="font-size:1rem;color:var(--muted);margin-bottom:0.75rem">How it Works</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;font-size:0.82rem;color:var(--muted)">
+        <div>
+          <strong style="color:var(--text)">Expected Value</strong>
+          <p style="margin-top:0.25rem">EV = (Win Prob × Profit) − (Loss Prob × Stake). A positive EV means the bet is
+            profitable over the long run.</p>
+        </div>
+        <div>
+          <strong style="color:var(--text)">Implied Probability</strong>
+          <p style="margin-top:0.25rem">The break-even probability embedded in the odds. For -110 American odds, the
+            implied probability is 52.4%.</p>
+        </div>
+        <div>
+          <strong style="color:var(--text)">Edge</strong>
+          <p style="margin-top:0.25rem">Your estimated win probability minus the implied probability. A positive edge
+            means you believe the bet is mispriced in your favor.</p>
+        </div>
+        <div>
+          <strong style="color:var(--text)">Kelly Criterion</strong>
+          <p style="margin-top:0.25rem">The optimal fraction of your bankroll to wager, maximizing long-term growth. Use
+            the slider to reduce variance with fractional Kelly.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/base.js"></script>
+  <script src="/static/ev-calculator.js"></script>
+  <script>
+    initEVCalculator('ev');
+  </script>
+</body>
+
+</html>

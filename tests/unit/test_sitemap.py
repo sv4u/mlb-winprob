@@ -29,6 +29,7 @@ _EXPECTED_PAGE_PATHS = [
     "/",
     "/season/2026",
     "/standings",
+    "/tools/ev-calculator",
     "/wiki",
     "/dashboard",
     "/sitemap",
@@ -88,6 +89,7 @@ _TEMPLATES_WITH_SITEMAP_NAV = [
     "game.html",
     "season_2026.html",
     "standings.html",
+    "ev_calculator.html",
     "wiki.html",
     "dashboard.html",
     "sitemap.html",
@@ -153,5 +155,13 @@ async def test_xml_sitemap_contains_expected_paths() -> None:
 
     assert '<?xml version="1.0"' in body
     assert "http://www.sitemaps.org/schemas/sitemap/0.9" in body
-    for path in ["/", "/season/2026", "/standings", "/wiki", "/dashboard", "/sitemap"]:
+    for path in [
+        "/",
+        "/season/2026",
+        "/standings",
+        "/tools/ev-calculator",
+        "/wiki",
+        "/dashboard",
+        "/sitemap",
+    ]:
         assert f"{path}</loc>" in body
