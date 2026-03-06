@@ -39,7 +39,7 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
-    <a href="/tools/ev-calculator">EV Calculator</a>
+    <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
@@ -86,10 +86,10 @@
         <div class="desc">Predicted vs actual divisional standings, league leaders, and full team batting and pitching statistics.</div>
       </div>
       <div class="link-card">
-        <a href="/tools/ev-calculator">EV Calculator</a>
-        <div class="path">/tools/ev-calculator</div>
-        <div class="desc">Expected value calculator for sports bets. Supports American, decimal, and fractional odds with edge,
-          ROI, and Kelly criterion analysis.</div>
+        <a href="/odds">Odds Hub</a>
+        <div class="path">/odds</div>
+        <div class="desc">Live odds board, positive-EV bet finder, and EV calculator. Shows moneyline odds from multiple
+          sportsbooks, model-vs-market edge analysis, and Kelly criterion sizing.</div>
         </div>
         <div class="link-card">
         <a href="/wiki">Wiki</a>
@@ -151,6 +151,10 @@
       <div class="link-card">
         <a href="/api/odds"><span class="method-badge method-get">GET</span>/api/odds</a>
         <div class="desc">Live MLB game odds from The Odds API (cached, 5-min TTL). Requires API key configuration.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/ev-opportunities"><span class="method-badge method-get">GET</span>/api/ev-opportunities</a>
+        <div class="desc">Positive-EV moneyline bets where the model's win probability exceeds the market implied probability. Supports min_edge filter.</div>
       </div>
       <div class="link-card">
         <a href="/api/upsets?season=2025"><span class="method-badge method-get">GET</span>/api/upsets</a>

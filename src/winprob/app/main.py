@@ -461,10 +461,43 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
 @app.get("/api/odds", response_model=None)
 async def api_odds() -> dict:
     """Return all current MLB game odds from The Odds API (cached)."""
-    from winprob.app.odds_cache import get_cached_odds, is_odds_configured
+    from winprob.app.odds_cache import get_cached_odds, is_odds_configured, match_odds_for_game
+
+    from winprob.external.odds import _to_retro
 
     events = await get_cached_odds()
-    return {"configured": is_odds_configured(), "count": len(events), "events": events}
+    enriched: list[dict] = []
+    for ev in events:
+        hr = _to_retro(ev.get("home_team") or "")
+        ar = _to_retro(ev.get("away_team") or "")
+        matched = match_odds_for_game([ev], hr, ar)
+        if matched:
+            matched["home_retro"] = hr
+            matched["away_retro"] = ar
+            enriched.append(matched)
+    return {"configured": is_odds_configured(), "count": len(enriched), "events": enriched}
+
+
+@app.get("/api/ev-opportunities", response_model=None)
+async def api_ev_opportunities(
+    min_edge: Annotated[float, Query(ge=0.0, le=0.5)] = 0.0,
+) -> dict:
+    """Positive-EV moneyline bets: model edge over best market odds."""
+    from winprob.app.odds_cache import (
+        compute_ev_opportunities,
+        get_cached_odds,
+        is_odds_configured,
+    )
+
+    if not is_odds_configured():
+        return {"configured": False, "count": 0, "opportunities": []}
+    if not is_ready():
+        return {"configured": True, "count": 0, "opportunities": []}
+
+    events = await get_cached_odds()
+    df = get_features()
+    opps = compute_ev_opportunities(events, df, min_edge=min_edge)
+    return {"configured": True, "count": len(opps), "opportunities": opps}
 
 
 @app.get("/api/upsets", response_model=None)
@@ -820,7 +853,7 @@ async def xml_sitemap(request: Request) -> Response:
         "/",
         "/season/2026",
         "/standings",
-        "/tools/ev-calculator",
+        "/odds",
         "/wiki",
         "/chat",
         "/dashboard",
@@ -844,10 +877,18 @@ async def page_wiki(request: Request):
     return templates.TemplateResponse("wiki.html", _ctx(request))
 
 
+@app.get("/odds", response_class=HTMLResponse)
+async def page_odds_hub(request: Request):
+    """Odds hub: EV+ opportunities, all odds board, and EV calculator."""
+    return templates.TemplateResponse("odds_hub.html", _ctx(request))
+
+
 @app.get("/tools/ev-calculator", response_class=HTMLResponse)
 async def page_ev_calculator(request: Request):
-    """Expected value calculator for sports betting analysis."""
-    return templates.TemplateResponse("ev_calculator.html", _ctx(request))
+    """Legacy EV calculator URL — redirects to the Odds Hub."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/odds", status_code=301)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

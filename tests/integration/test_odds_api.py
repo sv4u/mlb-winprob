@@ -59,3 +59,24 @@ def test_game_detail_has_odds_fields(api_client: TestClient) -> None:
     assert "live_odds" in data
     assert "odds_configured" in data
     assert isinstance(data["odds_configured"], bool)
+
+
+def test_api_ev_opportunities_response_shape(api_client: TestClient) -> None:
+    """GET /api/ev-opportunities returns the expected top-level keys."""
+    r = api_client.get("/api/ev-opportunities")
+    assert r.status_code == 200
+    data = r.json()
+    assert "configured" in data
+    assert "count" in data
+    assert "opportunities" in data
+    assert isinstance(data["configured"], bool)
+    assert isinstance(data["count"], int)
+    assert isinstance(data["opportunities"], list)
+    assert data["count"] == len(data["opportunities"])
+
+
+def test_ev_calculator_redirects_to_odds_hub(api_client: TestClient) -> None:
+    """GET /tools/ev-calculator returns a 301 redirect to /odds."""
+    r = api_client.get("/tools/ev-calculator", follow_redirects=False)
+    assert r.status_code == 301
+    assert "/odds" in r.headers.get("location", "")

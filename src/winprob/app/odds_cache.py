@@ -3,6 +3,9 @@
 Provides a 5-minute cache to avoid burning API quota on every page load.
 All public functions degrade gracefully when the API key is not configured
 or the external service is unavailable.
+
+Also provides EV opportunity computation by joining model probabilities with
+live market odds to identify positive-edge bets.
 """
 
 from __future__ import annotations
@@ -11,6 +14,8 @@ import asyncio
 import logging
 import time
 from typing import Any
+
+import pandas as pd
 
 from winprob.external.odds import OddsClient, _to_retro
 from winprob.external.odds_config import get_odds_config_status
@@ -158,3 +163,107 @@ def match_odds_for_game(
         }
 
     return None
+
+
+def american_to_decimal(price: int | float) -> float:
+    """Convert American moneyline odds to decimal odds.
+
+    Positive (e.g. +130): 130/100 + 1 = 2.30
+    Negative (e.g. -150): 100/150 + 1 = 1.667
+    """
+    p = float(price)
+    if p > 0:
+        return p / 100.0 + 1.0
+    if p < 0:
+        return 100.0 / abs(p) + 1.0
+    return 2.0
+
+
+def compute_ev_opportunities(
+    events: list[dict[str, Any]],
+    features_df: pd.DataFrame,
+    min_edge: float = 0.0,
+) -> list[dict[str, Any]]:
+    """Join live odds events with model probabilities to find EV+ bets.
+
+    For each odds event that matches a game in features_df, computes EV metrics
+    for both home and away moneyline sides. Returns opportunities sorted by edge
+    (descending), filtered to edge > min_edge.
+    """
+    from winprob.app.data_cache import TEAM_NAMES
+
+    if not events or features_df.empty:
+        return []
+
+    opportunities: list[dict[str, Any]] = []
+
+    for ev in events:
+        ev_home_retro = _to_retro(ev.get("home_team") or "")
+        ev_away_retro = _to_retro(ev.get("away_team") or "")
+        if not ev_home_retro or not ev_away_retro:
+            continue
+
+        matched = match_odds_for_game([ev], ev_home_retro, ev_away_retro)
+        if not matched or not matched["bookmakers"]:
+            continue
+
+        mask = (features_df["home_retro"] == ev_home_retro) & (
+            features_df["away_retro"] == ev_away_retro
+        )
+        rows = features_df[mask]
+        if rows.empty:
+            continue
+
+        row = rows.iloc[-1]
+        prob_home = float(row["prob"]) if pd.notna(row.get("prob")) else None
+        if prob_home is None:
+            continue
+
+        game_pk = int(row.get("game_pk", 0) or 0)
+        date_str = str(row.get("date", ""))[:10]
+        home_name = TEAM_NAMES.get(ev_home_retro, ev.get("home_team", ""))
+        away_name = TEAM_NAMES.get(ev_away_retro, ev.get("away_team", ""))
+
+        for side, price, model_prob in [
+            ("home", matched["best_home_price"], prob_home),
+            ("away", matched["best_away_price"], 1.0 - prob_home),
+        ]:
+            if price == 0:
+                continue
+            implied = american_to_implied(price)
+            edge = model_prob - implied
+            if edge <= min_edge:
+                continue
+            dec = american_to_decimal(price)
+            ev_per_unit = model_prob * (dec - 1.0) - (1.0 - model_prob)
+            b = dec - 1.0
+            kelly = max(0.0, (b * model_prob - (1.0 - model_prob)) / b) if b > 0 else 0.0
+
+            best_book = ""
+            for bm in matched["bookmakers"]:
+                bp = bm["home_price"] if side == "home" else bm["away_price"]
+                if bp == price:
+                    best_book = bm["title"]
+                    break
+
+            opportunities.append(
+                {
+                    "game_pk": game_pk,
+                    "date": date_str,
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "commence_time": matched["commence_time"],
+                    "selection": side,
+                    "team": home_name if side == "home" else away_name,
+                    "odds": price,
+                    "sportsbook": best_book,
+                    "implied_prob": round(implied, 4),
+                    "model_prob": round(model_prob, 4),
+                    "edge": round(edge, 4),
+                    "ev_per_unit": round(ev_per_unit, 4),
+                    "kelly_pct": round(kelly * 100, 2),
+                }
+            )
+
+    opportunities.sort(key=lambda x: x["edge"], reverse=True)
+    return opportunities

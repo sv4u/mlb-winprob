@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
+import pandas as pd
+
 from winprob.app.odds_cache import (
+    american_to_decimal,
     american_to_implied,
+    compute_ev_opportunities,
     match_odds_for_game,
     is_odds_configured,
     _pick_best_price,
@@ -209,3 +213,90 @@ def test_is_odds_configured_false() -> None:
         return_value={"configured": False, "source": None},
     ):
         assert is_odds_configured() is False
+
+
+# ---------------------------------------------------------------------------
+# american_to_decimal
+# ---------------------------------------------------------------------------
+
+
+def test_american_to_decimal_positive() -> None:
+    """Positive American odds convert to decimal correctly."""
+    assert abs(american_to_decimal(130) - 2.30) < 0.001
+
+
+def test_american_to_decimal_negative() -> None:
+    """Negative American odds convert to decimal correctly."""
+    assert abs(american_to_decimal(-150) - 1.6667) < 0.001
+
+
+def test_american_to_decimal_even() -> None:
+    """Even money (+100) converts to 2.0."""
+    assert abs(american_to_decimal(100) - 2.0) < 0.001
+
+
+# ---------------------------------------------------------------------------
+# compute_ev_opportunities
+# ---------------------------------------------------------------------------
+
+
+def _make_features_df() -> pd.DataFrame:
+    """Build a minimal features DataFrame matching one test event."""
+    return pd.DataFrame(
+        {
+            "game_pk": [100001],
+            "date": [pd.Timestamp("2026-06-15")],
+            "season": [2026],
+            "home_retro": ["NYA"],
+            "away_retro": ["BOS"],
+            "prob": [0.62],
+            "home_win": [None],
+        }
+    )
+
+
+_MOCK_NAMES = {"NYA": "Yankees", "BOS": "Red Sox"}
+
+
+def test_compute_ev_finds_positive_edge() -> None:
+    """Opportunities are returned when model probability exceeds implied."""
+    events = [_make_event()]
+    df = _make_features_df()
+    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+        opps = compute_ev_opportunities(events, df, min_edge=0.0)
+    home_opps = [o for o in opps if o["selection"] == "home"]
+    assert len(home_opps) >= 1
+    assert home_opps[0]["edge"] > 0
+
+
+def test_compute_ev_filters_by_min_edge() -> None:
+    """Opportunities below min_edge are excluded."""
+    events = [_make_event()]
+    df = _make_features_df()
+    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+        opps = compute_ev_opportunities(events, df, min_edge=0.99)
+    assert len(opps) == 0
+
+
+def test_compute_ev_empty_events() -> None:
+    """Empty events list returns no opportunities."""
+    df = _make_features_df()
+    opps = compute_ev_opportunities([], df, min_edge=0.0)
+    assert opps == []
+
+
+def test_compute_ev_empty_df() -> None:
+    """Empty features DataFrame returns no opportunities."""
+    events = [_make_event()]
+    opps = compute_ev_opportunities(events, pd.DataFrame(), min_edge=0.0)
+    assert opps == []
+
+
+def test_compute_ev_sorted_by_edge() -> None:
+    """Opportunities are sorted by edge descending."""
+    events = [_make_event()]
+    df = _make_features_df()
+    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+        opps = compute_ev_opportunities(events, df, min_edge=0.0)
+    if len(opps) >= 2:
+        assert opps[0]["edge"] >= opps[1]["edge"]

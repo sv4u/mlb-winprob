@@ -45,7 +45,7 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
-    <a href="/tools/ev-calculator">EV Calculator</a>
+    <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
@@ -353,7 +353,7 @@ async function load() {
 
     // Model vs Market comparison
     var mktProb = g.live_odds.home_implied_prob;
-    if (mktProb != null && ph != null) {
+    if (mktProb != null && g.prob_home != null) {
       var edgePp = ((ph - mktProb) * 100).toFixed(1);
       var edgeCls = ph > mktProb ? 'edge-positive' : 'edge-negative';
       var edgeSign = ph > mktProb ? '+' : '';
