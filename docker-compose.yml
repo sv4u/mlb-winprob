@@ -1,5 +1,3 @@
-version: "3.9"
-
 # =============================================================================
 # MLB Win Probability — Docker Compose
 #
@@ -41,7 +39,8 @@ services:
     environment:
       MODEL: "${MODEL:-stacked}"
       PORT: "8087"
-    restart: unless-stopped
+    restart: no
+    mem_limit: 8g
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8087/api/seasons"]
       interval: 30s

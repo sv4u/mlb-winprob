@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package winprob.v1;
+
+import "winprob/v1/common.proto";
+
+service ChatService {
+  rpc SendMessage(ChatRequest) returns (stream ChatResponse);
+  rpc GetStatus(Empty) returns (ChatStatusResponse);
+}
+
+message ChatRequest {
+  string message = 1;
+  string session_id = 2;
+  optional string model = 3;
+}
+
+message ChatResponse {
+  string content = 1;
+  bool done = 2;
+}
+
+message ChatStatusResponse {
+  bool ollama_available = 1;
+  string model = 2;
+  int32 session_count = 3;
+}
+
+service OllamaService {
+  rpc Chat(OllamaChatRequest) returns (stream OllamaChatResponse);
+  rpc ListModels(Empty) returns (ListModelsResponse);
+}
+
+message OllamaChatRequest {
+  string model = 1;
+  string messages_json = 2;
+  optional string tools_json = 3;
+  bool stream = 4;
+}
+
+message OllamaChatResponse {
+  string content = 1;
+  optional string tool_calls_json = 2;
+  bool done = 3;
+}
+
+message ListModelsResponse {
+  string json = 1;
+}

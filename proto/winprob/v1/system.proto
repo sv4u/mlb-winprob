@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package winprob.v1;
+
+import "winprob/v1/common.proto";
+
+service SystemService {
+  rpc Health(Empty) returns (HealthResponse);
+  rpc Version(Empty) returns (VersionResponse);
+  rpc Seasons(Empty) returns (SeasonsResponse);
+  rpc Teams(Empty) returns (TeamsResponse);
+}
+
+message HealthResponse {
+  bool ready = 1;
+  string version = 2;
+}
+
+message VersionResponse {
+  string version = 1;
+  string git_commit = 2;
+}
+
+message SeasonsResponse {
+  repeated int32 seasons = 1;
+}
+
+message TeamsResponse {
+  repeated Team teams = 1;
+}

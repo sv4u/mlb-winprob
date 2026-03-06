@@ -1,9 +1,14 @@
 """Start the MLB Win Probability web dashboard.
 
+Runs HTTP (FastAPI) and gRPC in a single process: the app lifespan starts the
+gRPC server on GRPC_PORT (default 50051) when WINPROB_GRPC_ENABLED=1. Set
+WINPROB_GRPC_ENABLED=0 or use --no-grpc to run pure FastAPI (fallback mode).
+
 Usage
 -----
-    python scripts/serve.py                   # default: localhost:8087
-    python scripts/serve.py --port 9000       # custom port
+    python scripts/serve.py                   # default: localhost:8087, gRPC :50051
+    python scripts/serve.py --port 9000       # custom HTTP port
+    python scripts/serve.py --no-grpc         # disable gRPC (pure FastAPI)
     python scripts/serve.py --model xgboost   # use a different model type
     python scripts/serve.py --model lightgbm  # LightGBM model
     python scripts/serve.py --reload          # auto-reload on code changes (dev)
@@ -36,6 +41,17 @@ def main() -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8087)
     ap.add_argument(
+        "--no-grpc",
+        action="store_true",
+        help="Disable gRPC server (WINPROB_GRPC_ENABLED=0); run pure FastAPI.",
+    )
+    ap.add_argument(
+        "--grpc-port",
+        type=int,
+        default=50051,
+        help="gRPC server port (default 50051). Set GRPC_PORT env to override.",
+    )
+    ap.add_argument(
         "--model",
         default="stacked",
         choices=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
@@ -56,6 +72,11 @@ def main() -> None:
     args = ap.parse_args()
 
     os.environ.setdefault("WINPROB_MODEL_TYPE", args.model)
+    if args.no_grpc:
+        os.environ["WINPROB_GRPC_ENABLED"] = "0"
+    else:
+        os.environ.setdefault("WINPROB_GRPC_ENABLED", "1")
+    os.environ.setdefault("GRPC_PORT", str(args.grpc_port))
 
     from winprob.logging_config import setup_logging
 

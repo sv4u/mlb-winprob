@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package winprob.v1;
+
+import "winprob/v1/common.proto";
+
+service GameService {
+  rpc GetGames(GetGamesRequest) returns (GetGamesResponse);
+  rpc GetGameDetail(GetGameDetailRequest) returns (GameDetail);
+  rpc GetUpsets(GetUpsetsRequest) returns (GetUpsetsResponse);
+}
+
+message GetGamesRequest {
+  optional int32 season = 1;
+  optional string home = 2;
+  optional string away = 3;
+  optional string date = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+  string sort = 7;
+  string order = 8;
+}
+
+message GetGamesResponse {
+  int32 total = 1;
+  int32 offset = 2;
+  int32 limit = 3;
+  repeated Game games = 4;
+}
+
+message GetGameDetailRequest {
+  int64 game_pk = 1;
+}
+
+message UpsetEntry {
+  int64 game_pk = 1;
+  string date = 2;
+  int32 season = 3;
+  string home_name = 4;
+  string away_name = 5;
+  double prob_home = 6;
+  double fav_prob = 7;
+  string fav_team = 8;
+  string winner = 9;
+}
+
+message GetUpsetsRequest {
+  optional int32 season = 1;
+  optional string home = 2;
+  optional string away = 3;
+  double min_prob = 4;
+  int32 limit = 5;
+}
+
+message GetUpsetsResponse {
+  repeated UpsetEntry upsets = 1;
+}

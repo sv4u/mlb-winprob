@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package winprob.v1;
+
+import "winprob/v1/common.proto";
+
+service AdminService {
+  rpc GetStatus(Empty) returns (AdminStatusResponse);
+  rpc RunPipeline(RunPipelineRequest) returns (stream PipelineProgress);
+}
+
+message AdminStatusResponse {
+  string json = 1;
+}
+
+message RunPipelineRequest {
+  string kind = 1;
+}
+
+message PipelineProgress {
+  oneof update {
+    string log_line = 1;
+    PipelineState final_state = 2;
+  }
+}

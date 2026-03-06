@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package winprob.v1;
+
+// Shared message types used across services.
+
+message Empty {}
+// Field names use snake_case to match existing HTTP API JSON contracts.
+
+message Game {
+  int64 game_pk = 1;
+  string date = 2;
+  int32 season = 3;
+  string home_retro = 4;
+  string home_name = 5;
+  string away_retro = 6;
+  string away_name = 7;
+  optional double prob_home = 8;
+  optional int32 home_win = 9;
+  optional double home_elo = 10;
+  optional double away_elo = 11;
+}
+
+message Factor {
+  string feature = 1;
+  double value = 2;
+}
+
+message GameDetail {
+  int64 game_pk = 1;
+  string date = 2;
+  int32 season = 3;
+  string home_retro = 4;
+  string home_name = 5;
+  string away_retro = 6;
+  string away_name = 7;
+  optional double prob_home = 8;
+  optional int32 home_win = 9;
+  map<string, double> stats = 10;
+  repeated Factor top_factors = 11;
+}
+
+message Team {
+  string code = 1;
+  string name = 2;
+}
+
+message PipelineState {
+  string kind = 1;
+  string status = 2;
+  optional string started_at = 3;
+  optional string finished_at = 4;
+  optional double elapsed_seconds = 5;
+  optional string error = 6;
+  repeated string log_tail = 7;
+  int32 log_line_count = 8;
+}
+
+message TeamStanding {
+  string retro_code = 1;
+  int32 mlb_id = 2;
+  string team_name = 3;
+  double pred_wins = 4;
+  double pred_losses = 5;
+  double pred_win_pct = 6;
+  int32 pred_division_rank = 7;
+  string pred_gb = 8;
+  int32 pred_total_games = 9;
+  optional int32 actual_wins = 10;
+  optional int32 actual_losses = 11;
+  optional double actual_win_pct = 12;
+  optional string actual_gb = 13;
+  optional int32 actual_division_rank = 14;
+  optional int32 runs_scored = 15;
+  optional int32 runs_allowed = 16;
+  optional int32 run_diff = 17;
+  optional double wins_delta = 18;
+  optional double pct_delta = 19;
+  optional int32 rank_delta = 20;
+}
+
+message DivisionStandings {
+  int32 division_id = 1;
+  string division_name = 2;
+  string league = 3;
+  repeated TeamStanding teams = 4;
+}
+
+message PredictedLeader {
+  string team_name = 1;
+  string retro_code = 2;
+  double pred_wins = 3;
+  double pred_losses = 4;
+  double pred_win_pct = 5;
+}
+
+message ActualLeader {
+  string team_name = 1;
+  string retro_code = 2;
+  int32 actual_wins = 3;
+  int32 actual_losses = 4;
+  double actual_win_pct = 5;
+}
+
+message LeagueLeadersSection {
+  PredictedLeader predicted_leader = 1;
+  optional ActualLeader actual_leader = 2;
+}
+
+message LeagueLeaders {
+  LeagueLeadersSection AL = 1;
+  LeagueLeadersSection NL = 2;
+}

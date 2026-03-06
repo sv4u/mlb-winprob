@@ -33,6 +33,12 @@ dependencies = [
   "fastapi>=0.111",
   "uvicorn[standard]>=0.29",
   "jinja2>=3.1",
+  # gRPC
+  "grpcio>=1.60",
+  "protobuf>=4.25",
+  "grpcio-reflection>=1.60",
+  # LLM
+  "ollama>=0.4",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +51,7 @@ dev = [
   "hypothesis>=6.0",
   "aioresponses>=0.7",
   "types-aiofiles>=23.2",
+  "grpcio-tools>=1.60",
 ]
 
 [tool.hatch.build.targets.wheel]

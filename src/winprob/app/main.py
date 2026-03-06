@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import traceback
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
+import grpc
 import pandas as pd
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel
 
 from winprob.app.admin import (
@@ -47,7 +51,73 @@ from winprob.standings import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="MLB Win Probability", version="3.0")
+_GRPC_ENABLED = os.environ.get("WINPROB_GRPC_ENABLED", "1").strip() == "1"
+_GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
+
+
+def _grpc_dict(msg) -> dict:
+    """Convert protobuf to JSON-serializable dict (snake_case, include defaults)."""
+    return MessageToDict(
+        msg,
+        preserving_proto_field_name=True,
+        including_default_value_fields=True,
+    )
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup: load data, start gRPC server, create stubs. Shutdown: stop gRPC."""
+    model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
+    logger.info("Application startup: model_type=%s", model_type)
+    loaded = try_startup(model_type)
+    if loaded:
+        logger.info("Startup complete — serving on model '%s'", model_type)
+    else:
+        logger.info("Data not ready — server accepting requests; auto-bootstrap starting")
+        asyncio.create_task(_auto_bootstrap())
+
+    app.state._grpc_stubs = None
+    app.state._grpc_server = None
+    if _GRPC_ENABLED:
+        try:
+            from winprob.grpc.server import start_grpc_server
+
+            server = await start_grpc_server()
+            if server:
+                app.state._grpc_server = server
+                from winprob.grpc.generated.winprob.v1 import (
+                    admin_pb2_grpc,
+                    chat_pb2_grpc,
+                    games_pb2_grpc,
+                    models_pb2_grpc,
+                    standings_pb2_grpc,
+                    system_pb2_grpc,
+                )
+
+                channel = grpc.aio.insecure_channel(f"localhost:{_GRPC_PORT}")
+                app.state._grpc_stubs = {
+                    "system": system_pb2_grpc.SystemServiceStub(channel),
+                    "games": games_pb2_grpc.GameServiceStub(channel),
+                    "models": models_pb2_grpc.ModelServiceStub(channel),
+                    "standings": standings_pb2_grpc.StandingsServiceStub(channel),
+                    "admin": admin_pb2_grpc.AdminServiceStub(channel),
+                    "chat": chat_pb2_grpc.ChatServiceStub(channel),
+                }
+                logger.info("gRPC gateway enabled — stubs ready")
+        except Exception as exc:
+            logger.warning("gRPC server or stubs failed: %s — running without gateway", exc)
+
+    yield
+
+    if getattr(app.state, "_grpc_server", None) is not None:
+        from winprob.grpc.server import stop_grpc_server
+
+        await stop_grpc_server()
+        app.state._grpc_stubs = None
+        app.state._grpc_server = None
+
+
+app = FastAPI(title="MLB Win Probability", version="3.0", lifespan=_lifespan)
 app.add_middleware(TimingMiddleware)
 
 
@@ -99,36 +169,57 @@ async def _auto_bootstrap() -> None:
     await run_pipeline(PipelineKind.RETRAIN, on_success=_reload_after_retrain)
 
 
-@app.on_event("startup")
-async def _startup() -> None:
-    model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
-    logger.info("Application startup: model_type=%s", model_type)
-    loaded = try_startup(model_type)
-    if loaded:
-        logger.info("Startup complete — serving on model '%s'", model_type)
-    else:
-        logger.info("Data not ready — server accepting requests; auto-bootstrap starting")
-        asyncio.create_task(_auto_bootstrap())
-
-
 # ---------------------------------------------------------------------------
-# API endpoints
+# API endpoints (gateway to gRPC when enabled)
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/health")
-def api_health() -> dict:
+def _stubs(request: Request):
+    return getattr(request.app.state, "_grpc_stubs", None)
+
+
+def _grpc_error_to_response(exc: grpc.RpcError) -> JSONResponse:
+    if exc.code() == grpc.StatusCode.UNAVAILABLE:
+        return JSONResponse(
+            {"error": "System initializing — data not loaded yet.", "status": "initializing"},
+            status_code=503,
+        )
+    if exc.code() == grpc.StatusCode.NOT_FOUND:
+        return JSONResponse({"error": exc.details() or "Not found"}, status_code=404)
+    return JSONResponse(
+        {"error": exc.details() or str(exc)},
+        status_code=500,
+    )
+
+
+@app.get("/api/health", response_model=None)
+async def api_health(request: Request) -> dict | JSONResponse:
     """Lightweight health/readiness probe."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["system"].Health(common_pb2.Empty())
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     return {"ready": is_ready(), "version": "3.0"}
 
 
-@app.get("/api/version")
-def api_version() -> dict:
+@app.get("/api/version", response_model=None)
+async def api_version(request: Request) -> dict | JSONResponse:
     """Return the current application version and git commit hash."""
-    return {
-        "version": "3.0",
-        "git_commit": get_git_commit(),
-    }
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["system"].Version(common_pb2.Empty())
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
+    return {"version": "3.0", "git_commit": get_git_commit()}
 
 
 def _not_ready_json() -> JSONResponse:
@@ -140,8 +231,17 @@ def _not_ready_json() -> JSONResponse:
 
 
 @app.get("/api/seasons", response_model=None)
-def api_seasons() -> list[int] | JSONResponse:
+async def api_seasons(request: Request) -> list[int] | dict | JSONResponse:
     """List all available seasons."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["system"].Seasons(common_pb2.Empty())
+            return list(r.seasons)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     try:
@@ -152,8 +252,17 @@ def api_seasons() -> list[int] | JSONResponse:
 
 
 @app.get("/api/teams", response_model=None)
-def api_teams() -> list[dict] | JSONResponse:
+async def api_teams(request: Request) -> list[dict] | JSONResponse:
     """List all known teams with their Retrosheet codes and names."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["system"].Teams(common_pb2.Empty())
+            return _grpc_dict(r).get("teams", [])
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     df = get_features()
@@ -165,7 +274,8 @@ def api_teams() -> list[dict] | JSONResponse:
 
 
 @app.get("/api/games", response_model=None)
-def api_games(
+async def api_games(
+    request: Request,
     season: Annotated[int | None, Query()] = None,
     home: Annotated[str | None, Query()] = None,
     away: Annotated[str | None, Query()] = None,
@@ -176,6 +286,29 @@ def api_games(
     order: Annotated[str, Query()] = "desc",
 ) -> dict | JSONResponse:
     """Query games with optional filters."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import games_pb2
+
+            req = games_pb2.GetGamesRequest(
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                order=order,
+            )
+            if season is not None:
+                req.season = season
+            if home is not None:
+                req.home = home
+            if away is not None:
+                req.away = away
+            if date is not None:
+                req.date = date
+            r = await stubs["games"].GetGames(req)
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     logger.debug(
@@ -232,8 +365,19 @@ def api_games(
 
 
 @app.get("/api/games/{game_pk}", response_model=None)
-def api_game_detail(game_pk: int) -> dict | JSONResponse:
+async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse:
     """Full feature breakdown + SHAP attribution for a single game."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import games_pb2
+
+            r = await stubs["games"].GetGameDetail(
+                games_pb2.GetGameDetailRequest(game_pk=game_pk)
+            )
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     logger.debug("GET /api/games/%d", game_pk)
@@ -298,7 +442,8 @@ def api_game_detail(game_pk: int) -> dict | JSONResponse:
 
 
 @app.get("/api/upsets", response_model=None)
-def api_upsets(
+async def api_upsets(
+    request: Request,
     season: Annotated[int | None, Query()] = None,
     home: Annotated[str | None, Query()] = None,
     away: Annotated[str | None, Query()] = None,
@@ -306,6 +451,22 @@ def api_upsets(
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
 ) -> list[dict] | JSONResponse:
     """Return the biggest upsets (heavy favorites that lost)."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import games_pb2
+
+            req = games_pb2.GetUpsetsRequest(min_prob=min_prob, limit=limit)
+            if season is not None:
+                req.season = season
+            if home is not None:
+                req.home = home
+            if away is not None:
+                req.away = away
+            r = await stubs["games"].GetUpsets(req)
+            return _grpc_dict(r).get("upsets", [])
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     with timed_operation("upsets_query"):
@@ -346,10 +507,17 @@ def api_upsets(
 
 
 @app.get("/api/cv-summary")
-def api_cv_summary() -> list[dict]:
+async def api_cv_summary(request: Request) -> list[dict]:
     """Return cross-validation results from the latest training run."""
-    import json
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
 
+            r = await stubs["models"].GetCVSummary(common_pb2.Empty())
+            return json.loads(r.json) if r.json else []
+        except grpc.RpcError:
+            pass
     paths = [
         Path("data/models/cv_summary_v3.json"),
         Path("data/models/cv_summary_v2.json"),
@@ -363,6 +531,7 @@ def api_cv_summary() -> list[dict]:
 
 @app.get("/api/standings", response_model=None)
 async def api_standings(
+    request: Request,
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
 ) -> dict | JSONResponse:
     """Return predicted vs actual standings grouped by division.
@@ -371,6 +540,17 @@ async def api_standings(
     in the features cache.  Actual standings are fetched live from the
     MLB Stats API when available.
     """
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import standings_pb2
+
+            r = await stubs["standings"].GetStandings(
+                standings_pb2.GetStandingsRequest(season=season)
+            )
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     if not is_ready():
         return _not_ready_json()
     logger.debug("GET /api/standings season=%d", season)
@@ -458,11 +638,23 @@ async def api_standings(
     }
 
 
-@app.get("/api/team-stats")
+@app.get("/api/team-stats", response_model=None)
 async def api_team_stats(
+    request: Request,
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
 ) -> dict:
     """Return batting and pitching stats for all teams in a season."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import standings_pb2
+
+            r = await stubs["standings"].GetTeamStats(
+                standings_pb2.GetTeamStatsRequest(season=season)
+            )
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     from winprob.mlbapi.client import MLBAPIClient
     from winprob.mlbapi.standings import fetch_all_team_stats, fetch_standings
 
@@ -604,6 +796,7 @@ async def xml_sitemap(request: Request) -> Response:
         "/standings",
         "/tools/ev-calculator",
         "/wiki",
+        "/chat",
         "/dashboard",
         "/sitemap",
     ]
@@ -637,6 +830,68 @@ async def page_dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", _ctx(request))
 
 
+@app.get("/chat", response_class=HTMLResponse)
+async def page_chat(request: Request):
+    """Chat with the MLB Win Probability assistant (Ollama + tools)."""
+    return templates.TemplateResponse("chat.html", _ctx(request))
+
+
+class _ChatRequest(BaseModel):
+    """Body for POST /api/chat."""
+
+    message: str
+    session_id: str = "default"
+    model: str | None = None
+
+
+async def _stream_chat_sse(request: Request, body: _ChatRequest):
+    """Generator: stream ChatResponse as SSE lines."""
+    stubs = _stubs(request)
+    if not stubs or "chat" not in stubs:
+        yield f"data: {json.dumps({'content': 'Chat service unavailable (gRPC disabled).', 'done': True})}\n\n"
+        return
+    from winprob.grpc.generated.winprob.v1 import chat_pb2
+
+    req = chat_pb2.ChatRequest(
+        message=body.message,
+        session_id=body.session_id,
+    )
+    if body.model:
+        req.model = body.model
+    try:
+        stream = stubs["chat"].SendMessage(req)
+        async for chunk in stream:
+            payload = {"content": chunk.content or "", "done": chunk.done}
+            yield f"data: {json.dumps(payload)}\n\n"
+    except grpc.RpcError as e:
+        yield f"data: {json.dumps({'content': e.details() or str(e), 'done': True})}\n\n"
+
+
+@app.post("/api/chat", response_class=StreamingResponse)
+async def api_chat(request: Request, body: _ChatRequest) -> StreamingResponse:
+    """Stream chat reply as Server-Sent Events. Body: message, session_id?, model?."""
+    return StreamingResponse(
+        _stream_chat_sse(request, body),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/chat/status", response_model=None)
+async def api_chat_status(request: Request) -> dict | JSONResponse:
+    """Return chat status: ollama_available, model, session_count."""
+    stubs = _stubs(request)
+    if stubs and "chat" in stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["chat"].GetStatus(common_pb2.Empty())
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
+    return {"ollama_available": False, "model": "", "session_count": 0}
+
+
 # ---------------------------------------------------------------------------
 # Model switching API
 # ---------------------------------------------------------------------------
@@ -648,18 +903,38 @@ class _SwitchModelRequest(BaseModel):
     model_type: str
 
 
-@app.get("/api/active-model")
-def api_active_model() -> dict:
+@app.get("/api/active-model", response_model=None)
+async def api_active_model(request: Request) -> dict | JSONResponse:
     """Return the currently active model type and available alternatives."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["models"].GetActiveModel(common_pb2.Empty())
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     return {
         "model_type": get_active_model_type(),
-        "available": available_model_types(),
+        "available": list(available_model_types()),
     }
 
 
-@app.post("/api/admin/switch-model")
-def api_switch_model(body: _SwitchModelRequest) -> dict:
+@app.post("/api/admin/switch-model", response_model=None)
+async def api_switch_model(request: Request, body: _SwitchModelRequest) -> dict | JSONResponse:
     """Hot-swap the active prediction model at runtime."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import models_pb2
+
+            r = await stubs["models"].SwitchModel(
+                models_pb2.SwitchModelRequest(model_type=body.model_type)
+            )
+            return _grpc_dict(r)
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     model_type = body.model_type.lower().strip()
     if model_type not in _VALID_MODEL_TYPES:
         return {"ok": False, "message": f"Unknown model type '{model_type}'."}
@@ -679,9 +954,18 @@ def api_switch_model(body: _SwitchModelRequest) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/admin/status")
-def api_admin_status() -> dict:
+@app.get("/api/admin/status", response_model=None)
+async def api_admin_status(request: Request) -> dict | JSONResponse:
     """Full system status: data coverage, model inventory, pipeline states."""
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import common_pb2
+
+            r = await stubs["admin"].GetStatus(common_pb2.Empty())
+            return json.loads(r.json) if r.json else {}
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
     return {
         "version": "3.0",
         "git_commit": get_git_commit(),

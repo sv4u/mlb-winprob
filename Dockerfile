@@ -105,6 +105,12 @@ FROM base AS production
 # ---------------------------------------------------------------------------
 COPY scripts/ scripts/
 COPY docker/  docker/
+COPY proto/   proto/
+
+# Proto codegen — generate gRPC stubs (grpcio-tools required at build time).
+# grpcio-tools left installed; uv pip uninstall has no non-interactive flag in this image.
+RUN uv pip install --system --no-cache grpcio-tools \
+    && PYTHON=python ./scripts/gen_proto.sh
 
 # Bake the git commit hash into the image (passed via --build-arg or CI).
 ARG GIT_COMMIT=unknown
@@ -122,9 +128,11 @@ RUN mkdir -p data/raw data/processed data/processed/statcast_player \
 
 VOLUME ["/app/data", "/app/logs"]
 
-EXPOSE 8087
+EXPOSE 8087 50051
 
 ENV MODEL=stacked \
-    PORT=8087
+    PORT=8087 \
+    GRPC_PORT=50051 \
+    WINPROB_GRPC_ENABLED=1
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

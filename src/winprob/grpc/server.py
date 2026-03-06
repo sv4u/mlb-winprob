@@ -1,0 +1,82 @@
+"""Async gRPC server; started within FastAPI lifespan, sharing uvicorn's event loop."""
+
+from __future__ import annotations
+
+import logging
+import os
+
+import grpc.aio
+
+from winprob.grpc.generated.winprob.v1 import (
+    admin_pb2_grpc,
+    chat_pb2_grpc,
+    games_pb2_grpc,
+    models_pb2_grpc,
+    standings_pb2_grpc,
+    system_pb2_grpc,
+)
+from winprob.grpc.services.admin import AdminServicer
+from winprob.grpc.services.chat import ChatServicer
+from winprob.grpc.services.games import GameServicer
+from winprob.grpc.services.models import ModelServicer
+from winprob.grpc.services.ollama_adapter import OllamaAdapterServicer
+from winprob.grpc.services.standings import StandingsServicer
+from winprob.grpc.services.system import SystemServicer
+
+logger = logging.getLogger(__name__)
+
+_GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
+_server: grpc.aio.Server | None = None
+
+
+def _add_servicers(server: grpc.aio.Server) -> None:
+    """Register all gRPC servicers. Called before server.start()."""
+    system_pb2_grpc.add_SystemServiceServicer_to_server(
+        SystemServicer(), server
+    )
+    games_pb2_grpc.add_GameServiceServicer_to_server(
+        GameServicer(), server
+    )
+    models_pb2_grpc.add_ModelServiceServicer_to_server(
+        ModelServicer(), server
+    )
+    standings_pb2_grpc.add_StandingsServiceServicer_to_server(
+        StandingsServicer(), server
+    )
+    admin_pb2_grpc.add_AdminServiceServicer_to_server(
+        AdminServicer(), server
+    )
+    chat_pb2_grpc.add_ChatServiceServicer_to_server(
+        ChatServicer(), server
+    )
+    chat_pb2_grpc.add_OllamaServiceServicer_to_server(
+        OllamaAdapterServicer(), server
+    )
+
+
+async def start_grpc_server() -> grpc.aio.Server | None:
+    """Create, configure, and start the gRPC server on GRPC_PORT.
+
+    Uses the current asyncio event loop (uvicorn's when called from lifespan).
+    Returns the server instance so the caller can await server.stop(grace) on shutdown.
+    """
+    if os.environ.get("WINPROB_GRPC_ENABLED", "1").strip() == "0":
+        logger.info("gRPC disabled (WINPROB_GRPC_ENABLED=0)")
+        return None
+    server = grpc.aio.server()
+    _add_servicers(server)
+    server.add_insecure_port(f"[::]:{_GRPC_PORT}")
+    await server.start()
+    global _server
+    _server = server
+    logger.info("gRPC server listening on port %s", _GRPC_PORT)
+    return server
+
+
+async def stop_grpc_server(grace: float = 5.0) -> None:
+    """Stop the gRPC server if it was started."""
+    global _server
+    if _server is not None:
+        await _server.stop(grace)
+        _server = None
+        logger.info("gRPC server stopped")
