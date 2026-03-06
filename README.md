@@ -455,6 +455,16 @@ docker compose up -d                 # start again
 PORT=9000 MODEL=xgboost docker compose up -d
 ```
 
+### Live Odds (optional)
+
+To enable live game and futures odds from [The Odds API](https://the-odds-api.com), set an API key in one of these ways:
+
+- **Environment:** `ODDS_API_KEY=your-key`
+- **Admin dashboard:** Dashboard → “Live Odds API Key” → enter key → Save (writes `data/processed/odds/config.json`)
+- **Config file:** Create `data/processed/odds/config.json` with `{"api_key": "your-key"}` (the `data/` directory is git-ignored)
+
+Without a key, the app runs normally; odds features are simply unavailable. See the [Wiki → Data Sources → Live Odds](http://localhost:8087/wiki#ds-live-odds) for full instructions.
+
 ### Force a full re-bootstrap
 
 Deleting the model artifacts directory causes the entrypoint to re-run the complete pipeline on the next start:

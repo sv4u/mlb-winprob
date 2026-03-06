@@ -154,6 +154,25 @@
     </div>
   </div>
 
+  <h2 class="section-title">Live Odds API Key</h2>
+  <div class="model-switch-section odds-config-section">
+    <h3>The Odds API</h3>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">
+      Optional: set an API key to enable live odds ingestion (game and futures). Get a free key at
+      <a href="https://the-odds-api.com/" target="_blank" rel="noopener">the-odds-api.com</a>.
+      The key is stored under <code>data/processed/odds/config.json</code> and is not committed to git.
+    </p>
+    <div class="model-switch-row">
+      <span class="model-switch-status" id="odds-config-status">Loading…</span>
+    </div>
+    <div class="model-switch-row" style="margin-top:0.75rem">
+      <input type="password" id="odds-api-key-input" placeholder="API key" autocomplete="off"
+        style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:0.5rem 0.75rem;font-size:0.9rem;min-width:220px" />
+      <button class="btn btn-update" id="btn-save-odds-config" onclick="saveOddsConfig()">Save Key</button>
+      <span class="model-switch-status" id="odds-save-result"></span>
+    </div>
+  </div>
+
   <h2 class="section-title">Active Model</h2>
   <div class="model-switch-section">
     <h3>Runtime Model Selection</h3>
@@ -213,9 +232,53 @@ function setBadge(id, status) {
   el.className = 'status-badge status-' + status;
 }
 
+  async function fetchOddsConfig() {
+    try {
+      const r = await fetch('/api/admin/odds-config');
+      const d = await r.json();
+      const statusEl = document.getElementById('odds-config-status');
+      if (d.configured) {
+        statusEl.textContent = 'Configured (' + (d.source || '') + ')';
+      } else {
+        statusEl.textContent = 'Not configured';
+      }
+    } catch (e) {
+      document.getElementById('odds-config-status').textContent = 'Error loading status';
+    }
+  }
+
+  async function saveOddsConfig() {
+    const input = document.getElementById('odds-api-key-input');
+    const resultEl = document.getElementById('odds-save-result');
+    const key = (input && input.value) ? input.value.trim() : '';
+    if (!key) {
+      resultEl.textContent = 'Enter an API key.';
+      return;
+    }
+    resultEl.textContent = 'Saving…';
+    try {
+      const r = await fetch('/api/admin/odds-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: key })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        resultEl.textContent = 'Saved.';
+        input.value = '';
+        fetchOddsConfig();
+      } else {
+        resultEl.textContent = d.message || 'Save failed.';
+      }
+    } catch (e) {
+      resultEl.textContent = 'Request failed.';
+    }
+  }
+
 async function fetchStatus() {
   try {
     const s = await timedFetch('/api/admin/status', 'timing-status');
+    fetchOddsConfig();
     renderOverview(s);
     const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.update.status === 'running' || s.pipelines.retrain.status === 'running';
     renderPipeline('ingest', s.pipelines.ingest, anyRunning);

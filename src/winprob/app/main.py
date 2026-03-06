@@ -909,6 +909,12 @@ class _SwitchModelRequest(BaseModel):
     model_type: str
 
 
+class _OddsConfigRequest(BaseModel):
+    """Body for POST /api/admin/odds-config. Key is never logged or re-exposed."""
+
+    api_key: str
+
+
 @app.get("/api/active-model", response_model=None)
 async def api_active_model(request: Request) -> dict | JSONResponse:
     """Return the currently active model type and available alternatives."""
@@ -972,6 +978,9 @@ async def api_admin_status(request: Request) -> dict | JSONResponse:
             return json.loads(r.json) if r.json else {}
         except grpc.RpcError as e:
             return _grpc_error_to_response(e)
+    from winprob.external.odds_config import get_odds_config_status
+
+    odds_status = get_odds_config_status()
     return {
         "version": "3.0",
         "git_commit": get_git_commit(),
@@ -982,7 +991,25 @@ async def api_admin_status(request: Request) -> dict | JSONResponse:
             "update": get_state(PipelineKind.UPDATE).to_dict(),
             "retrain": get_state(PipelineKind.RETRAIN).to_dict(),
         },
+        "odds_configured": odds_status.get("configured") is True,
     }
+
+
+@app.get("/api/admin/odds-config", response_model=None)
+async def api_admin_get_odds_config() -> dict:
+    """Return whether the Odds API key is configured and from where. Never returns the key."""
+    from winprob.external.odds_config import get_odds_config_status
+
+    return get_odds_config_status()
+
+
+@app.post("/api/admin/odds-config", response_model=None)
+async def api_admin_save_odds_config(body: _OddsConfigRequest) -> dict:
+    """Save the Odds API key to data/processed/odds/config.json. Key is never logged."""
+    from winprob.external.odds_config import set_odds_api_key
+
+    set_odds_api_key(body.api_key)
+    return {"ok": True}
 
 
 @app.post("/api/admin/ingest")

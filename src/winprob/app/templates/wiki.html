@@ -139,6 +139,7 @@
         <li><a href="#ds-fangraphs">FanGraphs</a></li>
         <li><a href="#ds-statcast">Statcast</a></li>
         <li><a href="#ds-vegas">Vegas Odds</a></li>
+        <li><a href="#ds-live-odds">Live Odds (The Odds API)</a></li>
         <li><a href="#ds-weather">Weather</a></li>
         <li><a href="#ds-crosswalk">Crosswalk</a></li>
       </ul>
@@ -365,6 +366,34 @@ If ML &gt; 0 (underdog):   prob = 100 / (ML + 100)</code></pre>
   Vegas lines encode public money, sharp action, injury news, and weather — information
   that statistical models often miss. When available, the <strong>line movement</strong>
   (opening line vs. closing line) is also captured as a feature.
+</p>
+
+<h3 id="ds-live-odds">Live Odds (The Odds API)</h3>
+<p>
+  Optional live game and futures odds are available via <a href="https://the-odds-api.com" target="_blank"
+    rel="noopener">The Odds API</a>.
+  Without an API key, the app continues to work normally; odds-related features are simply unavailable (graceful
+  degradation).
+</p>
+<p>
+  <strong>Getting a key:</strong> Sign up at <a href="https://the-odds-api.com/#get-access" target="_blank"
+    rel="noopener">the-odds-api.com</a> to receive a free API key (e.g. 500 requests/month on the free tier).
+</p>
+<p>
+  <strong>Configuring the key (choose one):</strong>
+</p>
+<ul>
+  <li><strong>Environment variable:</strong> Set <code>ODDS_API_KEY</code> to your key. Takes precedence over the config
+    file.</li>
+  <li><strong>Admin dashboard:</strong> Open <a href="/dashboard">Dashboard</a> → “Live Odds API Key”, enter the key,
+    and click Save. The key is written to <code>data/processed/odds/config.json</code>.</li>
+  <li><strong>Config file:</strong> Create <code>data/processed/odds/config.json</code> with
+    <code>{"api_key": "your-key-here"}</code>. The <code>data/</code> directory is git-ignored, so the key is never
+    committed.</li>
+</ul>
+<p>
+  After configuration, run <code>uv run scripts/ingest_odds.py</code> (or <code>--refresh</code>) to fetch and archive
+  game odds. Raw responses are stored under <code>data/processed/odds/live/</code>.
 </p>
 
 <h3 id="ds-weather">Weather</h3>

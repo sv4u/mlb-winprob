@@ -430,9 +430,37 @@ def _tool_find_ev_bets() -> str:
 
 
 def _tool_get_live_odds() -> str:
-    return json.dumps(
-        {"message": "Live odds are not available yet. They will be added in a future update."}
-    )
+    """Return live MLB game odds when The Odds API key is configured; else not-available message."""
+    from winprob.external.odds import OddsClient
+
+    client = OddsClient()
+    if not client.is_available():
+        return json.dumps(
+            {
+                "message": "Live odds are not configured. Set ODDS_API_KEY or add the key in Dashboard → Live Odds API Key."
+            }
+        )
+    events = client.get_game_odds_sync()
+    client.events_to_retro(events)
+    if not events:
+        return json.dumps(
+            {"message": "No upcoming games with odds right now.", "events": []}
+        )
+    out = []
+    for ev in events[:20]:
+        home = ev.get("home_team") or ""
+        away = ev.get("away_team") or ""
+        commence = ev.get("commence_time") or ""
+        books = ev.get("bookmakers") or []
+        h2h = []
+        for b in books:
+            for m in b.get("markets") or []:
+                if m.get("key") != "h2h":
+                    continue
+                for o in m.get("outcomes") or []:
+                    h2h.append({"book": b.get("key"), "team": o.get("name"), "price": o.get("price")})
+        out.append({"home_team": home, "away_team": away, "commence_time": commence, "moneyline": h2h[:4]})
+    return json.dumps({"events": out, "count": len(events)})
 
 
 def run_tool(name: str, params: dict) -> str:
