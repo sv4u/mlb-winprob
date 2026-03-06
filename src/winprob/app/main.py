@@ -831,6 +831,28 @@ async def page_season_2026(request: Request):
     )
 
 
+@app.get("/season/{season}", response_class=HTMLResponse)
+async def page_season_generic(request: Request, season: int):
+    """Dynamic season page — redirects to the home page filtered by season."""
+    from fastapi.responses import RedirectResponse
+
+    if not is_ready():
+        return _init_page(request)
+    df = get_features()
+    available = sorted(df["season"].dropna().unique().astype(int).tolist())
+    if season not in available:
+        return HTMLResponse(
+            content=templates.get_template("404_season.html").render(
+                request=request,
+                git_commit=get_git_commit(),
+                season=season,
+                available_seasons=available,
+            ),
+            status_code=404,
+        )
+    return RedirectResponse(url=f"/?season={season}", status_code=302)
+
+
 @app.get("/standings", response_class=HTMLResponse)
 async def page_standings(request: Request):
     """Full standings page: predicted vs actual, all divisions + league leaders."""

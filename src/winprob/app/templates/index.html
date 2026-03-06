@@ -332,6 +332,12 @@ async function init() {
     sel.appendChild(o);
   });
 
+  // Pre-select season from URL query parameter (e.g. /?season=2025)
+  const urlSeason = new URLSearchParams(window.location.search).get('season');
+  if (urlSeason && seasons.includes(parseInt(urlSeason, 10))) {
+    sel.value = urlSeason;
+  }
+
   // Team dropdowns
   ['f-home','f-away'].forEach(id => {
     const s = $(id);
