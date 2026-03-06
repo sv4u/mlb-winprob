@@ -239,6 +239,14 @@ th[data-sort].sort-desc::after { content: '▼'; opacity: 0.85; color: var(--acc
 .bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 8px; max-width: 120px; }
 .bar-fill { height: 8px; border-radius: 4px; }
 
+/* ── Odds display ────────────────────────────────────────────────── */
+.odds-best { color: var(--green); font-weight: 700; }
+.market-compare { display: flex; gap: 1.5rem; align-items: center; font-size: 0.85rem; flex-wrap: wrap; }
+.market-compare .edge-positive { color: var(--green); font-weight: 600; }
+.market-compare .edge-negative { color: var(--red); font-weight: 600; }
+.odds-note { font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem; }
+.odds-note a { color: var(--accent); }
+
 /* ── Badges ───────────────────────────────────────────────────────── */
 .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 .badge-home { background: rgba(46,204,113,.15); color: var(--green); }

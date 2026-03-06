@@ -1,5 +1,11 @@
-# Version control
-.git/
+# Version control — exclude .git contents but keep HEAD and packed-refs for
+# commit resolution.  Uses .git/* (not .git/) so the directory entry itself
+# stays in the build context and the walker descends into it, allowing the
+# negation patterns to re-include specific files.  .git/ would exclude the
+# directory entry, causing SkipDir before negations are evaluated (moby#31630).
+.git/*
+!.git/HEAD
+!.git/packed-refs
 .gitignore
 
 # Python caches

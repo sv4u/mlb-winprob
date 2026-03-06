@@ -112,9 +112,22 @@ COPY proto/   proto/
 RUN uv pip install --system --no-cache grpcio-tools \
     && PYTHON=python ./scripts/gen_proto.sh
 
-# Bake the git commit hash into the image (passed via --build-arg or CI).
+# Bake the git commit hash into the image.
+# Priority: explicit --build-arg > resolve from .git/HEAD + packed-refs.
 ARG GIT_COMMIT=unknown
-RUN echo "${GIT_COMMIT}" > /app/GIT_COMMIT
+COPY .git/HEA[D] .git/packed-ref[s] /tmp/gitinfo/
+RUN set -e; commit="$GIT_COMMIT"; \
+    if [ "$commit" = "unknown" ] && [ -f /tmp/gitinfo/HEAD ]; then \
+        ref=$(cat /tmp/gitinfo/HEAD); \
+        if printf '%s' "$ref" | grep -q '^ref:'; then \
+            rp=$(printf '%s' "$ref" | sed 's/^ref: //'); \
+            if [ -f /tmp/gitinfo/packed-refs ]; then \
+                commit=$(grep "$rp" /tmp/gitinfo/packed-refs | head -1 | cut -c1-8); \
+            fi; \
+        else commit=$(printf '%s' "$ref" | head -c 8); fi; \
+    fi; \
+    echo "$commit" > /app/GIT_COMMIT; \
+    rm -rf /tmp/gitinfo
 
 RUN chmod +x docker/entrypoint.sh \
     docker/ingest_daily.sh \

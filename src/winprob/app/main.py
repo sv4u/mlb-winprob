@@ -434,19 +434,37 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
         if k in feature_cols
     }
 
+    from winprob.app.odds_cache import get_cached_odds, is_odds_configured, match_odds_for_game
+
+    home_retro = str(row.get("home_retro", ""))
+    away_retro = str(row.get("away_retro", ""))
+    events = await get_cached_odds()
+    live_odds = match_odds_for_game(events, home_retro, away_retro)
+
     return {
         "game_pk": game_pk,
         "date": str(row.get("date", ""))[:10],
         "season": int(row.get("season", 0) or 0),
-        "home_retro": str(row.get("home_retro", "")),
-        "home_name": TEAM_NAMES.get(str(row.get("home_retro", "")), ""),
-        "away_retro": str(row.get("away_retro", "")),
-        "away_name": TEAM_NAMES.get(str(row.get("away_retro", "")), ""),
+        "home_retro": home_retro,
+        "home_name": TEAM_NAMES.get(home_retro, ""),
+        "away_retro": away_retro,
+        "away_name": TEAM_NAMES.get(away_retro, ""),
         "prob_home": round(float(row["prob"]), 4) if pd.notna(row.get("prob")) else None,
         "home_win": int(row["home_win"]) if pd.notna(row.get("home_win")) else None,
         "stats": stats,
         "top_factors": top_factors,
+        "live_odds": live_odds,
+        "odds_configured": is_odds_configured(),
     }
+
+
+@app.get("/api/odds", response_model=None)
+async def api_odds() -> dict:
+    """Return all current MLB game odds from The Odds API (cached)."""
+    from winprob.app.odds_cache import get_cached_odds, is_odds_configured
+
+    events = await get_cached_odds()
+    return {"configured": is_odds_configured(), "count": len(events), "events": events}
 
 
 @app.get("/api/upsets", response_model=None)

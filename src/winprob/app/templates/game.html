@@ -91,6 +91,25 @@
     <div id="comparison-bars"></div>
   </div>
 
+  <!-- Live Odds (hidden until populated by JS) -->
+  <div class="card" id="odds-card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h2 style="margin-bottom:0">Live Moneyline Odds</h2>
+      <span id="odds-updated" style="font-size:.75rem;color:var(--muted)"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Sportsbook</th>
+          <th class="num" id="odds-home-header">Home ML</th>
+          <th class="num" id="odds-away-header">Away ML</th>
+        </tr></thead>
+        <tbody id="odds-tbody"></tbody>
+      </table>
+    </div>
+    <div id="market-vs-model" style="margin-top:1rem"></div>
+  </div>
+
   <div class="grid-2">
     <!-- SHAP Attribution -->
     <div class="card">
@@ -311,6 +330,42 @@ async function load() {
     </div>`;
   }).join('');
 
+  // Live Odds card
+  if (g.live_odds && g.live_odds.bookmakers && g.live_odds.bookmakers.length > 0) {
+    var oddsCard = document.getElementById('odds-card');
+    oddsCard.style.display = '';
+    document.getElementById('odds-home-header').textContent = (g.home_name || 'Home') + ' ML';
+    document.getElementById('odds-away-header').textContent = (g.away_name || 'Away') + ' ML';
+    if (g.live_odds.commence_time) {
+      var ct = new Date(g.live_odds.commence_time);
+      document.getElementById('odds-updated').textContent = 'Game: ' + ct.toLocaleString();
+    }
+    var bestH = g.live_odds.best_home_price;
+    var bestA = g.live_odds.best_away_price;
+    var fmtOdds = function(p) { return p > 0 ? '+' + p : '' + p; };
+    document.getElementById('odds-tbody').innerHTML = g.live_odds.bookmakers.map(function(bm) {
+      var hCls = bm.home_price === bestH ? 'num odds-best' : 'num';
+      var aCls = bm.away_price === bestA ? 'num odds-best' : 'num';
+      return '<tr><td>' + bm.title + '</td>'
+        + '<td class="' + hCls + '">' + fmtOdds(bm.home_price) + '</td>'
+        + '<td class="' + aCls + '">' + fmtOdds(bm.away_price) + '</td></tr>';
+    }).join('');
+
+    // Model vs Market comparison
+    var mktProb = g.live_odds.home_implied_prob;
+    if (mktProb != null && ph != null) {
+      var edgePp = ((ph - mktProb) * 100).toFixed(1);
+      var edgeCls = ph > mktProb ? 'edge-positive' : 'edge-negative';
+      var edgeSign = ph > mktProb ? '+' : '';
+      document.getElementById('market-vs-model').innerHTML =
+        '<div class="market-compare">'
+        + '<span>Model: <strong>' + (ph * 100).toFixed(1) + '%</strong></span>'
+        + '<span>Market: <strong>' + (mktProb * 100).toFixed(1) + '%</strong></span>'
+        + '<span>Edge: <span class="' + edgeCls + '">' + edgeSign + edgePp + 'pp</span></span>'
+        + '</div>';
+    }
+  }
+
   // SHAP chart
   const shap = document.getElementById('shap-chart');
   const factors = (g.top_factors || []).slice(0, 10);
@@ -360,11 +415,30 @@ async function load() {
     document.getElementById('gev-side-away-label').textContent = g.away_name || 'Away';
   }
 
+  // Auto-populate odds from live data when available
+  var gevOdds = document.getElementById('gev-odds');
+  if (g.live_odds && gevOdds) {
+    gevOdds.value = g.live_odds.best_home_price;
+    if (sideHomeBtn) sideHomeBtn.dataset.evOdds = g.live_odds.best_home_price;
+    if (sideAwayBtn) sideAwayBtn.dataset.evOdds = g.live_odds.best_away_price;
+  }
+
   // Pre-fill with home team probability (default selected side)
   var gevProb = document.getElementById('gev-prob');
   if (gevProb) gevProb.value = homeProb;
 
   initEVCalculator('gev');
+
+  // Show note if odds API is not configured
+  if (g.odds_configured === false) {
+    var evCard = document.querySelector('.ev-calc-embedded');
+    if (evCard) {
+      var note = document.createElement('p');
+      note.className = 'odds-note';
+      note.innerHTML = 'Configure <a href="/dashboard">The Odds API key</a> in Dashboard for live odds auto-population.';
+      evCard.appendChild(note);
+    }
+  }
 }
 
 load();

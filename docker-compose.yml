@@ -38,6 +38,7 @@ services:
       - ollama_data:/root/.ollama
     restart: unless-stopped
     mem_limit: 6g
+    cpus: 6
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s
@@ -72,6 +73,7 @@ services:
       OLLAMA_CHAT_MODEL: "qwen2.5:7b"
     restart: no
     mem_limit: 2g
+    cpus: 2
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:30087/api/seasons"]
       interval: 30s

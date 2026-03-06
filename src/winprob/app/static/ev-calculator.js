@@ -75,6 +75,10 @@ function initEVCalculator(prefix, opts) {
       if (btn.dataset.evProb) {
         probInput.value = btn.dataset.evProb;
       }
+      if (btn.dataset.evOdds) {
+        var dec = parseOdds(btn.dataset.evOdds, "american");
+        oddsInput.value = dec !== null ? convertDecimalTo(dec, currentFormat) : btn.dataset.evOdds;
+      }
       recalc();
     });
   });
