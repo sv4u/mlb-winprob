@@ -3,52 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Odds Hub — MLB Win Probability</title>
+  <title>Odds & Smart Bets — MLB Win Probability</title>
   <link rel="stylesheet" href="/static/base.css" />
   <link rel="stylesheet" href="/static/ev-calculator.css" />
   <style>
     .hub-header { margin-bottom: 1.5rem; }
-    .hub-header h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.3rem; }
-    .hub-header p { color: var(--muted); font-size: 0.88rem; line-height: 1.6; max-width: 700px; }
+    .hub-header h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.3rem; letter-spacing: -0.02em; }
+    .hub-header p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; max-width: 700px; }
+    .hub-status { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; }
     .hub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
-    .hub-tab { padding: 0.6rem 1.25rem; font-size: 0.88rem; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; }
-    .hub-tab:hover { color: var(--text); }
+    .hub-tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color var(--transition), border-color var(--transition); }
+    .hub-tab:hover { color: var(--text-secondary); }
     .hub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .hub-panel { display: none; }
     .hub-panel.active { display: block; }
-    .ev-opp-row-positive { background: rgba(46,204,113,.04); }
+    .ev-opp-row-positive { background: rgba(52,211,153,.04); }
     .ev-edge { font-weight: 700; }
     .ev-edge-pos { color: var(--green); }
     .ev-edge-neg { color: var(--red); }
-    .no-data-msg { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
-    .no-data-msg .icon { font-size: 2rem; margin-bottom: 0.5rem; }
-    .odds-board-game { margin-bottom: 1.25rem; }
-    .odds-board-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-    .odds-board-header .matchup { font-weight: 700; font-size: 0.95rem; }
-    .odds-board-header .time { font-size: 0.78rem; color: var(--muted); }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.4rem; }
-    .status-live { background: var(--green); }
-    .status-off { background: var(--muted); }
+
+    .ev-summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .ev-summary-card { background: var(--card); border-radius: var(--radius-sm); padding: 0.75rem; text-align: center; }
+    .ev-summary-val { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ev-summary-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.15rem; }
+
+    .odds-board-game { margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .odds-board-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--card); }
+    .odds-board-header .matchup { font-weight: 700; font-size: 0.92rem; }
+    .odds-board-header .time { font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
+
     @media (max-width: 768px) {
       .hub-tabs { overflow-x: auto; }
       .hub-tab { white-space: nowrap; font-size: 0.82rem; padding: 0.5rem 0.9rem; }
+      .ev-summary-cards { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Win Prob</a>
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    <a href="/">All Seasons</a>
+    <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
-    <a href="/odds" class="active">Odds Hub</a>
+    <a href="/odds" class="active">Odds & Bets</a>
+    <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/sitemap">Sitemap</a>
+    <a href="/dashboard">Admin</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -66,33 +70,42 @@
 
 <div class="container">
   <div class="hub-header">
-    <h1>Odds Hub</h1>
+    <h1>Odds & Smart Bets</h1>
     <p>
-      Live moneyline odds from The Odds API, model-vs-market edge analysis, and the
-      EV calculator — all in one place. EV+ opportunities are computed by comparing
-      model win probabilities against the best available sportsbook lines.
+      Compare model win probabilities against live sportsbook lines.
+      Positive expected value (+EV) bets are highlighted — these are games where
+      the model sees a meaningful edge over the market.
     </p>
-    <div style="margin-top:0.75rem">
-      <span class="status-dot" id="odds-status-dot"></span>
-      <span id="odds-status-text" style="font-size:0.82rem;color:var(--muted)">Checking odds status…</span>
+    <div class="hub-status">
+      <div class="freshness">
+        <span class="freshness-dot" id="odds-status-dot"></span>
+        <span id="odds-status-text">Checking odds…</span>
+      </div>
+      <div class="freshness" id="odds-last-updated" style="display:none">
+        <span>Last updated: </span>
+        <span id="odds-update-time"></span>
+      </div>
     </div>
   </div>
 
   <div class="hub-tabs" id="hub-tabs">
-    <div class="hub-tab active" data-tab="ev">EV+ Opportunities</div>
+    <div class="hub-tab active" data-tab="ev">Smart Bets (+EV)</div>
     <div class="hub-tab" data-tab="board">All Odds</div>
     <div class="hub-tab" data-tab="calc">EV Calculator</div>
   </div>
 
   <!-- Tab 1: EV+ Opportunities -->
   <div class="hub-panel active" id="panel-ev">
+    <div id="ev-summary-area"></div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
-        <h2 style="margin:0">Positive Expected Value Bets</h2>
-        <span id="ev-count" style="font-size:.8rem;color:var(--muted)"></span>
+      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
+        <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">Positive Expected Value Bets</h2>
+        <span id="ev-count" style="font-size:.78rem;color:var(--muted)"></span>
       </div>
       <div id="ev-table-wrap">
-        <div class="loading"><div class="spinner"></div><p>Loading EV opportunities…</p></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
       </div>
     </div>
   </div>
@@ -100,12 +113,13 @@
   <!-- Tab 2: All Odds Board -->
   <div class="hub-panel" id="panel-board">
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
-        <h2 style="margin:0">All Game Odds</h2>
-        <span id="board-count" style="font-size:.8rem;color:var(--muted)"></span>
+      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
+        <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">All Game Odds</h2>
+        <span id="board-count" style="font-size:.78rem;color:var(--muted)"></span>
       </div>
       <div id="board-wrap">
-        <div class="loading"><div class="spinner"></div><p>Loading odds board…</p></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
       </div>
     </div>
   </div>
@@ -113,9 +127,9 @@
   <!-- Tab 3: EV Calculator -->
   <div class="hub-panel" id="panel-calc">
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="font-size:1.1rem;margin-bottom:0.35rem">Expected Value Calculator</h2>
-      <p style="color:var(--muted);font-size:0.85rem;margin:0">
-        Calculate the expected value, edge, ROI, and optimal Kelly stake for any sports bet.
+      <h2 style="font-size:1rem;margin-bottom:0.35rem;text-transform:none;letter-spacing:0">Expected Value Calculator</h2>
+      <p style="color:var(--text-secondary);font-size:0.85rem;margin:0">
+        Calculate the expected value, edge, ROI, and optimal Kelly stake for any bet.
       </p>
     </div>
     <div class="card">
@@ -176,11 +190,21 @@
   </div>
 </div>
 
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Win Probability · Odds via The Odds API · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
 <script src="/static/base.js"></script>
 <script src="/static/ev-calculator.js"></script>
 <script>
-function fmtOdds(p) { return p > 0 ? '+' + p : '' + p; }
-
 // ── Tab switching ──────────────────────────────────────────────────
 document.querySelectorAll('.hub-tab').forEach(function(tab) {
   tab.addEventListener('click', function() {
@@ -197,48 +221,63 @@ async function loadEVOpportunities() {
     var data = await timedFetch('/api/ev-opportunities');
     if (!data.configured) {
       document.getElementById('ev-table-wrap').innerHTML =
-        '<div class="no-data-msg"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Dashboard</a> to see EV+ opportunities.</p></div>';
+        '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a> to see +EV opportunities.</p></div>';
       return;
     }
     var opps = data.opportunities || [];
     document.getElementById('ev-count').textContent = opps.length + ' opportunit' + (opps.length !== 1 ? 'ies' : 'y');
+
+    // Summary cards
+    if (opps.length) {
+      var avgEdge = opps.reduce(function (s, o) { return s + o.edge; }, 0) / opps.length;
+      var bestEdge = Math.max.apply(null, opps.map(function (o) { return o.edge; }));
+      var avgKelly = opps.reduce(function (s, o) { return s + o.kelly_pct; }, 0) / opps.length;
+      document.getElementById('ev-summary-area').innerHTML =
+        '<div class="ev-summary-cards">' +
+        '<div class="ev-summary-card"><div class="ev-summary-val text-green">' + opps.length + '</div><div class="ev-summary-lbl">+EV Bets Found</div></div>' +
+        '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (avgEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Edge</div></div>' +
+        '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (bestEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Best Edge</div></div>' +
+        '<div class="ev-summary-card"><div class="ev-summary-val text-accent">' + avgKelly.toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Kelly %</div></div>' +
+        '</div>';
+    }
+
     if (!opps.length) {
       document.getElementById('ev-table-wrap').innerHTML =
-        '<div class="no-data-msg"><div class="icon">📊</div><p>No positive-EV bets found right now.<br>The model does not see an edge over any current market lines.</p></div>';
+        '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets right now. The model does not see an edge over any current market lines.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
       return;
     }
-    var html = '<div class="table-wrap"><table><thead><tr>'
-      + '<th data-sort="string">Matchup</th>'
-      + '<th data-sort="string">Selection</th>'
-      + '<th data-sort="string">Book</th>'
-      + '<th class="num" data-sort="number">Odds</th>'
-      + '<th class="num" data-sort="number">Model</th>'
-      + '<th class="num" data-sort="number">Market</th>'
-      + '<th class="num" data-sort="number">Edge</th>'
-      + '<th class="num" data-sort="number">EV/unit</th>'
-      + '<th class="num" data-sort="number">Kelly %</th>'
-      + '</tr></thead><tbody>';
+    var html = '<div class="table-wrap"><table><thead><tr>' +
+      '<th data-sort="string">Game</th>' +
+      '<th data-sort="string">Pick</th>' +
+      '<th data-sort="string">Book</th>' +
+      '<th class="num" data-sort="number">Odds</th>' +
+      '<th class="num" data-sort="number">Model %</th>' +
+      '<th class="num" data-sort="number">Market %</th>' +
+      '<th class="num" data-sort="number">Edge</th>' +
+      '<th class="num" data-sort="number">EV/unit</th>' +
+      '<th class="num" data-sort="number">Kelly</th>' +
+      '</tr></thead><tbody>';
     opps.forEach(function(o) {
       var edgeCls = o.edge > 0 ? 'ev-edge-pos' : 'ev-edge-neg';
       var edgeSign = o.edge > 0 ? '+' : '';
-      html += '<tr class="' + (o.edge > 0 ? 'ev-opp-row-positive' : '') + '">'
-        + '<td><a href="/game/' + o.game_pk + '">' + o.away_team + ' @ ' + o.home_team + '</a></td>'
-        + '<td><span class="badge ' + (o.selection==='home'?'badge-home':'badge-away') + '">' + o.team + '</span></td>'
-        + '<td>' + o.sportsbook + '</td>'
-        + '<td class="num">' + fmtOdds(o.odds) + '</td>'
-        + '<td class="num">' + (o.model_prob*100).toFixed(1) + '%</td>'
-        + '<td class="num">' + (o.implied_prob*100).toFixed(1) + '%</td>'
-        + '<td class="num ev-edge ' + edgeCls + '">' + edgeSign + (o.edge*100).toFixed(1) + 'pp</td>'
-        + '<td class="num ' + edgeCls + '">' + edgeSign + '$' + Math.abs(o.ev_per_unit).toFixed(3) + '</td>'
-        + '<td class="num">' + o.kelly_pct.toFixed(1) + '%</td>'
-        + '</tr>';
+      html += '<tr class="' + (o.edge > 0 ? 'ev-opp-row-positive' : '') + '">' +
+        '<td><a href="/game/' + o.game_pk + '">' + o.away_team + ' @ ' + o.home_team + '</a></td>' +
+        '<td><span class="badge ' + (o.selection === 'home' ? 'badge-home' : 'badge-away') + '">' + o.team + '</span></td>' +
+        '<td style="font-size:0.78rem">' + o.sportsbook + '</td>' +
+        '<td class="num text-mono">' + fmtOdds(o.odds) + '</td>' +
+        '<td class="num">' + (o.model_prob * 100).toFixed(1) + '%</td>' +
+        '<td class="num">' + (o.implied_prob * 100).toFixed(1) + '%</td>' +
+        '<td class="num ev-edge ' + edgeCls + '">' + edgeSign + (o.edge * 100).toFixed(1) + 'pp</td>' +
+        '<td class="num ' + edgeCls + ' text-mono">' + edgeSign + '$' + Math.abs(o.ev_per_unit).toFixed(3) + '</td>' +
+        '<td class="num text-mono">' + o.kelly_pct.toFixed(1) + '%</td>' +
+        '</tr>';
     });
     html += '</tbody></table></div>';
     document.getElementById('ev-table-wrap').innerHTML = html;
     initAllSortables();
   } catch (e) {
     document.getElementById('ev-table-wrap').innerHTML =
-      '<div class="no-data-msg"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
+      '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
   }
 }
 
@@ -248,36 +287,38 @@ async function loadOddsBoard() {
     var data = await timedFetch('/api/odds');
     if (!data.configured) {
       document.getElementById('board-wrap').innerHTML =
-        '<div class="no-data-msg"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Dashboard</a> to see live odds.</p></div>';
+        '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a></p></div>';
       return;
     }
     var events = data.events || [];
     document.getElementById('board-count').textContent = events.length + ' game' + (events.length !== 1 ? 's' : '');
     if (!events.length) {
       document.getElementById('board-wrap').innerHTML =
-        '<div class="no-data-msg"><div class="icon">⚾</div><p>No live odds available right now.<br>Odds are typically posted 12–24 hours before game time.</p></div>';
+        '<div class="empty-state"><div class="icon">⚾</div><p>No live odds available right now.<br>Odds are typically posted 12–24 hours before game time.</p></div>';
       return;
     }
     var html = '';
     events.forEach(function(ev) {
-      var ct = ev.commence_time ? new Date(ev.commence_time).toLocaleString() : '';
+      var lt = ev.commence_time ? formatLocalTime(ev.commence_time) : { time: '—', tzAbbr: '' };
+      var timeStr = lt.time + (lt.tzAbbr ? ' ' + lt.tzAbbr : '');
+      if (lt.relative) timeStr += ' (' + lt.relative + ')';
       html += '<div class="odds-board-game">';
       html += '<div class="odds-board-header">';
       html += '<span class="matchup">' + (ev.away_team||'') + ' @ ' + (ev.home_team||'') + '</span>';
-      html += '<span class="time">' + ct + '</span>';
+      html += '<span class="time">' + timeStr + '</span>';
       html += '</div>';
       if (ev.bookmakers && ev.bookmakers.length) {
-        html += '<div class="table-wrap"><table><thead><tr>'
-          + '<th>Sportsbook</th>'
-          + '<th class="num">' + (ev.home_team||'Home') + '</th>'
-          + '<th class="num">' + (ev.away_team||'Away') + '</th>'
-          + '</tr></thead><tbody>';
+        html += '<div class="table-wrap"><table><thead><tr>' +
+          '<th>Sportsbook</th>' +
+          '<th class="num">' + (ev.home_team || 'Home') + '</th>' +
+          '<th class="num">' + (ev.away_team || 'Away') + '</th>' +
+          '</tr></thead><tbody>';
         ev.bookmakers.forEach(function(bm) {
           var hCls = bm.home_price === ev.best_home_price ? 'num odds-best' : 'num';
           var aCls = bm.away_price === ev.best_away_price ? 'num odds-best' : 'num';
-          html += '<tr><td>' + bm.title + '</td>'
-            + '<td class="' + hCls + '">' + fmtOdds(bm.home_price) + '</td>'
-            + '<td class="' + aCls + '">' + fmtOdds(bm.away_price) + '</td></tr>';
+          html += '<tr><td>' + bm.title + '</td>' +
+            '<td class="' + hCls + ' text-mono">' + fmtOdds(bm.home_price) + '</td>' +
+            '<td class="' + aCls + ' text-mono">' + fmtOdds(bm.away_price) + '</td></tr>';
         });
         html += '</tbody></table></div>';
       }
@@ -286,7 +327,7 @@ async function loadOddsBoard() {
     document.getElementById('board-wrap').innerHTML = html;
   } catch (e) {
     document.getElementById('board-wrap').innerHTML =
-      '<div class="no-data-msg"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
+      '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
   }
 }
 
@@ -297,17 +338,22 @@ async function checkOddsStatus() {
     var dot = document.getElementById('odds-status-dot');
     var txt = document.getElementById('odds-status-text');
     if (!data.configured) {
-      dot.className = 'status-dot status-off';
+      dot.className = 'freshness-dot offline';
       txt.textContent = 'Odds API not configured';
     } else if (data.count > 0) {
-      dot.className = 'status-dot status-live';
+      dot.className = 'freshness-dot live';
       txt.textContent = data.count + ' game' + (data.count!==1?'s':'') + ' with live odds';
+      var updEl = document.getElementById('odds-last-updated');
+      if (updEl && data.fetched_at) {
+        updEl.style.display = '';
+        document.getElementById('odds-update-time').textContent = formatLocalTime(data.fetched_at).full;
+      }
     } else {
-      dot.className = 'status-dot status-off';
+      dot.className = 'freshness-dot stale';
       txt.textContent = 'No live odds available';
     }
   } catch (e) {
-    document.getElementById('odds-status-dot').className = 'status-dot status-off';
+    document.getElementById('odds-status-dot').className = 'freshness-dot offline';
     document.getElementById('odds-status-text').textContent = 'Could not reach odds API';
   }
 }

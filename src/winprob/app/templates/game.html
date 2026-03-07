@@ -7,49 +7,142 @@
   <link rel="stylesheet" href="/static/base.css" />
   <link rel="stylesheet" href="/static/ev-calculator.css" />
   <style>
-    h2{font-size:1.1rem;margin-bottom:1rem;color:var(--muted)}
-    .matchup{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
-    .team-block{text-align:center;flex:1}
-    .team-name{font-size:1.35rem;font-weight:700;margin-bottom:.5rem}
-    .prob-big{font-size:2.5rem;font-weight:800;line-height:1}
-    .vs{color:var(--muted);font-size:1.25rem;padding:.5rem}
-    .bar-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem}
-    .bar-row label{width:90px;font-size:.8rem;color:var(--muted);text-align:right}
-    .bar-outer{flex:1;background:var(--border);border-radius:4px;height:10px}
-    .bar-inner{height:10px;border-radius:4px;transition:width .4s}
-    .bar-row span{width:50px;font-size:.85rem;text-align:right}
-    .shap-row{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
-    .shap-label{width:280px;font-size:.82rem;color:var(--muted)}
-    .shap-bar-wrap{flex:1;position:relative;height:12px}
-    .shap-center{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border)}
-    .shap-bar{position:absolute;top:0;height:12px;border-radius:2px;transition:width .3s}
-    .shap-val{width:55px;font-size:.82rem;text-align:right}
-    .result-badge{display:inline-block;padding:.3rem .8rem;border-radius:6px;font-weight:700;font-size:.95rem}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-    @media(max-width:640px){
-      .grid-2{grid-template-columns:1fr}
-      .prob-big{font-size:1.8rem}
-      .team-name{font-size:1.1rem}
-      .shap-label{width:140px;font-size:.75rem}
-      .shap-val{width:45px;font-size:.75rem}
+    .game-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .game-date-display {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .game-time-tz {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--card);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+    }
+    .matchup {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 1.5rem;
+    }
+    .team-block {
+      text-align: center;
+      flex: 1;
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .team-block-home { background: rgba(52, 211, 153, 0.03); border-radius: var(--radius) 0 0 var(--radius); }
+    .team-block-away { background: rgba(248, 113, 113, 0.03); border-radius: 0 var(--radius) var(--radius) 0; }
+    .team-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.35rem; font-weight: 600; }
+    .team-name { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .prob-gauge-wrap { position: relative; margin-bottom: 0.5rem; }
+    .prob-big {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .prob-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+    .vs-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 50px;
+      background: var(--card);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .confidence-badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-xl);
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 0.5rem;
+    }
+
+    .comparison-section { margin-bottom: 0.5rem; }
+    .bar-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+    .bar-row label { width: 140px; font-size: 0.78rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+    .bar-outer { flex: 1; background: var(--border); border-radius: 4px; height: 8px; }
+    .bar-inner { height: 8px; border-radius: 4px; transition: width .4s; }
+    .bar-row span { width: 55px; font-size: 0.82rem; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .shap-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .shap-label { width: 200px; font-size: 0.78rem; color: var(--text-secondary); text-align: right; flex-shrink: 0; }
+    .shap-bar-wrap { flex: 1; position: relative; height: 10px; }
+    .shap-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+    .shap-bar { position: absolute; top: 0; height: 10px; border-radius: 3px; transition: width .3s; }
+    .shap-val { width: 55px; font-size: 0.78rem; text-align: right; font-family: var(--font-mono); }
+
+    .shap-legend {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .shap-legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .shap-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+    .result-badge { display: inline-block; padding: .3rem .8rem; border-radius: var(--radius-xl); font-weight: 700; font-size: .85rem; }
+
+    .odds-freshness {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    @media (max-width: 640px) {
+      .matchup { flex-direction: column; }
+      .vs-divider { width: 100%; height: 40px; }
+      .team-block-home { border-radius: var(--radius) var(--radius) 0 0; }
+      .team-block-away { border-radius: 0 0 var(--radius) var(--radius); }
+      .prob-big { font-size: 1.6rem; }
+      .team-name { font-size: 1.05rem; }
+      .shap-label { width: 120px; font-size: 0.72rem; }
+      .shap-val { width: 40px; font-size: 0.72rem; }
+      .bar-row label { width: 100px; font-size: 0.72rem; }
     }
   </style>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Win Prob</a>
   <span id="header-sub" class="meta">Loading…</span>
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    <a href="/">All Seasons</a>
+    <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
-    <a href="/odds">Odds Hub</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/sitemap">Sitemap</a>
+    <a href="/dashboard">Admin</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -69,33 +162,41 @@
 
   <!-- Matchup overview -->
   <div class="card" id="matchup-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <span id="game-date" style="color:var(--muted);font-size:.9rem"></span>
+    <div class="game-header-bar">
+      <div class="game-date-display">
+        <span id="game-date-friendly"></span>
+        <span class="game-time-tz" id="game-time-local"></span>
+      </div>
       <span id="result-badge"></span>
     </div>
     <div class="matchup">
-      <div class="team-block">
+      <div class="team-block team-block-home">
+        <div class="team-label">Home</div>
         <div class="team-name" id="home-name">—</div>
         <div class="prob-big" id="home-prob" style="color:var(--green)">—</div>
-        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">P(home win)</div>
+        <div class="prob-sub">predicted win probability</div>
+        <div id="home-confidence"></div>
       </div>
-      <div class="vs">vs</div>
-      <div class="team-block">
+      <div class="vs-divider">VS</div>
+      <div class="team-block team-block-away">
+        <div class="team-label">Away</div>
         <div class="team-name" id="away-name">—</div>
         <div class="prob-big" id="away-prob" style="color:var(--red)">—</div>
-        <div style="font-size:.8rem;color:var(--muted);margin-top:.25rem">P(away win)</div>
+        <div class="prob-sub">predicted win probability</div>
+        <div id="away-confidence"></div>
       </div>
     </div>
-
-    <!-- Comparison bars -->
-    <div id="comparison-bars"></div>
+    <div class="comparison-section" id="comparison-bars"></div>
   </div>
 
   <!-- Live Odds (hidden until populated by JS) -->
   <div class="card" id="odds-card" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <h2 style="margin-bottom:0">Live Moneyline Odds</h2>
-      <span id="odds-updated" style="font-size:.75rem;color:var(--muted)"></span>
+    <div class="flex-between mb-md">
+      <h2 style="margin:0">Live Moneyline Odds</h2>
+      <div class="odds-freshness">
+        <span class="freshness-dot live" id="odds-freshness-dot"></span>
+        <span id="odds-updated"></span>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -113,11 +214,16 @@
   <div class="grid-2">
     <!-- SHAP Attribution -->
     <div class="card">
-      <h2>Top Factors (SHAP Attribution)</h2>
+      <h2>Why This Prediction?</h2>
       <div id="shap-chart"></div>
-      <p style="margin-top:.75rem;font-size:.75rem;color:var(--muted)">
-        Bars show log-odds contribution of each factor.  Blue = favors home team, red = favors away.
-      </p>
+      <div class="shap-legend">
+        <div class="shap-legend-item">
+          <div class="shap-legend-dot" style="background:var(--accent)"></div> Favors home
+        </div>
+        <div class="shap-legend-item">
+          <div class="shap-legend-dot" style="background:var(--red)"></div> Favors away
+        </div>
+      </div>
     </div>
 
     <!-- Key stats -->
@@ -140,11 +246,10 @@
 
   <!-- EV Calculator widget -->
   <div class="card ev-calc-embedded">
-    <h2>EV Calculator
-      <span style="font-size:0.75rem;font-weight:400;color:var(--muted);margin-left:0.5rem">
-        <a href="/tools/ev-calculator" style="font-size:0.75rem">Open full calculator →</a>
-      </span>
-    </h2>
+    <div class="flex-between mb-md">
+      <h2 style="margin:0">Bet Calculator</h2>
+      <a href="/odds" class="btn btn-sm sec">Full Odds Hub →</a>
+    </div>
     <div class="ev-field" style="margin-bottom:1rem">
       <label>Bet Side</label>
       <div class="ev-side-row">
@@ -175,7 +280,8 @@
           <input type="text" id="gev-odds" value="-110" placeholder="-110" autocomplete="off" />
         </div>
         <div class="ev-field">
-          <label for="gev-prob">Win Probability (%)</label>
+          <label for="gev-prob">Win Probability (%) <span style="font-weight:400;color:var(--muted);font-size:0.72rem">from
+              model</span></label>
           <input type="number" id="gev-prob" value="50" min="0.1" max="99.9" step="0.1" />
         </div>
         <div class="ev-field">
@@ -238,6 +344,18 @@
 
 </div>
 
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Win Probability · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
 <script src="/static/base.js"></script>
 <script src="/static/ev-calculator.js"></script>
 <script>
@@ -245,10 +363,10 @@ const gamePk = {{ game_pk }};
 
 const FEATURE_LABELS = {
   home_elo:'Home Elo',away_elo:'Away Elo',elo_diff:'Elo edge (H−A)',
-  home_win_pct_30:'Home 30g win%',away_win_pct_30:'Away 30g win%',
-  home_pythag_30:'Home 30g Pythagorean',away_pythag_30:'Away 30g Pythagorean',
+  home_win_pct_30: 'Home 30g win%', away_win_pct_30: 'Away 30g win%',
   home_win_pct_ewm:'Home recent form',away_win_pct_ewm:'Away recent form',
   home_win_pct_home_only:'Home at-home win%',away_win_pct_away_only:'Away on-road win%',
+  home_pythag_30: 'Home 30g Pythagorean', away_pythag_30: 'Away 30g Pythagorean',
   home_sp_era:'Home SP ERA',away_sp_era:'Away SP ERA',
   home_sp_k9:'Home SP K/9',away_sp_k9:'Away SP K/9',
   home_bat_woba:'Home batting wOBA',away_bat_woba:'Away batting wOBA',
@@ -260,6 +378,7 @@ const FEATURE_LABELS = {
   season_progress:'Season progress',
   home_streak:'Home streak',away_streak:'Away streak',
   home_rest_days:'Home rest days',away_rest_days:'Away rest days',
+  home_sp_era_window: 'Home SP ERA', away_sp_era_window: 'Away SP ERA',
 };
 
 const STAT_PAIRS = [
@@ -285,56 +404,79 @@ function fmt(v, f, key) {
 
 async function load() {
   const start = performance.now();
-  const r = await fetch(`/api/games/${gamePk}`);
+  const r = await fetch('/api/games/' + gamePk);
   const serverMs = r.headers.get("X-Process-Time-Ms");
   const g = await r.json();
   showTiming('timing-game', serverMs, performance.now() - start);
-  if (g.error) { document.body.innerHTML = `<div style="padding:2rem;color:#e74c3c">${g.error}</div>`; return; }
+  if (g.error) { document.body.innerHTML = '<div style="padding:2rem;color:var(--red)">' + g.error + '</div>'; return; }
 
-  document.getElementById('header-sub').textContent = `${g.away_name} @ ${g.home_name} — ${g.date}`;
-  document.getElementById('game-date').textContent = g.date;
-  document.getElementById('home-name').textContent = g.home_name;
-  document.getElementById('away-name').textContent = g.away_name;
-  document.title = `${g.away_name} @ ${g.home_name} — MLB Win Prob`;
+  document.getElementById('header-sub').textContent = g.away_name + ' @ ' + g.home_name;
+  document.title = g.away_name + ' @ ' + g.home_name + ' — MLB Win Prob';
+
+  // Date and time display
+  var dateDisplay = formatGameDate(g.date);
+  document.getElementById('game-date-friendly').textContent = dateDisplay;
+
+  if (g.commence_time || (g.live_odds && g.live_odds.commence_time)) {
+    var ct = g.commence_time || g.live_odds.commence_time;
+    var lt = formatLocalTime(ct);
+    document.getElementById('game-time-local').textContent = lt.time + ' ' + lt.tzAbbr;
+  } else {
+    document.getElementById('game-time-local').style.display = 'none';
+  }
 
   if (g.game_type === 'S') {
-    const caveat = document.createElement('div');
-    caveat.style.cssText = 'background:rgba(255,152,0,.06);border:1px solid rgba(255,152,0,.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#ff9800;line-height:1.55';
-    caveat.innerHTML = '<strong>Spring Training</strong> — This is a pre-season exhibition game. Model predictions are based on prior-season team strength and may not reflect spring roster decisions, minor-league callups, or reduced starter workloads.';
-    document.getElementById('header-sub').parentElement.insertBefore(caveat, document.getElementById('header-sub').nextSibling);
+    var caveat = document.createElement('div');
+    caveat.className = 'caveat';
+    caveat.innerHTML = '<span class="caveat-icon">⚠</span><div><strong>Spring Training</strong> — This is a pre-season exhibition game. Predictions use prior-season team strength and may not reflect spring roster decisions.</div>';
+    document.getElementById('matchup-card').prepend(caveat);
   }
+
+  document.getElementById('home-name').textContent = g.home_name;
+  document.getElementById('away-name').textContent = g.away_name;
 
   const ph = g.prob_home ?? 0.5;
   const pa = 1 - ph;
   document.getElementById('home-prob').textContent = (ph*100).toFixed(1)+'%';
-  document.getElementById('home-prob').style.color = ph >= 0.5 ? '#2ecc71' : '#e74c3c';
+  document.getElementById('home-prob').style.color = ph >= 0.5 ? 'var(--green)' : 'var(--red)';
   document.getElementById('away-prob').textContent = (pa*100).toFixed(1)+'%';
-  document.getElementById('away-prob').style.color = pa >= 0.5 ? '#2ecc71' : '#e74c3c';
+  document.getElementById('away-prob').style.color = pa >= 0.5 ? 'var(--green)' : 'var(--red)';
+
+  // Confidence badges
+  var homeConf = probConfidence(ph);
+  var awayConf = probConfidence(pa);
+  var favSide = ph >= 0.5 ? 'home' : 'away';
+  if (favSide === 'home') {
+    document.getElementById('home-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + homeConf.label + ' favorite</span>';
+  } else {
+    document.getElementById('away-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + awayConf.label + ' favorite</span>';
+  }
 
   if (g.home_win != null) {
-    const rb = document.getElementById('result-badge');
+    var rb = document.getElementById('result-badge');
     rb.innerHTML = g.home_win === 1
-      ? `<span class="result-badge badge-home">HOME WIN</span>`
-      : `<span class="result-badge badge-away">AWAY WIN</span>`;
+      ? '<span class="result-badge badge-home">HOME WIN</span>'
+      : '<span class="result-badge badge-away">AWAY WIN</span>';
   }
 
   // Comparison bars
-  const bars = document.getElementById('comparison-bars');
-  const barsData = [
-    ['P(home win)', ph, 1-ph],
-    ['30g win%', g.stats?.home_win_pct_30, g.stats?.away_win_pct_30],
+  var bars = document.getElementById('comparison-bars');
+  var barsData = [
+    ['Model prediction', ph, 1 - ph],
+    ['30-game win%', g.stats?.home_win_pct_30, g.stats?.away_win_pct_30],
     ['Pythagorean (30g)', g.stats?.home_pythag_30, g.stats?.away_pythag_30],
-    ['wOBA', g.stats?.home_bat_woba ? (g.stats.home_bat_woba-0.28)/0.1 : null, g.stats?.away_bat_woba ? (g.stats.away_bat_woba-0.28)/0.1 : null],
+    ['Batting wOBA', g.stats?.home_bat_woba ? (g.stats.home_bat_woba - 0.28) / 0.1 : null, g.stats?.away_bat_woba ? (g.stats.away_bat_woba - 0.28) / 0.1 : null],
   ];
-  bars.innerHTML = barsData.map(([lbl, h, a]) => {
+  bars.innerHTML = barsData.map(function (row) {
+    var lbl = row[0], h = row[1], a = row[2];
     if (h == null || a == null) return '';
-    const tot = (h||0) + (a||0);
-    const hp = tot > 0 ? Math.round(h/tot*100) : 50;
-    return `<div class="bar-row">
-      <label>${lbl}</label>
-      <div class="bar-outer"><div class="bar-inner" style="width:${hp}%;background:#4f8ef7"></div></div>
-      <span>${h.toFixed ? (h*100<10?h.toFixed(3):(h*100).toFixed(1)+'%') : h}</span>
-    </div>`;
+    var tot = (h || 0) + (a || 0);
+    var hp = tot > 0 ? Math.round(h / tot * 100) : 50;
+    return '<div class="bar-row">' +
+      '<label>' + lbl + '</label>' +
+      '<div class="bar-outer"><div class="bar-inner" style="width:' + hp + '%;background:var(--accent)"></div></div>' +
+      '<span>' + (h.toFixed ? (h * 100 < 10 ? h.toFixed(3) : (h * 100).toFixed(1) + '%') : h) + '</span>' +
+      '</div>';
   }).join('');
 
   // Live Odds card
@@ -344,70 +486,73 @@ async function load() {
     document.getElementById('odds-home-header').textContent = (g.home_name || 'Home') + ' ML';
     document.getElementById('odds-away-header').textContent = (g.away_name || 'Away') + ' ML';
     if (g.live_odds.commence_time) {
-      var ct = new Date(g.live_odds.commence_time);
-      document.getElementById('odds-updated').textContent = 'Game: ' + ct.toLocaleString();
+      var ct2 = formatLocalTime(g.live_odds.commence_time);
+      document.getElementById('odds-updated').textContent = 'Game: ' + ct2.full;
     }
     var bestH = g.live_odds.best_home_price;
     var bestA = g.live_odds.best_away_price;
-    var fmtOdds = function(p) { return p > 0 ? '+' + p : '' + p; };
     document.getElementById('odds-tbody').innerHTML = g.live_odds.bookmakers.map(function(bm) {
       var hCls = bm.home_price === bestH ? 'num odds-best' : 'num';
       var aCls = bm.away_price === bestA ? 'num odds-best' : 'num';
-      return '<tr><td>' + bm.title + '</td>'
-        + '<td class="' + hCls + '">' + fmtOdds(bm.home_price) + '</td>'
-        + '<td class="' + aCls + '">' + fmtOdds(bm.away_price) + '</td></tr>';
+      return '<tr><td>' + bm.title + '</td>' +
+        '<td class="' + hCls + '">' + fmtOdds(bm.home_price) + '</td>' +
+        '<td class="' + aCls + '">' + fmtOdds(bm.away_price) + '</td></tr>';
     }).join('');
 
-    // Model vs Market comparison
     var mktProb = g.live_odds.home_implied_prob;
     if (mktProb != null && g.prob_home != null) {
       var edgePp = ((ph - mktProb) * 100).toFixed(1);
       var edgeCls = ph > mktProb ? 'edge-positive' : 'edge-negative';
       var edgeSign = ph > mktProb ? '+' : '';
+      var evLabel = ph > mktProb
+        ? '<span class="ev-chip ev-chip-positive">+EV Opportunity</span>'
+        : '<span class="ev-chip ev-chip-negative">-EV</span>';
       document.getElementById('market-vs-model').innerHTML =
-        '<div class="market-compare">'
-        + '<span>Model: <strong>' + (ph * 100).toFixed(1) + '%</strong></span>'
-        + '<span>Market: <strong>' + (mktProb * 100).toFixed(1) + '%</strong></span>'
-        + '<span>Edge: <span class="' + edgeCls + '">' + edgeSign + edgePp + 'pp</span></span>'
-        + '</div>';
+        '<div class="market-compare">' +
+        '<span>Model: <strong>' + (ph * 100).toFixed(1) + '%</strong></span>' +
+        '<span>Market: <strong>' + (mktProb * 100).toFixed(1) + '%</strong></span>' +
+        '<span>Edge: <span class="' + edgeCls + '">' + edgeSign + edgePp + 'pp</span></span>' +
+        evLabel +
+        '</div>';
     }
   }
 
   // SHAP chart
-  const shap = document.getElementById('shap-chart');
-  const factors = (g.top_factors || []).slice(0, 10);
-  const maxAbs = Math.max(...factors.map(f => Math.abs(f.value)), 0.01);
-  shap.innerHTML = factors.map(f => {
-    const pct = Math.abs(f.value) / maxAbs * 45; // max 45% from center
-    const label = FEATURE_LABELS[f.feature] || f.feature;
-    const color = f.value >= 0 ? '#4f8ef7' : '#e74c3c';
-    const left = f.value >= 0 ? `50%` : `${50-pct}%`;
-    return `<div class="shap-row">
-      <div class="shap-label">${label}</div>
-      <div class="shap-bar-wrap">
-        <div class="shap-center"></div>
-        <div class="shap-bar" style="left:${left};width:${pct}%;background:${color}"></div>
-      </div>
-      <div class="shap-val" style="color:${color}">${f.value>=0?'+':''}${f.value.toFixed(3)}</div>
-    </div>`;
+  var shap = document.getElementById('shap-chart');
+  var factors = (g.top_factors || []).slice(0, 10);
+  var maxAbs = Math.max.apply(null, factors.map(function (f) { return Math.abs(f.value); }).concat([0.01]));
+  shap.innerHTML = factors.map(function (f) {
+    var pct = Math.abs(f.value) / maxAbs * 45;
+    var label = FEATURE_LABELS[f.feature] || f.feature.replace(/_/g, ' ');
+    var color = f.value >= 0 ? 'var(--accent)' : 'var(--red)';
+    var left = f.value >= 0 ? '50%' : (50 - pct) + '%';
+    return '<div class="shap-row">' +
+      '<div class="shap-label">' + label + '</div>' +
+      '<div class="shap-bar-wrap">' +
+      '<div class="shap-center"></div>' +
+      '<div class="shap-bar" style="left:' + left + ';width:' + pct + '%;background:' + color + '"></div>' +
+      '</div>' +
+      '<div class="shap-val" style="color:' + color + '">' + (f.value >= 0 ? '+' : '') + f.value.toFixed(3) + '</div>' +
+      '</div>';
   }).join('');
 
   // Stats table
-  const tbody = document.getElementById('stats-table');
-  tbody.innerHTML = STAT_PAIRS.map(([label, hk, ak, f]) => {
+  var tbody = document.getElementById('stats-table');
+  tbody.innerHTML = STAT_PAIRS.map(function (row) {
+    var label = row[0], hk = row[1], ak = row[2], f = row[3];
     if (hk === null) {
-      const v = g.stats?.[f];
-      return `<tr><td>${label}</td><td colspan="2" style="text-align:center">${fmt(v, f, f)}</td></tr>`;
+      var v = g.stats?.[f];
+      return '<tr><td>' + label + '</td><td colspan="2" style="text-align:center">' + fmt(v, f, f) + '</td></tr>';
     }
-    const hv = g.stats?.[hk], av = g.stats?.[ak];
-    const better_h = (hk.includes('era') || hk.includes('fip')) ? hv < av : hv > av;
-    const hStyle = better_h ? 'color:var(--green);font-weight:600' : '';
-    const aStyle = !better_h ? 'color:var(--green);font-weight:600' : '';
-    return `<tr><td>${label}</td><td style="${hStyle}">${fmt(hv,f,hk)}</td><td style="${aStyle}">${fmt(av,f,ak)}</td></tr>`;
+    var hv = g.stats?.[hk], av = g.stats?.[ak];
+    var better_h = (hk.includes('era') || hk.includes('fip')) ? hv < av : hv > av;
+    var hStyle = better_h ? 'color:var(--green);font-weight:600' : '';
+    var aStyle = !better_h ? 'color:var(--green);font-weight:600' : '';
+    return '<tr><td>' + label + '</td><td style="' + hStyle + '">' + fmt(hv, f, hk) + '</td><td style="' + aStyle + '">' + fmt(av, f, ak) + '</td></tr>';
   }).join('');
   initAllSortables();
 
-  // Auto-populate EV calculator with model probabilities
+  // Auto-populate EV calculator
   var homeProb = (ph * 100).toFixed(1);
   var awayProb = (pa * 100).toFixed(1);
 
@@ -422,7 +567,6 @@ async function load() {
     document.getElementById('gev-side-away-label').textContent = g.away_name || 'Away';
   }
 
-  // Auto-populate odds from live data when available
   var gevOdds = document.getElementById('gev-odds');
   if (g.live_odds && gevOdds) {
     gevOdds.value = g.live_odds.best_home_price;
@@ -430,13 +574,11 @@ async function load() {
     if (sideAwayBtn) sideAwayBtn.dataset.evOdds = g.live_odds.best_away_price;
   }
 
-  // Pre-fill with home team probability (default selected side)
   var gevProb = document.getElementById('gev-prob');
   if (gevProb) gevProb.value = homeProb;
 
   initEVCalculator('gev');
 
-  // Show note if odds API is not configured
   if (g.odds_configured === false) {
     var evCard = document.querySelector('.ev-calc-embedded');
     if (evCard) {

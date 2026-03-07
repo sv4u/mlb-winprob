@@ -1,5 +1,5 @@
 /* ===================================================================
-   EV Calculator — styles for standalone page and embedded widget
+   EV Calculator — styles for standalone page and embedded widget (v2)
    =================================================================== */
 
 /* ── Calculator container ─────────────────────────────────────────── */
@@ -13,28 +13,30 @@
 .ev-input-group {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 1rem;
 }
 .ev-field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 .ev-field label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--muted);
   font-weight: 600;
   letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .ev-field input,
 .ev-field select {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 0.55rem 0.75rem;
-  font-size: 0.95rem;
-  transition: border-color 0.15s;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.92rem;
+  font-family: var(--font-sans);
+  transition: border-color var(--transition);
 }
 .ev-field input:focus,
 .ev-field select:focus {
@@ -49,19 +51,20 @@
 /* Odds format toggle row */
 .ev-format-row {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 .ev-format-btn {
   flex: 1;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: 0.38rem 0.5rem;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--muted);
   font-weight: 600;
-  transition: all 0.15s;
+  font-family: var(--font-sans);
+  transition: all var(--transition);
   text-align: center;
 }
 .ev-format-btn.active {
@@ -73,28 +76,29 @@
 /* Home/Away side toggle */
 .ev-side-row {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 .ev-side-btn {
   flex: 1;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--muted);
   font-weight: 600;
-  transition: all 0.15s;
+  font-family: var(--font-sans);
+  transition: all var(--transition);
   text-align: center;
 }
 .ev-side-btn.active-home {
-  background: rgba(46, 204, 113, 0.15);
+  background: var(--green-dim);
   border-color: var(--green);
   color: var(--green);
 }
 .ev-side-btn.active-away {
-  background: rgba(231, 76, 60, 0.15);
+  background: var(--red-dim);
   border-color: var(--red);
   color: var(--red);
 }
@@ -103,7 +107,7 @@
 .ev-results {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 /* Primary EV result */
@@ -113,24 +117,27 @@
   border-bottom: 1px solid var(--border);
 }
 .ev-primary-label {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 0.35rem;
+  font-weight: 600;
 }
 .ev-primary-value {
-  font-size: 2.2rem;
+  font-size: 2rem;
   font-weight: 800;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
 }
 .ev-primary-verdict {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 700;
   margin-top: 0.35rem;
   padding: 0.2rem 0.6rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xl);
   display: inline-block;
 }
 .ev-positive {
@@ -140,11 +147,11 @@
   color: var(--red);
 }
 .ev-verdict-positive {
-  background: rgba(46, 204, 113, 0.12);
+  background: var(--green-dim);
   color: var(--green);
 }
 .ev-verdict-negative {
-  background: rgba(231, 76, 60, 0.12);
+  background: var(--red-dim);
   color: var(--red);
 }
 
@@ -153,20 +160,21 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.45rem 0;
-  border-bottom: 1px solid rgba(46, 51, 80, 0.5);
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .ev-metric:last-child {
   border-bottom: none;
 }
 .ev-metric-label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 .ev-metric-value {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 .ev-metric-sub {
   font-size: 0.72rem;
@@ -187,7 +195,7 @@
   margin-bottom: 0.5rem;
 }
 .ev-kelly-title {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -197,17 +205,18 @@
   font-size: 0.82rem;
   color: var(--accent);
   font-weight: 600;
+  font-family: var(--font-mono);
 }
 .ev-slider-wrap {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 .ev-slider-wrap input[type="range"] {
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 6px;
+  height: 5px;
   background: var(--border);
   border-radius: 3px;
   outline: none;
@@ -222,6 +231,7 @@
   background: var(--accent);
   cursor: pointer;
   border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
 }
 .ev-slider-wrap input[type="range"]::-moz-range-thumb {
   width: 16px;
@@ -232,11 +242,12 @@
   border: 2px solid var(--surface);
 }
 .ev-slider-label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--accent);
   font-weight: 600;
-  min-width: 40px;
+  min-width: 38px;
   text-align: right;
+  font-family: var(--font-mono);
 }
 
 /* Kelly results */
@@ -248,18 +259,21 @@
 }
 .ev-kelly-stat {
   background: var(--card);
-  border-radius: 6px;
-  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
 }
 .ev-kelly-stat-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .ev-kelly-stat-value {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 /* No-bet state */
@@ -286,11 +300,12 @@
 .ev-bankroll-row input {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   padding: 0.35rem 0.55rem;
   font-size: 0.85rem;
   width: 100px;
+  font-family: var(--font-sans);
 }
 .ev-bankroll-row input:focus {
   outline: none;
@@ -305,7 +320,7 @@
   padding: 0.75rem 0;
 }
 .ev-calc-embedded .ev-primary-value {
-  font-size: 1.8rem;
+  font-size: 1.6rem;
 }
 
 /* ── Responsive ───────────────────────────────────────────────────── */
@@ -314,13 +329,13 @@
     grid-template-columns: 1fr;
   }
   .ev-primary-value {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
   }
 }
 @media (max-width: 480px) {
   .ev-format-btn {
     font-size: 0.72rem;
-    padding: 0.35rem 0.3rem;
+    padding: 0.32rem 0.3rem;
   }
   .ev-kelly-results {
     grid-template-columns: 1fr;

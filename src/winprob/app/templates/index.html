@@ -6,52 +6,149 @@
   <title>MLB Win Probability</title>
   <link rel="stylesheet" href="/static/base.css" />
   <style>
-    .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
-    .chart-wrap h3 { margin-bottom: 1rem; font-size: 0.95rem; color: var(--muted); }
-    #cv-chart { width: 100%; height: 240px; }
-    .home-win { color: var(--green); font-weight: 600; }
-    .away-win { color: var(--red); }
+    /* ── Home-specific styles ───────────────────────────────────── */
+    .home-hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .home-hero-left {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .home-hero-left::before {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      filter: blur(40px);
+    }
+    .home-hero-left h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.3rem;
+    }
+    .home-hero-left p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.6;
+      max-width: 400px;
+    }
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+    }
+    .quick-stat {
+      background: var(--card);
+      border-radius: var(--radius-sm);
+      padding: 0.55rem 0.75rem;
+    }
+    .quick-stat .qs-val { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .quick-stat .qs-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+    .smart-bets-preview {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .smart-bets-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .smart-bets-header h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .smart-bets-list { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+    .smart-bets-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 768px) {
+      .home-hero { grid-template-columns: 1fr; }
+      .quick-stats { grid-template-columns: 1fr 1fr; }
+    }
+
+    .chart-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .chart-wrap h3 { margin-bottom: 1rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    #cv-chart { width: 100%; height: 220px; }
+
     .models-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; margin-bottom: 1rem; font-size: 0.8rem; color: var(--muted); }
     .models-toggle:hover { color: var(--text); }
     .models-toggle .arrow { transition: transform 0.2s; display: inline-block; }
     .models-toggle.open .arrow { transform: rotate(90deg); }
-    .model-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .model-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; position: relative; overflow: hidden; }
+    .model-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .model-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.15rem; position: relative; overflow: hidden; }
     .model-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-    .model-card.logistic::before { background: #4f8ef7; }
-    .model-card.lightgbm::before { background: #f7a04f; }
-    .model-card.xgboost::before  { background: #2ecc71; }
-    .model-card.catboost::before { background: #f1c40f; }
-    .model-card.mlp::before      { background: #9b59b6; }
-    .model-card.stacked::before  { background: #e74c8e; }
-    .model-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; }
-    .model-card .model-tag { font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.45rem; border-radius: 4px; }
-    .model-card.stacked .model-tag { background: rgba(231,76,142,.15); color: #e74c8e; }
-    .model-card .model-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.55; margin-bottom: 0.75rem; }
-    .model-facts { list-style: none; font-size: 0.78rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.25rem; }
+    .model-card.logistic::before { background: #5b9aff; }
+    .model-card.lightgbm::before { background: #fb923c; }
+    .model-card.xgboost::before  { background: #34d399; }
+    .model-card.catboost::before { background: #facc15; }
+    .model-card.mlp::before      { background: #a78bfa; }
+    .model-card.stacked::before  { background: #e06090; }
+    .model-card h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .model-card .model-tag { font-size: 0.62rem; font-weight: 600; padding: 0.12rem 0.4rem; border-radius: 4px; }
+    .model-card.stacked .model-tag { background: rgba(224,96,144,.15); color: #e06090; }
+    .model-card .model-desc { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.65rem; }
+    .model-facts { list-style: none; font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem; }
     .model-facts li::before { content: '›  '; color: var(--accent); font-weight: 700; }
-    .model-perf { margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--border); display: flex; gap: 1rem; font-size: 0.78rem; }
+    .model-perf { margin-top: 0.65rem; padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; gap: 1rem; font-size: 0.75rem; }
     .model-perf span { color: var(--muted); }
-    .model-perf strong { color: var(--text); }
+    .model-perf strong { color: var(--text); font-family: var(--font-mono); }
     @media (max-width: 768px) {
       .model-cards { grid-template-columns: 1fr; }
     }
+
+    .home-win { color: var(--green); font-weight: 600; }
+    .away-win { color: var(--red); }
   </style>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">⚾ MLB Win Probability</a>
-  <span class="meta">2000–2026 • v3 • <code class="git-hash">{{ git_commit }}</code></span>
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Win Prob</a>
+  <span class="meta">2000–2026 · v3 · <code class="git-hash">{{ git_commit }}</code></span>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    <a href="/" class="active">All Seasons</a>
+    <a href="/" class="active">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
-    <a href="/odds">Odds Hub</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/sitemap">Sitemap</a>
+    <a href="/dashboard">Admin</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -69,15 +166,47 @@
 
 <div class="container">
 
-  <!-- Stat cards filled by JS -->
-  <div class="stat-cards" id="stat-cards">
-    <div class="stat-card"><div class="label">Total games</div><div class="value" id="sc-total">—</div></div>
-    <div class="stat-card"><div class="label">Seasons</div><div class="value" id="sc-seasons">—</div></div>
-    <div class="stat-card"><div class="label">Best model Brier</div><div class="value" id="sc-brier">—</div></div>
-    <div class="stat-card"><div class="label">Best season accuracy</div><div class="value" id="sc-acc">—</div></div>
+  <!-- Hero: Quick Stats + Smart Bets Preview -->
+  <div class="home-hero">
+    <div class="home-hero-left">
+      <h1>Win Probability Dashboard</h1>
+      <p>
+        ML-powered game predictions across 27 seasons of MLB data.
+        Six models, 100+ features, fully out-of-sample.
+      </p>
+      <div class="quick-stats">
+        <div class="quick-stat">
+          <div class="qs-val" id="sc-total">—</div>
+          <div class="qs-lbl">Total Games</div>
+        </div>
+        <div class="quick-stat">
+          <div class="qs-val" id="sc-seasons">—</div>
+          <div class="qs-lbl">Seasons</div>
+        </div>
+        <div class="quick-stat">
+          <div class="qs-val" id="sc-brier">—</div>
+          <div class="qs-lbl">Best Brier Score</div>
+        </div>
+        <div class="quick-stat">
+          <div class="qs-val" id="sc-acc">—</div>
+          <div class="qs-lbl">Peak Accuracy</div>
+        </div>
+      </div>
+    </div>
+    <div class="smart-bets-preview">
+      <div class="smart-bets-header">
+        <h2><span style="color:var(--green)">↗</span> Today's Smart Bets</h2>
+        <a href="/odds" class="btn btn-sm sec">View all →</a>
+      </div>
+      <div class="smart-bets-list" id="smart-bets-list">
+        <div class="skeleton skeleton-card" style="height:60px"></div>
+        <div class="skeleton skeleton-card" style="height:60px"></div>
+        <div class="skeleton skeleton-card" style="height:60px"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- CV accuracy chart -->
+  <!-- CV Chart (collapsible) -->
   <div class="chart-wrap">
     <h3>Out-of-Sample Accuracy by Season (Expanding-Window CV)</h3>
     <canvas id="cv-chart"></canvas>
@@ -89,14 +218,13 @@
   </div>
   <div id="models-section" style="display:none">
     <div class="model-cards" id="model-cards">
-  
+
       <div class="model-card logistic">
         <h4>Logistic Regression</h4>
         <p class="model-desc">
           A regularised linear model and the interpretable baseline. All 66 features are
           z-score normalised before fitting, so the learned coefficients directly quantify
           each feature's additive contribution to the log-odds of the home team winning.
-          Fast, stable, and fully auditable via coefficient-based SHAP attributions.
         </p>
         <ul class="model-facts">
           <li>L2 regularisation (C = 1.0), L-BFGS solver</li>
@@ -108,39 +236,33 @@
           <div><span>Accuracy </span><strong id="acc-logistic">—</strong></div>
         </div>
       </div>
-  
+
       <div class="model-card lightgbm">
         <h4>LightGBM</h4>
         <p class="model-desc">
           Microsoft's gradient-boosted tree library. Grows an ensemble of shallow trees in
-          sequence — each corrects the errors of the previous ones — capturing non-linear
-          interactions between features (e.g. strong Elo <em>and</em> favourable home/road
-          split together matter more than either alone). Hyperparameters are tuned via a
-          60-trial Optuna Bayesian search.
+          sequence, capturing non-linear interactions between features.
         </p>
         <ul class="model-facts">
-          <li>Optuna-tuned: learning rate, num_leaves, n_estimators, regularisation</li>
+          <li>Optuna-tuned: learning rate, num_leaves, n_estimators</li>
           <li>Tree-based SHAP explanations via TreeExplainer</li>
-          <li>Best for: fast batch inference, non-linear feature interactions</li>
+          <li>Best for: fast batch inference, non-linear interactions</li>
         </ul>
         <div class="model-perf" id="perf-lightgbm">
           <div><span>Brier </span><strong id="brier-lightgbm">—</strong></div>
           <div><span>Accuracy </span><strong id="acc-lightgbm">—</strong></div>
         </div>
       </div>
-  
+
       <div class="model-card xgboost">
         <h4>XGBoost</h4>
         <p class="model-desc">
-          DMLC's gradient-boosted tree library with a different regularisation scheme
-          (separate L1/L2 penalties on leaf weights, <code>min_child_weight</code>). Its
-          split-finding algorithm produces probability estimates that are <em>complementary</em>
-          to LightGBM — the two models tend to disagree most on uncertain games, making them
-          effective ensemble partners. Typically achieves the best single-model Brier score.
+          DMLC's gradient-boosted tree library with L1/L2 penalties on leaf weights.
+          Typically achieves the best single-model Brier score.
         </p>
         <ul class="model-facts">
-          <li>Optuna-tuned: learning rate, max_depth, n_estimators, regularisation</li>
-          <li>Tree-based SHAP explanations via TreeExplainer</li>
+          <li>Optuna-tuned: learning rate, max_depth, regularisation</li>
+          <li>Complementary error surface to LightGBM</li>
           <li>Best for: highest single-model accuracy</li>
         </ul>
         <div class="model-perf" id="perf-xgboost">
@@ -148,18 +270,16 @@
           <div><span>Accuracy </span><strong id="acc-xgboost">—</strong></div>
         </div>
       </div>
-  
+
       <div class="model-card catboost">
         <h4>CatBoost</h4>
         <p class="model-desc">
-          Yandex's gradient-boosted tree library with ordered boosting and native categorical
-          feature support.  Uses symmetric (oblivious) decision trees, which tend to generalise
-          well on tabular data and are resistant to overfitting.  Acts as a third complementary
-          tree model in the stacked ensemble.
+          Yandex's gradient-boosted tree library with ordered boosting and symmetric
+          decision trees. Resistant to overfitting.
         </p>
         <ul class="model-facts">
           <li>Ordered boosting reduces prediction shift</li>
-          <li>Symmetric trees, L2 leaf regularisation, learning rate decay</li>
+          <li>Symmetric trees, L2 leaf regularisation</li>
           <li>Best for: robustness, low-variance ensemble partner</li>
         </ul>
         <div class="model-perf" id="perf-catboost">
@@ -167,14 +287,12 @@
           <div><span>Accuracy </span><strong id="acc-catboost">—</strong></div>
         </div>
       </div>
-  
+
       <div class="model-card mlp">
         <h4>Neural Network (MLP)</h4>
         <p class="model-desc">
-          A multi-layer perceptron classifier with two hidden layers (128, 64 units) and ReLU
-          activations.  Captures nonlinear feature interactions that tree models may miss.
-          Features are z-score normalised before training.  Provides model diversity for stacking
-          since its error surface is fundamentally different from tree-based learners.
+          A multi-layer perceptron with two hidden layers (128, 64 units) and ReLU
+          activations. Provides model diversity for stacking.
         </p>
         <ul class="model-facts">
           <li>Architecture: 128 → 64 → 1, Adam optimizer</li>
@@ -186,20 +304,16 @@
           <div><span>Accuracy </span><strong id="acc-mlp">—</strong></div>
         </div>
       </div>
-  
+
       <div class="model-card stacked">
         <h4>Stacked Ensemble <span class="model-tag">default</span></h4>
         <p class="model-desc">
-          The stacked ensemble never sees raw features. It takes the <strong>calibrated
-            probability outputs</strong> of all five base models as its inputs and trains a
-          logistic-regression meta-learner to find the optimal blend. Because each base model
-          makes different errors, the meta-learner learns to up-weight whichever model is most
-          reliable in each probability range. Achieves the best overall Brier and calibration.
+          Takes the calibrated probability outputs of all five base models and trains a
+          logistic-regression meta-learner to find the optimal blend.
         </p>
         <ul class="model-facts">
-          <li>Inputs: Logistic + LightGBM + XGBoost + CatBoost + MLP calibrated probabilities</li>
+          <li>Inputs: all 5 base model calibrated probabilities</li>
           <li>Meta-learner: LogisticRegression (C = 0.5)</li>
-          <li>All base probabilities are out-of-sample relative to the meta-learner</li>
           <li>Best for: maximum production accuracy</li>
         </ul>
         <div class="model-perf" id="perf-stacked">
@@ -207,48 +321,41 @@
           <div><span>Accuracy </span><strong id="acc-stacked">—</strong></div>
         </div>
       </div>
-  
-    </div><!-- .model-cards -->
-  
+
+    </div>
+
     <details style="margin-bottom:1.5rem">
-      <summary style="cursor:pointer;font-size:0.8rem;color:var(--muted);list-style:none">
+      <summary style="cursor:pointer;font-size:0.78rem;color:var(--muted);list-style:none;font-weight:500">
         ▸ Training techniques
       </summary>
       <div style="margin-top:0.75rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.75rem">
         <div class="stat-card">
-          <div class="label">Platt calibration</div>
-          <div style="font-size:0.8rem;color:var(--muted);margin-top:0.4rem;line-height:1.5">
-            A sigmoid meta-layer fitted on a held-out calibration set corrects systematic
-            over/under-confidence so that a predicted 65% game actually wins ~65% of the time.
+          <div class="label">Calibration</div>
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.35rem;line-height:1.5">
+            Isotonic for tree models, Platt (sigmoid) for linear/neural — so a predicted 65% actually wins ~65% of the time.
           </div>
         </div>
         <div class="stat-card">
           <div class="label">Time-weighted training</div>
-          <div style="font-size:0.8rem;color:var(--muted);margin-top:0.4rem;line-height:1.5">
-            Exponential decay (rate = 0.12/season) gives recent seasons more influence.
-            2024 weight = 1.0 · 2020 weight ≈ 0.61 · 2015 weight ≈ 0.30. Adapts to the
-            2023 shift ban, pitch clock, and enlarged bases.
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.35rem;line-height:1.5">
+            Exponential decay (0.12/season) gives recent seasons more influence, adapting to rule changes.
           </div>
         </div>
         <div class="stat-card">
           <div class="label">Optuna HPO</div>
-          <div style="font-size:0.8rem;color:var(--muted);margin-top:0.4rem;line-height:1.5">
-            60-trial Bayesian search over learning rate, tree depth/leaves, n_estimators,
-            subsample, and L1/L2 regularisation — evaluated on a 3-season expanding window
-            to minimise Brier score before the full CV run.
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.35rem;line-height:1.5">
+            60-trial Bayesian search over hyperparameters, evaluated on 3-season expanding window.
           </div>
         </div>
         <div class="stat-card">
           <div class="label">Expanding-window CV</div>
-          <div style="font-size:0.8rem;color:var(--muted);margin-top:0.4rem;line-height:1.5">
-            For evaluation season N, the model is trained on all seasons before N. No future
-            data ever leaks into training or calibration. All reported metrics are
-            fully out-of-sample.
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.35rem;line-height:1.5">
+            For season N, the model trains on all prior seasons. No future data leaks. All metrics are fully out-of-sample.
           </div>
         </div>
       </div>
     </details>
-  </div><!-- #models-section -->
+  </div>
 
   <!-- Tabs -->
   <div class="tabs">
@@ -285,51 +392,42 @@
 
 </div>
 
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+    <a href="/sitemap">Sitemap</a>
+  </div>
+  <div>MLB Win Probability · Sabermetric Research System · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
 <script src="/static/base.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let currentTab = 'games', currentPage = 0, pageSize = 50, totalRows = 0;
 
-  // ── API helper with error handling ─────────────────────────────────────────
-  async function api(url, timingId) {
-    return timedFetch(url, timingId || null);
-}
-
   function showError(msg) {
-    $('table-wrap').innerHTML = `<p style="color:var(--red);padding:1.5rem">${msg}</p>`;
-    $('pagination').innerHTML = '';
-  }
-
-  function setLoading(on) {
-    $('table-wrap').style.opacity = on ? '0.4' : '1';
-    $('table-wrap').style.pointerEvents = on ? 'none' : '';
-  }
-
-function teamColor(prob) {
-  if (prob >= 0.65) return '#2ecc71';
-  if (prob <= 0.35) return '#e74c3c';
-  return '#4f8ef7';
+  $('table-wrap').innerHTML = '<p style="color:var(--red);padding:1.5rem">' + msg + '</p>';
+  $('pagination').innerHTML = '';
 }
-
-  function gameTypeBadge(gt) {
-    if (gt === 'S') return ' <span class="badge" style="background:rgba(255,152,0,.12);color:#ff9800" title="Spring Training — predictions use prior-season strength">Spring</span>';
-    return '';
-  }
 
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   let seasons = [], teams = [], cv = [];
   try {
     [seasons, teams, cv] = await Promise.all([
-      api('/api/seasons', 'timing-init'), api('/api/teams'), api('/api/cv-summary')
+      timedFetch('/api/seasons', 'timing-init'), api('/api/teams'), api('/api/cv-summary')
     ]);
   } catch (e) {
     showError('Failed to load data from server. Is the server running?');
     return;
   }
 
-  // Season dropdown — most recent first
   const sel = $('f-season');
   [...seasons].reverse().forEach(s => {
     const o = document.createElement('option');
@@ -337,13 +435,11 @@ async function init() {
     sel.appendChild(o);
   });
 
-  // Pre-select season from URL query parameter (e.g. /?season=2025)
   const urlSeason = new URLSearchParams(window.location.search).get('season');
   if (urlSeason && seasons.includes(parseInt(urlSeason, 10))) {
     sel.value = urlSeason;
   }
 
-  // Team dropdowns
   ['f-home','f-away'].forEach(id => {
     const s = $(id);
     teams.forEach(t => {
@@ -353,7 +449,6 @@ async function init() {
     });
   });
 
-  // Stat cards + per-model performance from CV data
   if (cv.length) {
     const allBriers = cv.map(r => r.brier);
     const allAccs = cv.map(r => r.accuracy);
@@ -366,27 +461,66 @@ async function init() {
   $('sc-total').textContent = '—';
   $('sc-seasons').textContent = seasons.length;
 
-  // Trigger search when Enter is pressed in the date field
   $('f-date').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(0); });
 
   loadData(0);
+      loadSmartBets();
+    }
+
+    // ── Smart Bets Preview ──────────────────────────────────────────────────
+    async function loadSmartBets() {
+      try {
+        const data = await api('/api/ev-opportunities');
+        const list = $('smart-bets-list');
+        if (!data.configured) {
+          list.innerHTML = '<div class="smart-bets-empty"><div>🔑 <a href="/dashboard">Configure The Odds API</a> to see smart bets</div></div>';
+          return;
+        }
+        const opps = (data.opportunities || []).slice(0, 4);
+        if (!opps.length) {
+          list.innerHTML = '<div class="smart-bets-empty"><div>No +EV opportunities right now.<br><span style="font-size:0.78rem">Check back when odds are posted.</span></div></div>';
+          return;
+        }
+        list.innerHTML = opps.map(o => {
+          var edgeSign = o.edge > 0 ? '+' : '';
+          return '<a href="/game/' + o.game_pk + '" style="text-decoration:none;color:inherit">' +
+            '<div class="smart-bet-card">' +
+            '<div>' +
+            '<div class="smart-bet-matchup">' + o.away_team + ' @ ' + o.home_team + '</div>' +
+            '<div class="smart-bet-details">' +
+            '<span>Bet: <strong>' + o.team + '</strong></span>' +
+            '<span>' + o.sportsbook + ' ' + fmtOdds(o.odds) + '</span>' +
+            '<span>Model: ' + (o.model_prob * 100).toFixed(0) + '% vs Market: ' + (o.implied_prob * 100).toFixed(0) + '%</span>' +
+            '</div>' +
+            '</div>' +
+            '<div>' +
+            '<div class="smart-bet-edge">' + edgeSign + (o.edge * 100).toFixed(1) + '%</div>' +
+            '<div class="smart-bet-book">edge</div>' +
+            '</div>' +
+            '</div></a>';
+        }).join('');
+      } catch (e) {
+        $('smart-bets-list').innerHTML = '<div class="smart-bets-empty">Could not load betting data</div>';
+      }
 }
 
 function drawCvChart(cv) {
   const seasonList = [...new Set(cv.map(r => r.season))].sort();
   const models = [...new Set(cv.map(r => r.model))];
-  const palette = { logistic: '#4f8ef7', lightgbm: '#f7a04f', xgboost: '#2ecc71', stacked: '#e74c8e' };
+  const palette = { logistic: '#5b9aff', lightgbm: '#fb923c', xgboost: '#34d399', catboost: '#facc15', mlp: '#a78bfa', stacked: '#e06090' };
 
   const datasets = models.map(m => {
     const bySeason = Object.fromEntries(cv.filter(r => r.model === m).map(r => [r.season, r.accuracy]));
     return {
       label: m,
       data: seasonList.map(s => bySeason[s] != null ? +(bySeason[s] * 100).toFixed(2) : null),
-      borderColor: palette[m] || '#aaa',
+      borderColor: palette[m] || '#888',
       backgroundColor: 'transparent',
-      pointRadius: 3,
+      pointRadius: 2,
+      pointHoverRadius: 5,
       tension: 0.3,
       spanGaps: true,
+      borderWidth: 2,
     };
   });
 
@@ -395,26 +529,30 @@ function drawCvChart(cv) {
     data: { labels: seasonList, datasets },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#8b90a8' } } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#6b7394', font: { family: 'Inter', size: 11 }, boxWidth: 12, padding: 16 } },
+        tooltip: { backgroundColor: '#1c2130', borderColor: '#2a3040', borderWidth: 1, titleFont: { family: 'Inter' }, bodyFont: { family: 'JetBrains Mono', size: 12 } }
+      },
       scales: {
-        x: { ticks: { color: '#8b90a8' }, grid: { color: '#2e3350' } },
-        y: { ticks: { color: '#8b90a8', callback: v => v + '%' }, grid: { color: '#2e3350' }, min: 50, max: 65 },
+        x: { ticks: { color: '#6b7394', font: { family: 'Inter', size: 11 } }, grid: { color: '#1f2535' } },
+        y: { ticks: { color: '#6b7394', callback: v => v + '%', font: { family: 'JetBrains Mono', size: 11 } }, grid: { color: '#1f2535' }, min: 50, max: 65 },
       },
     },
   });
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────
-  async function loadData(page = 0) {
-  currentPage = page;
-  setLoading(true);
+  async function loadData(page) {
+    currentPage = page || 0;
+    setLoading('table-wrap', true);
   try {
     if (currentTab === 'games') await loadGames();
     else await loadUpsets();
   } catch (e) {
-    showError(`Search failed: ${e.message}`);
+    showError('Search failed: ' + e.message);
   } finally {
-    setLoading(false);
+    setLoading('table-wrap', false);
   }
 }
 
@@ -425,42 +563,50 @@ async function loadGames() {
   const date = $('f-date').value;
   const offset = currentPage * pageSize;
 
-  let url = `/api/games?limit=${pageSize}&offset=${offset}&sort=date&order=desc`;
-  if (season) url += `&season=${season}`;
-  if (home)   url += `&home=${home}`;
-  if (away)   url += `&away=${away}`;
-  if (date)   url += `&date=${date}`;
+  let url = '/api/games?limit=' + pageSize + '&offset=' + offset + '&sort=date&order=desc';
+  if (season) url += '&season=' + season;
+  if (home) url += '&home=' + home;
+  if (away) url += '&away=' + away;
+  if (date) url += '&date=' + date;
 
-  const data = await api(url, 'timing-data');
+  const data = await timedFetch(url, 'timing-data');
   totalRows = data.total;
   $('sc-total').textContent = data.total.toLocaleString();
 
   if (!data.games.length) {
-    $('table-wrap').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No games match the selected filters.</p>';
+    $('table-wrap').innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No games match your filters.</p></div>';
     $('pagination').innerHTML = '';
     return;
   }
 
-  let html = `<div class="table-wrap"><table>
-    <thead><tr>
-      <th data-sort="date">Date</th><th data-sort="string">Matchup</th><th data-sort="percent">P(home win)</th><th data-sort="percent">P(away win)</th><th data-sort="string">Result</th>
-    </tr></thead><tbody>`;
+  let html = '<div class="table-wrap"><table><thead><tr>' +
+    '<th data-sort="date">Date</th>' +
+    '<th data-sort="string">Matchup</th>' +
+    '<th data-sort="percent">Home Win</th>' +
+    '<th data-sort="percent">Away Win</th>' +
+    '<th data-sort="string">Confidence</th>' +
+    '<th data-sort="string">Result</th>' +
+    '</tr></thead><tbody>';
 
   data.games.forEach(g => {
     const ph = g.prob_home ?? 0.5;
     const pa = 1 - ph;
+    const conf = probConfidence(ph > 0.5 ? ph : pa);
+    const favTeam = ph >= 0.5 ? g.home_name : g.away_name;
+    const dateDisplay = formatGameDate(g.date);
     const result = g.home_win == null
       ? '<span style="color:var(--muted)">—</span>'
       : g.home_win === 1
-        ? '<span class="badge badge-home">HOME WIN</span>'
-        : '<span class="badge badge-away">AWAY WIN</span>';
-    html += `<tr>
-      <td>${g.date}</td>
-      <td><a href="/game/${g.game_pk}">${g.away_name} @ ${g.home_name}</a>${gameTypeBadge(g.game_type)}</td>
-      <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(ph*100)}%;background:${teamColor(ph)}"></div></div>${(ph*100).toFixed(1)}%</div></td>
-      <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(pa*100)}%;background:${teamColor(pa)}"></div></div>${(pa*100).toFixed(1)}%</div></td>
-      <td>${result}</td>
-    </tr>`;
+        ? '<span class="badge badge-home">HOME</span>'
+        : '<span class="badge badge-away">AWAY</span>';
+    html += '<tr>' +
+      '<td style="white-space:nowrap;font-size:0.82rem">' + dateDisplay + gameTypeBadge(g.game_type) + '</td>' +
+      '<td><a href="/game/' + g.game_pk + '">' + g.away_name + ' @ ' + g.home_name + '</a></td>' +
+      '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(ph * 100) + '%;background:' + probColor(ph) + '"></div></div><span class="tabular-nums" style="font-weight:' + (ph >= 0.55 ? '700' : '400') + '">' + (ph * 100).toFixed(1) + '%</span></div></td>' +
+      '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(pa * 100) + '%;background:' + probColor(pa) + '"></div></div><span class="tabular-nums" style="font-weight:' + (pa >= 0.55 ? '700' : '400') + '">' + (pa * 100).toFixed(1) + '%</span></div></td>' +
+      '<td><span class="' + conf.cls + '" style="font-size:0.78rem;font-weight:600">' + conf.label + '</span></td>' +
+      '<td>' + result + '</td>' +
+      '</tr>';
   });
 
   html += '</tbody></table></div>';
@@ -475,37 +621,38 @@ async function loadUpsets() {
   const away = $('f-away').value;
   const minProb = parseFloat($('f-minprob').value) || 0.65;
 
-  let url = `/api/upsets?min_prob=${minProb}&limit=100`;
-  if (season) url += `&season=${season}`;
-  if (home) url += `&home=${home}`;
-  if (away) url += `&away=${away}`;
+  let url = '/api/upsets?min_prob=' + minProb + '&limit=100';
+  if (season) url += '&season=' + season;
+  if (home) url += '&home=' + home;
+  if (away) url += '&away=' + away;
 
-  const data = await api(url, 'timing-data');
+  const data = await timedFetch(url, 'timing-data');
 
   if (!data.length) {
-    $('table-wrap').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No upsets match the selected filters.</p>';
+    $('table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🏆</div><p>No upsets match your filters.</p></div>';
     $('pagination').innerHTML = '';
     return;
   }
 
-  let html = `<div class="table-wrap"><table><thead><tr>
-    <th data-sort="date">Date</th><th data-sort="string">Away</th><th>@</th><th data-sort="string">Home</th><th data-sort="string">Favourite</th><th data-sort="percent">Fav prob</th><th data-sort="string">Winner</th>
-  </tr></thead><tbody>`;
+  let html = '<div class="table-wrap"><table><thead><tr>' +
+    '<th data-sort="date">Date</th><th data-sort="string">Away</th><th>@</th><th data-sort="string">Home</th>' +
+    '<th data-sort="string">Favourite</th><th data-sort="percent">Fav prob</th><th data-sort="string">Winner</th>' +
+    '</tr></thead><tbody>';
 
   data.forEach(g => {
     const favTeam = g.fav_team === 'home' ? g.home_name : g.away_name;
     const winBadge = g.winner === 'home'
       ? '<span class="badge badge-home">HOME</span>'
       : '<span class="badge badge-away">AWAY</span>';
-    html += `<tr>
-      <td>${g.date}</td>
-      <td><a href="/game/${g.game_pk}">${g.away_name}</a></td>
-      <td style="color:var(--muted)">@</td>
-      <td><a href="/game/${g.game_pk}">${g.home_name}</a></td>
-      <td>${favTeam}</td>
-      <td><span class="badge badge-neutral">${(g.fav_prob*100).toFixed(1)}%</span></td>
-      <td>${winBadge}</td>
-    </tr>`;
+    html += '<tr>' +
+      '<td>' + formatGameDate(g.date) + '</td>' +
+      '<td><a href="/game/' + g.game_pk + '">' + g.away_name + '</a></td>' +
+      '<td style="color:var(--muted)">@</td>' +
+      '<td><a href="/game/' + g.game_pk + '">' + g.home_name + '</a></td>' +
+      '<td>' + favTeam + '</td>' +
+      '<td><span class="badge badge-neutral">' + (g.fav_prob * 100).toFixed(1) + '%</span></td>' +
+      '<td>' + winBadge + '</td>' +
+      '</tr>';
   });
 
   html += '</tbody></table></div>';
@@ -517,19 +664,18 @@ async function loadUpsets() {
 function renderPagination() {
   const pages = Math.ceil(totalRows / pageSize);
   if (pages <= 1) {
-    $('pagination').innerHTML = `<span>${totalRows.toLocaleString()} games found</span>`;
+    $('pagination').innerHTML = '<span>' + totalRows.toLocaleString() + ' games</span>';
     return;
   }
-  $('pagination').innerHTML = `
-    <span>${totalRows.toLocaleString()} games found</span>
-    <span>
-      <button class="sec" onclick="loadData(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>← Prev</button>
-      &nbsp; Page ${currentPage + 1} of ${pages} &nbsp;
-      <button class="sec" onclick="loadData(${currentPage + 1})" ${currentPage >= pages - 1 ? 'disabled' : ''}>Next →</button>
-    </span>`;
+  $('pagination').innerHTML =
+    '<span>' + totalRows.toLocaleString() + ' games</span>' +
+    '<span>' +
+    '<button class="sec btn-sm" onclick="loadData(' + (currentPage - 1) + ')" ' + (currentPage === 0 ? 'disabled' : '') + '>← Prev</button>' +
+    ' Page ' + (currentPage + 1) + ' of ' + pages + ' ' +
+    '<button class="sec btn-sm" onclick="loadData(' + (currentPage + 1) + ')" ' + (currentPage >= pages - 1 ? 'disabled' : '') + '>Next →</button>' +
+    '</span>';
 }
 
-  // ── Model performance cards ────────────────────────────────────────────────
   function fillModelPerf(cv) {
     const modelKeys = ['logistic', 'lightgbm', 'xgboost', 'catboost', 'mlp', 'stacked'];
     modelKeys.forEach(m => {
@@ -537,12 +683,12 @@ function renderPagination() {
       if (!rows.length) return;
       const meanBrier = rows.reduce((s, r) => s + r.brier, 0) / rows.length;
       const meanAcc = rows.reduce((s, r) => s + r.accuracy, 0) / rows.length;
-      const brierEl = $(`brier-${m}`);
-      const accEl = $(`acc-${m}`);
-      if (brierEl) brierEl.textContent = meanBrier.toFixed(4);
-      if (accEl) accEl.textContent = (meanAcc * 100).toFixed(1) + '%';
-    });
-  }
+    const brierEl = $('brier-' + m);
+    const accEl = $('acc-' + m);
+    if (brierEl) brierEl.textContent = meanBrier.toFixed(4);
+    if (accEl) accEl.textContent = (meanAcc * 100).toFixed(1) + '%';
+  });
+}
 
   function toggleModels() {
     const sec = $('models-section');
@@ -556,7 +702,6 @@ function switchTab(tab, el) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  // Show/hide filters relevant to each tab
   $('f-date-wrap').style.display = tab === 'games' ? '' : 'none';
   $('f-minprob-wrap').style.display = tab === 'upsets' ? '' : 'none';
   loadData(0);

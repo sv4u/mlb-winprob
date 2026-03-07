@@ -6,51 +6,73 @@
   <title>Standings — MLB Win Probability</title>
   <link rel="stylesheet" href="/static/base.css" />
   <style>
-    .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
-    .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
-    .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
-    .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
-    .hero p { font-size: 0.88rem; color: var(--muted); max-width: 700px; line-height: 1.6; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .leaders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.75rem; }
-    .leader-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
-    .leader-card h3 { font-size: 0.92rem; color: var(--muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .04em; }
-    .leader-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .leaders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .leader-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .leader-card h3 {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .leader-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
     .leader-row:last-child { border-bottom: none; }
-    .leader-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .leader-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; font-weight: 600; }
     .leader-team { font-size: 1rem; font-weight: 700; }
-    .leader-record { font-size: 0.9rem; color: var(--muted); }
-    .division-section { margin-bottom: 2rem; }
+    .leader-record { font-size: 0.88rem; color: var(--text-secondary); font-family: var(--font-mono); }
+    .division-section { margin-bottom: 1.75rem; }
     .division-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
     .division-header h3 { font-size: 1rem; font-weight: 700; }
-    .division-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+    .division-badge {
+      display: inline-block;
+      padding: 0.18rem 0.55rem;
+      border-radius: var(--radius-xl);
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
     .team-name { font-weight: 600; }
     .stats-section { margin-bottom: 2rem; }
     .stats-section h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
-    .stats-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
+    .stats-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius); }
     .stats-table-wrap table { min-width: 900px; }
     @media (max-width: 768px) {
       .leaders-grid { grid-template-columns: 1fr; }
-      .hero { padding: 1.25rem; }
-      .hero h2 { font-size: 1.3rem; }
     }
   </style>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Win Prob</a>
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    <a href="/">All Seasons</a>
+    <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings" class="active">Standings</a>
-    <a href="/odds">Odds Hub</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/sitemap">Sitemap</a>
+    <a href="/dashboard">Admin</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -71,23 +93,23 @@
     <div class="hero-badge">Predicted vs Actual</div>
     <h2>2026 Season Standings</h2>
     <p>
-      Pre-season predicted standings derived from per-game win probabilities,
-      compared against live MLB results. Divisional rankings, league leaders,
-      and full team statistics updated from the MLB Stats API.
+      Predicted standings from per-game win probabilities, compared against live MLB results.
+      Divisional rankings, league leaders, and team statistics via the MLB Stats API.
     </p>
   </div>
 
   <div class="tab-bar">
-    <div class="tab-btn active" onclick="showTab('standings')">Standings</div>
-    <div class="tab-btn" onclick="showTab('batting')">Team Batting</div>
-    <div class="tab-btn" onclick="showTab('pitching')">Team Pitching</div>
+    <div class="tab-btn active" onclick="showTab('standings',this)">Standings</div>
+    <div class="tab-btn" onclick="showTab('batting',this)">Team Batting</div>
+    <div class="tab-btn" onclick="showTab('pitching',this)">Team Pitching</div>
   </div>
 
   <!-- Standings tab -->
   <div id="tab-standings" class="tab-content active">
     <div id="leaders-area"></div>
     <div id="standings-area">
-      <div class="loading"><div class="spinner"></div><p style="margin-top:0.75rem">Loading standings&hellip;</p></div>
+      <div class="skeleton skeleton-card" style="height:120px"></div>
+      <div class="skeleton skeleton-card" style="height:120px"></div>
     </div>
     <span class="timing-badge" id="timing-standings" style="display:none"></span>
   </div>
@@ -95,7 +117,7 @@
   <!-- Batting stats tab -->
   <div id="tab-batting" class="tab-content">
     <div id="batting-area">
-      <div class="loading"><div class="spinner"></div><p style="margin-top:0.75rem">Loading batting stats&hellip;</p></div>
+      <div class="skeleton skeleton-card" style="height:200px"></div>
     </div>
     <span class="timing-badge" id="timing-team-stats" style="display:none"></span>
   </div>
@@ -103,49 +125,56 @@
   <!-- Pitching stats tab -->
   <div id="tab-pitching" class="tab-content">
     <div id="pitching-area">
-      <div class="loading"><div class="spinner"></div><p style="margin-top:0.75rem">Loading pitching stats&hellip;</p></div>
+      <div class="skeleton skeleton-card" style="height:200px"></div>
     </div>
   </div>
 </div>
 
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Win Probability · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
 <script src="/static/base.js"></script>
 <script>
-const $ = id => document.getElementById(id);
-
+  const $ = id => document.getElementById(id);
 let statsLoaded = false;
 
-function showTab(name) {
+  function showTab(name, el) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  event.target.classList.add('active');
-  $(`tab-${name}`).classList.add('active');
+  if (el) el.classList.add('active');
+  $('tab-' + name).classList.add('active');
   if ((name === 'batting' || name === 'pitching') && !statsLoaded) {
     statsLoaded = true;
     loadTeamStats();
   }
 }
 
-// ── API helper ────────────────────────────────────────────────────────────
-  async function api(url, timingId) {
-    return timedFetch(url, timingId || null);
-}
-
-function deltaHtml(val, decimals = 0, invert = false) {
-  if (val == null || isNaN(val)) return '<span class="delta-zero">-</span>';
-  const v = invert ? -val : val;
-  const sign = v > 0 ? '+' : '';
-  const cls = v > 0 ? 'delta-pos' : v < 0 ? 'delta-neg' : 'delta-zero';
-  return `<span class="${cls}">${sign}${v.toFixed(decimals)}</span>`;
+  function deltaHtml(val, decimals, invert) {
+    decimals = decimals || 0;
+    if (val == null || isNaN(val)) return '<span class="delta-zero">—</span>';
+    var v = invert ? -val : val;
+    var sign = v > 0 ? '+' : '';
+    var cls = v > 0 ? 'delta-pos' : v < 0 ? 'delta-neg' : 'delta-zero';
+    return '<span class="' + cls + '">' + sign + v.toFixed(decimals) + '</span>';
 }
 
 // ── Standings ─────────────────────────────────────────────────────────────
 async function loadStandings() {
   try {
-    const data = await api('/api/standings?season=2026', 'timing-standings');
+    var data = await timedFetch('/api/standings?season=2026', 'timing-standings');
     renderLeaders(data.league_leaders);
     renderDivisions(data.divisions);
   } catch (e) {
-    $('standings-area').innerHTML = `<div class="error-msg">Failed to load standings: ${e.message}</div>`;
+    $('standings-area').innerHTML = '<div class="error-msg">Failed to load standings: ' + e.message + '</div>';
   }
 }
 
@@ -154,33 +183,19 @@ function renderLeaders(leaders) {
     $('leaders-area').innerHTML = '';
     return;
   }
-  let html = '<div class="leaders-grid">';
-  ['AL', 'NL'].forEach(league => {
-    const l = leaders[league];
+  var html = '<div class="leaders-grid">';
+  ['AL', 'NL'].forEach(function (league) {
+    var l = leaders[league];
     if (!l) return;
-    const badgeCls = league === 'AL' ? 'badge-al' : 'badge-nl';
-    html += `<div class="leader-card">
-      <h3><span class="division-badge ${badgeCls}">${league}</span> League Leader</h3>`;
-
+    var badgeCls = league === 'AL' ? 'badge-al' : 'badge-nl';
+    html += '<div class="leader-card"><h3><span class="division-badge ' + badgeCls + '">' + league + '</span> League Leader</h3>';
     if (l.predicted_leader) {
-      const pl = l.predicted_leader;
-      html += `<div class="leader-row">
-        <div>
-          <div class="leader-label">Predicted</div>
-          <div class="leader-team">${pl.team_name || pl.retro_code}</div>
-        </div>
-        <div class="leader-record">${pl.pred_wins}-${pl.pred_losses} (${(pl.pred_win_pct * 100).toFixed(1)}%)</div>
-      </div>`;
+      var pl = l.predicted_leader;
+      html += '<div class="leader-row"><div><div class="leader-label">Predicted</div><div class="leader-team">' + (pl.team_name || pl.retro_code) + '</div></div><div class="leader-record">' + pl.pred_wins + '-' + pl.pred_losses + ' (' + (pl.pred_win_pct * 100).toFixed(1) + '%)</div></div>';
     }
     if (l.actual_leader) {
-      const al = l.actual_leader;
-      html += `<div class="leader-row">
-        <div>
-          <div class="leader-label">Actual</div>
-          <div class="leader-team">${al.team_name || al.retro_code}</div>
-        </div>
-        <div class="leader-record">${al.actual_wins}-${al.actual_losses} (${(al.actual_win_pct * 100).toFixed(1)}%)</div>
-      </div>`;
+      var al = l.actual_leader;
+      html += '<div class="leader-row"><div><div class="leader-label">Actual</div><div class="leader-team">' + (al.team_name || al.retro_code) + '</div></div><div class="leader-record">' + al.actual_wins + '-' + al.actual_losses + ' (' + (al.actual_win_pct * 100).toFixed(1) + '%)</div></div>';
     }
     html += '</div>';
   });
@@ -190,62 +205,48 @@ function renderLeaders(leaders) {
 
 function renderDivisions(divisions) {
   if (!divisions || !divisions.length) {
-    $('standings-area').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No standings data available yet.</p>';
+    $('standings-area').innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No standings data available yet.</p></div>';
     return;
   }
-
-  const hasActual = divisions.some(d => d.teams.some(t => t.actual_wins != null));
-  let html = '';
-
-  divisions.forEach(div => {
-    const badgeCls = div.league === 'AL' ? 'badge-al' : 'badge-nl';
-    html += `<div class="division-section">
-      <div class="division-header">
-        <span class="division-badge ${badgeCls}">${div.league}</span>
-        <h3>${div.division_name}</h3>
-      </div>
-      <div class="stats-table-wrap"><table>
-        <thead><tr>
-          <th data-sort="string">Team</th>
-          <th class="num" data-sort="number">Pred W</th>
-          <th class="num" data-sort="number">Pred L</th>
-          <th class="num" data-sort="percent">Pred %</th>
-          <th class="num" data-sort="number">Pred GB</th>`;
-
+  var hasActual = divisions.some(function (d) { return d.teams.some(function (t) { return t.actual_wins != null; }); });
+  var html = '';
+  divisions.forEach(function (div) {
+    var badgeCls = div.league === 'AL' ? 'badge-al' : 'badge-nl';
+    html += '<div class="division-section"><div class="division-header"><span class="division-badge ' + badgeCls + '">' + div.league + '</span><h3>' + div.division_name + '</h3></div><div class="stats-table-wrap"><table><thead><tr>' +
+      '<th data-sort="string">Team</th>' +
+      '<th class="num" data-sort="number">Pred W</th>' +
+      '<th class="num" data-sort="number">Pred L</th>' +
+      '<th class="num" data-sort="percent">Pred %</th>' +
+      '<th class="num" data-sort="number">Pred GB</th>';
     if (hasActual) {
-      html += `
-          <th class="num" data-sort="number">Act W</th>
-          <th class="num" data-sort="number">Act L</th>
-          <th class="num" data-sort="percent">Act %</th>
-          <th class="num" data-sort="number">Act GB</th>
-          <th class="num" data-sort="number">RS</th>
-          <th class="num" data-sort="number">RA</th>
-          <th class="num" data-sort="number">Diff</th>
-          <th class="num" data-sort="number">&Delta; W</th>
-          <th class="num" data-sort="percent">&Delta; %</th>`;
+      html += '<th class="num" data-sort="number">Act W</th>' +
+        '<th class="num" data-sort="number">Act L</th>' +
+        '<th class="num" data-sort="percent">Act %</th>' +
+        '<th class="num" data-sort="number">Act GB</th>' +
+        '<th class="num" data-sort="number">RS</th>' +
+        '<th class="num" data-sort="number">RA</th>' +
+        '<th class="num" data-sort="number">Diff</th>' +
+        '<th class="num" data-sort="number">&Delta; W</th>' +
+        '<th class="num" data-sort="percent">&Delta; %</th>';
     }
     html += '</tr></thead><tbody>';
-
-    div.teams.forEach(t => {
-      html += `<tr>
-        <td class="team-name">${t.team_name}</td>
-        <td class="num">${t.pred_wins.toFixed(1)}</td>
-        <td class="num">${t.pred_losses.toFixed(1)}</td>
-        <td class="num">${(t.pred_win_pct * 100).toFixed(1)}%</td>
-        <td class="num">${t.pred_gb}</td>`;
-
+    div.teams.forEach(function (t) {
+      html += '<tr><td class="team-name">' + t.team_name + '</td>' +
+        '<td class="num tabular-nums">' + t.pred_wins.toFixed(1) + '</td>' +
+        '<td class="num tabular-nums">' + t.pred_losses.toFixed(1) + '</td>' +
+        '<td class="num">' + (t.pred_win_pct * 100).toFixed(1) + '%</td>' +
+        '<td class="num">' + t.pred_gb + '</td>';
       if (hasActual) {
         if (t.actual_wins != null) {
-          html += `
-            <td class="num">${t.actual_wins}</td>
-            <td class="num">${t.actual_losses}</td>
-            <td class="num">${(t.actual_win_pct * 100).toFixed(1)}%</td>
-            <td class="num">${t.actual_gb}</td>
-            <td class="num">${t.runs_scored}</td>
-            <td class="num">${t.runs_allowed}</td>
-            <td class="num" style="color:${t.run_diff > 0 ? 'var(--green)' : t.run_diff < 0 ? 'var(--red)' : 'var(--muted)'}">${t.run_diff > 0 ? '+' : ''}${t.run_diff}</td>
-            <td class="num">${deltaHtml(t.wins_delta, 1)}</td>
-            <td class="num">${deltaHtml(t.pct_delta * 100, 1)}</td>`;
+          html += '<td class="num tabular-nums">' + t.actual_wins + '</td>' +
+            '<td class="num tabular-nums">' + t.actual_losses + '</td>' +
+            '<td class="num">' + (t.actual_win_pct * 100).toFixed(1) + '%</td>' +
+            '<td class="num">' + t.actual_gb + '</td>' +
+            '<td class="num">' + t.runs_scored + '</td>' +
+            '<td class="num">' + t.runs_allowed + '</td>' +
+            '<td class="num" style="color:' + (t.run_diff > 0 ? 'var(--green)' : t.run_diff < 0 ? 'var(--red)' : 'var(--muted)') + '">' + (t.run_diff > 0 ? '+' : '') + t.run_diff + '</td>' +
+            '<td class="num">' + deltaHtml(t.wins_delta, 1) + '</td>' +
+            '<td class="num">' + deltaHtml(t.pct_delta * 100, 1) + '</td>';
         } else {
           html += '<td class="num" colspan="9" style="color:var(--muted)">No live data</td>';
         }
@@ -254,7 +255,6 @@ function renderDivisions(divisions) {
     });
     html += '</tbody></table></div></div>';
   });
-
   $('standings-area').innerHTML = html;
   initAllSortables();
 }
@@ -262,52 +262,39 @@ function renderDivisions(divisions) {
 // ── Team Stats ────────────────────────────────────────────────────────────
 async function loadTeamStats() {
   try {
-    const data = await api('/api/team-stats?season=2026', 'timing-team-stats');
+    var data = await timedFetch('/api/team-stats?season=2026', 'timing-team-stats');
     renderBatting(data.teams);
     renderPitching(data.teams);
   } catch (e) {
-    $('batting-area').innerHTML = `<div class="error-msg">Failed to load team stats: ${e.message}</div>`;
-    $('pitching-area').innerHTML = `<div class="error-msg">Failed to load team stats: ${e.message}</div>`;
+    $('batting-area').innerHTML = '<div class="error-msg">Failed to load team stats: ' + e.message + '</div>';
+    $('pitching-area').innerHTML = '<div class="error-msg">Failed to load team stats: ' + e.message + '</div>';
   }
 }
 
 function renderBatting(teams) {
   if (!teams || !teams.length) {
-    $('batting-area').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No batting data available.</p>';
+    $('batting-area').innerHTML = '<div class="empty-state"><p>No batting data available.</p></div>';
     return;
   }
-  const sorted = [...teams].sort((a, b) => b.batting.ops - a.batting.ops);
-  let html = `<div class="stats-section">
-    <h3>Team Batting Statistics</h3>
-    <div class="stats-table-wrap"><table>
-      <thead><tr>
-        <th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>
-        <th class="num" data-sort="number">AVG</th><th class="num" data-sort="number">OBP</th><th class="num" data-sort="number">SLG</th><th class="num" data-sort="number">OPS</th>
-        <th class="num" data-sort="number">R</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">2B</th><th class="num" data-sort="number">3B</th>
-        <th class="num" data-sort="number">HR</th><th class="num" data-sort="number">RBI</th><th class="num" data-sort="number">SB</th>
-        <th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>
-      </tr></thead><tbody>`;
-
-  sorted.forEach((t, i) => {
-    const b = t.batting;
-    html += `<tr>
-      <td class="num">${i + 1}</td>
-      <td class="team-name">${t.team_name}</td>
-      <td>${t.record}</td>
-      <td class="num">${b.avg.toFixed(3)}</td>
-      <td class="num">${b.obp.toFixed(3)}</td>
-      <td class="num">${b.slg.toFixed(3)}</td>
-      <td class="num" style="font-weight:700">${b.ops.toFixed(3)}</td>
-      <td class="num">${b.runs}</td>
-      <td class="num">${b.hits}</td>
-      <td class="num">${b.doubles}</td>
-      <td class="num">${b.triples}</td>
-      <td class="num">${b.hr}</td>
-      <td class="num">${b.rbi}</td>
-      <td class="num">${b.sb}</td>
-      <td class="num">${b.bb}</td>
-      <td class="num">${b.so}</td>
-    </tr>`;
+  var sorted = teams.slice().sort(function (a, b) { return b.batting.ops - a.batting.ops; });
+  var html = '<div class="stats-section"><h3>Team Batting Statistics</h3><div class="stats-table-wrap"><table><thead><tr>' +
+    '<th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>' +
+    '<th class="num" data-sort="number">AVG</th><th class="num" data-sort="number">OBP</th><th class="num" data-sort="number">SLG</th><th class="num" data-sort="number">OPS</th>' +
+    '<th class="num" data-sort="number">R</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">2B</th><th class="num" data-sort="number">3B</th>' +
+    '<th class="num" data-sort="number">HR</th><th class="num" data-sort="number">RBI</th><th class="num" data-sort="number">SB</th>' +
+    '<th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>' +
+    '</tr></thead><tbody>';
+  sorted.forEach(function (t, i) {
+    var b = t.batting;
+    html += '<tr><td class="num">' + (i + 1) + '</td><td class="team-name">' + t.team_name + '</td><td class="text-mono" style="font-size:0.78rem">' + t.record + '</td>' +
+      '<td class="num tabular-nums">' + b.avg.toFixed(3) + '</td>' +
+      '<td class="num tabular-nums">' + b.obp.toFixed(3) + '</td>' +
+      '<td class="num tabular-nums">' + b.slg.toFixed(3) + '</td>' +
+      '<td class="num tabular-nums font-bold">' + b.ops.toFixed(3) + '</td>' +
+      '<td class="num">' + b.runs + '</td><td class="num">' + b.hits + '</td>' +
+      '<td class="num">' + b.doubles + '</td><td class="num">' + b.triples + '</td>' +
+      '<td class="num">' + b.hr + '</td><td class="num">' + b.rbi + '</td>' +
+      '<td class="num">' + b.sb + '</td><td class="num">' + b.bb + '</td><td class="num">' + b.so + '</td></tr>';
   });
   html += '</tbody></table></div></div>';
   $('batting-area').innerHTML = html;
@@ -316,44 +303,30 @@ function renderBatting(teams) {
 
 function renderPitching(teams) {
   if (!teams || !teams.length) {
-    $('pitching-area').innerHTML = '<p style="color:var(--muted);padding:1.5rem">No pitching data available.</p>';
+    $('pitching-area').innerHTML = '<div class="empty-state"><p>No pitching data available.</p></div>';
     return;
   }
-  const sorted = [...teams].sort((a, b) => a.pitching.era - b.pitching.era);
-  let html = `<div class="stats-section">
-    <h3>Team Pitching Statistics</h3>
-    <div class="stats-table-wrap"><table>
-      <thead><tr>
-        <th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>
-        <th class="num" data-sort="number">ERA</th><th class="num" data-sort="number">W</th><th class="num" data-sort="number">L</th><th class="num" data-sort="number">SV</th>
-        <th class="num" data-sort="number">IP</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>
-        <th class="num" data-sort="number">WHIP</th><th class="num" data-sort="number">HR</th>
-      </tr></thead><tbody>`;
-
-  sorted.forEach((t, i) => {
-    const p = t.pitching;
-    html += `<tr>
-      <td class="num">${i + 1}</td>
-      <td class="team-name">${t.team_name}</td>
-      <td>${t.record}</td>
-      <td class="num" style="font-weight:700">${p.era.toFixed(2)}</td>
-      <td class="num">${p.wins}</td>
-      <td class="num">${p.losses}</td>
-      <td class="num">${p.saves}</td>
-      <td class="num">${p.ip}</td>
-      <td class="num">${p.hits}</td>
-      <td class="num">${p.bb}</td>
-      <td class="num">${p.so}</td>
-      <td class="num">${p.whip.toFixed(2)}</td>
-      <td class="num">${p.hr}</td>
-    </tr>`;
+  var sorted = teams.slice().sort(function (a, b) { return a.pitching.era - b.pitching.era; });
+  var html = '<div class="stats-section"><h3>Team Pitching Statistics</h3><div class="stats-table-wrap"><table><thead><tr>' +
+    '<th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>' +
+    '<th class="num" data-sort="number">ERA</th><th class="num" data-sort="number">W</th><th class="num" data-sort="number">L</th><th class="num" data-sort="number">SV</th>' +
+    '<th class="num" data-sort="number">IP</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>' +
+    '<th class="num" data-sort="number">WHIP</th><th class="num" data-sort="number">HR</th>' +
+    '</tr></thead><tbody>';
+  sorted.forEach(function (t, i) {
+    var p = t.pitching;
+    html += '<tr><td class="num">' + (i + 1) + '</td><td class="team-name">' + t.team_name + '</td><td class="text-mono" style="font-size:0.78rem">' + t.record + '</td>' +
+      '<td class="num tabular-nums font-bold">' + p.era.toFixed(2) + '</td>' +
+      '<td class="num">' + p.wins + '</td><td class="num">' + p.losses + '</td><td class="num">' + p.saves + '</td>' +
+      '<td class="num">' + p.ip + '</td><td class="num">' + p.hits + '</td>' +
+      '<td class="num">' + p.bb + '</td><td class="num">' + p.so + '</td>' +
+      '<td class="num tabular-nums">' + p.whip.toFixed(2) + '</td><td class="num">' + p.hr + '</td></tr>';
   });
   html += '</tbody></table></div></div>';
   $('pitching-area').innerHTML = html;
   initAllSortables();
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────
 loadStandings();
 </script>
 </body>
