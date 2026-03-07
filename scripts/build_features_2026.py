@@ -322,6 +322,7 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "game_pk": int(g["game_pk"]),
             "date": pd.to_datetime(g["game_date_local"]).date(),
             "season": 2026,
+            "game_type": g.get("game_type", "R"),
             "home_mlb_id": int(g["home_mlb_id"]),
             "away_mlb_id": int(g["away_mlb_id"]),
             "home_retro": h_code,

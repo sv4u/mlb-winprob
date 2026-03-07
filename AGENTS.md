@@ -9,7 +9,8 @@
 # 1. System Overview
 
 This repository implements a research-grade, reproducible MLB win
-probability modeling platform covering seasons 2000–2026 (regular season only).
+probability modeling platform covering seasons 2000–2026 (regular season
+and spring training).
 
 The system is designed to:
 
@@ -115,6 +116,7 @@ Columns:
 -   double_header (str)
 -   game_number (int)
 -   status (str)
+- game_type (str: R=regular, S=spring training)
 
 Checksum file:
 
@@ -122,7 +124,8 @@ games\_<season>.checksum.json
 
 Includes:
 
--   row_count
+- row_count
+- game_types
 -   parquet_sha256
 -   csv_sha256
 -   raw_payloads_sha256
@@ -322,6 +325,7 @@ Implemented modules:
 8. CLI query tool (`scripts/query_game.py`)
 9. Daily automation (`scripts/update_daily.sh` + cron)
 10. EV Calculator (expected value, implied probability, edge, ROI, break-even probability, Kelly criterion; standalone page at `/tools/ev-calculator` + embedded widget on game detail pages with auto-populated model probabilities)
+11. Pre-season / spring training support (`game_type` column: `R`=regular, `S`=spring; schedule ingestion via `--include-preseason`; odds from both `baseball_mlb` and `baseball_mlb_preseason` sport keys; UI badges and caveat for pre-season predictions)
 
 Planned modules:
 

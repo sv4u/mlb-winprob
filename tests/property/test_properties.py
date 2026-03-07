@@ -42,6 +42,7 @@ def _game_dict_st() -> st.SearchStrategy[dict]:
         {
             "gamePk": _game_pk_st,
             "gameDate": st.just("2024-04-01T17:10:00Z"),
+            "gameType": st.sampled_from(["R", "S"]),
             "teams": st.fixed_dictionaries(
                 {
                     "home": st.fixed_dictionaries(

@@ -297,6 +297,13 @@ async function load() {
   document.getElementById('away-name').textContent = g.away_name;
   document.title = `${g.away_name} @ ${g.home_name} — MLB Win Prob`;
 
+  if (g.game_type === 'S') {
+    const caveat = document.createElement('div');
+    caveat.style.cssText = 'background:rgba(255,152,0,.06);border:1px solid rgba(255,152,0,.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#ff9800;line-height:1.55';
+    caveat.innerHTML = '<strong>Spring Training</strong> — This is a pre-season exhibition game. Model predictions are based on prior-season team strength and may not reflect spring roster decisions, minor-league callups, or reduced starter workloads.';
+    document.getElementById('header-sub').parentElement.insertBefore(caveat, document.getElementById('header-sub').nextSibling);
+  }
+
   const ph = g.prob_home ?? 0.5;
   const pa = 1 - ph;
   document.getElementById('home-prob').textContent = (ph*100).toFixed(1)+'%';

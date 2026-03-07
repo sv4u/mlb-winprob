@@ -196,6 +196,8 @@ def startup(model_type: str = "logistic") -> None:
             raise RuntimeError("No feature files found.  Run build_features.py first.")
         _features = pd.concat(frames, ignore_index=True)
         _features["date"] = pd.to_datetime(_features["date"], errors="coerce").dt.date
+        if "game_type" not in _features.columns:
+            _features["game_type"] = "R"
 
         from winprob.model.artifacts import latest_artifact, load_model
         from winprob.model.train import _predict_proba

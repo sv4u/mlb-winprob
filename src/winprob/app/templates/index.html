@@ -312,6 +312,11 @@ function teamColor(prob) {
   return '#4f8ef7';
 }
 
+  function gameTypeBadge(gt) {
+    if (gt === 'S') return ' <span class="badge" style="background:rgba(255,152,0,.12);color:#ff9800" title="Spring Training — predictions use prior-season strength">Spring</span>';
+    return '';
+  }
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   let seasons = [], teams = [], cv = [];
@@ -451,7 +456,7 @@ async function loadGames() {
         : '<span class="badge badge-away">AWAY WIN</span>';
     html += `<tr>
       <td>${g.date}</td>
-      <td><a href="/game/${g.game_pk}">${g.away_name} @ ${g.home_name}</a></td>
+      <td><a href="/game/${g.game_pk}">${g.away_name} @ ${g.home_name}</a>${gameTypeBadge(g.game_type)}</td>
       <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(ph*100)}%;background:${teamColor(ph)}"></div></div>${(ph*100).toFixed(1)}%</div></td>
       <td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(pa*100)}%;background:${teamColor(pa)}"></div></div>${(pa*100).toFixed(1)}%</div></td>
       <td>${result}</td>

@@ -10,14 +10,20 @@ from typing import Any
 import pandas as pd
 from zoneinfo import ZoneInfo
 
+import logging
+
 from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
 from winprob.mlbapi.schedule import (
+    ALL_GAME_TYPES,
+    GAME_TYPE_REGULAR,
     fetch_schedule_chunk,
     parse_utc_iso,
-    schedule_bounds_regular_season,
+    schedule_bounds,
 )
 from winprob.mlbapi.teams import build_team_maps, get_teams_df
 from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
+
+log = logging.getLogger(__name__)
 
 
 def month_ranges(start: date, end: date) -> list[tuple[date, date]]:
@@ -38,6 +44,7 @@ async def fetch_with_adaptive_split(
     season: int,
     start: date,
     end: date,
+    game_type: str = GAME_TYPE_REGULAR,
     max_mb: int,
     max_depth: int,
     depth: int = 0,
@@ -50,6 +57,7 @@ async def fetch_with_adaptive_split(
             season=season,
             start=start,
             end=mid,
+            game_type=game_type,
             max_mb=max_mb,
             max_depth=max_depth,
             depth=depth + 1,
@@ -59,13 +67,16 @@ async def fetch_with_adaptive_split(
             season=season,
             start=mid + timedelta(days=1),
             end=end,
+            game_type=game_type,
             max_mb=max_mb,
             max_depth=max_depth,
             depth=depth + 1,
         )
         return pd.concat([left, right], ignore_index=True)
 
-    df = await fetch_schedule_chunk(client, season=season, start_date=start, end_date=end)
+    df = await fetch_schedule_chunk(
+        client, season=season, start_date=start, end_date=end, game_type=game_type
+    )
     approx_bytes = df.memory_usage(deep=True).sum()
     if approx_bytes > max_mb * 1024 * 1024 and depth < max_depth and span_days > 1:
         mid = start + timedelta(days=span_days // 2)
@@ -74,6 +85,7 @@ async def fetch_with_adaptive_split(
             season=season,
             start=start,
             end=mid,
+            game_type=game_type,
             max_mb=max_mb,
             max_depth=max_depth,
             depth=depth + 1,
@@ -83,6 +95,7 @@ async def fetch_with_adaptive_split(
             season=season,
             start=mid + timedelta(days=1),
             end=end,
+            game_type=game_type,
             max_mb=max_mb,
             max_depth=max_depth,
             depth=depth + 1,
@@ -131,23 +144,61 @@ def add_local_times(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+async def _fetch_game_type(
+    client: MLBAPIClient,
+    *,
+    season: int,
+    game_type: str,
+    max_mb: int,
+    max_depth: int,
+) -> pd.DataFrame:
+    """Fetch all games for one (season, game_type) pair."""
+    try:
+        start, end = await schedule_bounds(
+            client, season=season, game_type=game_type
+        )
+    except RuntimeError:
+        log.info("No games for season=%d gameType=%s — skipping", season, game_type)
+        return pd.DataFrame()
+    dfs: list[pd.DataFrame] = []
+    for cs, ce in month_ranges(start, end):
+        dfs.append(
+            await fetch_with_adaptive_split(
+                client,
+                season=season,
+                start=cs,
+                end=ce,
+                game_type=game_type,
+                max_mb=max_mb,
+                max_depth=max_depth,
+            )
+        )
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+
 async def ingest_one_season(
-    *, season: int, refresh_mlbapi: bool, max_mb: int, max_depth: int
+    *,
+    season: int,
+    refresh_mlbapi: bool,
+    max_mb: int,
+    max_depth: int,
+    game_types: tuple[str, ...] = ALL_GAME_TYPES,
 ) -> dict[str, Any]:
     cfg = MLBAPIConfig(rps=5.0, burst=10.0, max_concurrency=8)
     async with MLBAPIClient(config=cfg, refresh=refresh_mlbapi) as client:
         teams_df = await get_teams_df(client, season=season)
         team_maps = build_team_maps(teams_df)
 
-        start, end = await schedule_bounds_regular_season(client, season=season)
-        dfs = []
-        for cs, ce in month_ranges(start, end):
-            dfs.append(
-                await fetch_with_adaptive_split(
-                    client, season=season, start=cs, end=ce, max_mb=max_mb, max_depth=max_depth
-                )
+        all_dfs: list[pd.DataFrame] = []
+        for gt in game_types:
+            gt_df = await _fetch_game_type(
+                client, season=season, game_type=gt, max_mb=max_mb, max_depth=max_depth
             )
-        df = pd.concat(dfs, ignore_index=True)
+            if not gt_df.empty:
+                all_dfs.append(gt_df)
+        if not all_dfs:
+            raise RuntimeError(f"No games found for season={season} types={game_types}")
+        df = pd.concat(all_dfs, ignore_index=True)
 
     # When a game is rescheduled (common in 2020) the same game_pk appears in
     # multiple monthly chunks — once as "Postponed" on the original date and
@@ -180,9 +231,13 @@ async def ingest_one_season(
 
     raw_schedule_dir = Path("data/raw/mlb_api/schedule")
     raw_files = list(raw_schedule_dir.glob("*.json"))
+    if "game_type" not in df.columns:
+        df["game_type"] = GAME_TYPE_REGULAR
+
     checksum = {
         "season": season,
         "row_count": int(len(df)),
+        "game_types": list(df["game_type"].unique()),
         "parquet_sha256": sha256_file(parquet_path),
         "csv_sha256": sha256_file(csv_path),
         "raw_payloads_sha256": sha256_aggregate_of_files(raw_files) if raw_files else None,
@@ -203,7 +258,14 @@ async def main() -> None:
     ap.add_argument("--refresh-mlbapi", action="store_true")
     ap.add_argument("--max-response-mb", type=int, default=5)
     ap.add_argument("--max-split-depth", type=int, default=4)
+    ap.add_argument(
+        "--include-preseason",
+        action="store_true",
+        help="Also ingest spring training (gameType=S) alongside regular season",
+    )
     args = ap.parse_args()
+
+    game_types = ALL_GAME_TYPES if args.include_preseason else (GAME_TYPE_REGULAR,)
 
     seasons = args.seasons or list(range(2000, 2026))
     results = []
@@ -215,6 +277,7 @@ async def main() -> None:
                     refresh_mlbapi=args.refresh_mlbapi,
                     max_mb=args.max_response_mb,
                     max_depth=args.max_split_depth,
+                    game_types=game_types,
                 )
             )
         except Exception as e:

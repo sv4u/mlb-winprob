@@ -94,7 +94,7 @@ Schema:
 Invariants:
 - `mlb_team_id` unique per season.
 
-## 3.2 Schedule (regular season only)
+## 3.2 Schedule
 
 Paths:
 - `data/processed/schedule/games_<season>.parquet`
@@ -118,10 +118,11 @@ Schema:
 | `double_header` | string | no | Stats API field |
 | `game_number` | int32? | no | DH number when present |
 | `status` | string | no | e.g., Scheduled |
+| `game_type` | string | yes | `R` = regular season, `S` = spring training |
 
 Invariants:
 - Unique `game_pk`.
-- Dataset includes only `gameType=R`.
+- Dataset includes `gameType=R` (regular season) by default. When ingested with `--include-preseason`, also includes `gameType=S` (spring training).
 
 Checksum schema (minimum):
 
@@ -129,6 +130,7 @@ Checksum schema (minimum):
 |---|---|---:|
 | `season` | int | yes |
 | `row_count` | int | yes |
+| `game_types` | list[str] | yes |
 | `parquet_sha256` | string | yes |
 | `csv_sha256` | string | yes |
 | `raw_payloads_sha256` | string\|null | yes |
@@ -271,6 +273,7 @@ Schema:
 | `game_pk` | int64 | Canonical game identifier |
 | `date` | object (`datetime.date`) | Game date (local) |
 | `season` | int64 | Season |
+| `game_type` | string | `R` = regular season, `S` = spring training |
 | `home_mlb_id`, `away_mlb_id` | int64 | MLB team IDs |
 | `home_retro`, `away_retro` | string | Retrosheet team codes |
 | `home_win` | float64 | 1.0 / 0.0 / NaN (NaN for 2026 pre-season) |
@@ -311,9 +314,11 @@ Schema:
 
 Invariants:
 
-- Total columns: 70 (66 model features + 4 identifiers + `home_win` + `feature_hash`)
+- Total columns: 71 (66 model features + 5 identifiers + `home_win` + `feature_hash`)
 - `date` column dtype is always `datetime.date` (never plain string)
+- `game_type` is `R` for regular season, `S` for spring training
 - 2026 rows have `home_win = NaN`; all 66 feature columns are populated from 2025 end-of-season team state
+- Spring training games (`game_type=S`) use the same prior-season features; model predictions carry a caveat
 
 ## 3.8 Prediction snapshots
 

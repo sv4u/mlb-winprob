@@ -35,6 +35,7 @@ def _make_schedule(*games: dict) -> pd.DataFrame:
                 "double_header": g.get("double_header", "N"),
                 "game_number": g.get("game_number", 1),
                 "status": g.get("status", "Final"),
+                "game_type": g.get("game_type", "R"),
             }
         )
     return pd.DataFrame(rows)

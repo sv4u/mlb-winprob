@@ -1,11 +1,19 @@
-# Version control — exclude .git contents but keep HEAD and packed-refs for
-# commit resolution.  Uses .git/* (not .git/) so the directory entry itself
-# stays in the build context and the walker descends into it, allowing the
-# negation patterns to re-include specific files.  .git/ would exclude the
-# directory entry, causing SkipDir before negations are evaluated (moby#31630).
+# Version control — exclude .git contents but keep HEAD, packed-refs, and
+# loose refs for commit resolution.  Uses .git/* (not .git/) so the
+# directory entry itself stays in the build context and the walker descends
+# into it, allowing the negation patterns to re-include specific files.
+# .git/ would exclude the directory entry, causing SkipDir before
+# negations are evaluated (moby#31630).
+#
+# Loose refs (e.g. .git/refs/heads/main) are needed because modern Git
+# only writes packed-refs on `git gc` / `git pack-refs`; most checkouts
+# store the current branch hash as a loose file under refs/heads/.
 .git/*
 !.git/HEAD
 !.git/packed-refs
+!.git/refs
+!.git/refs/heads
+!.git/refs/heads/*
 .gitignore
 
 # Python caches

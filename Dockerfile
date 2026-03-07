@@ -113,15 +113,22 @@ RUN uv pip install --system --no-cache grpcio-tools \
     && PYTHON=python ./scripts/gen_proto.sh
 
 # Bake the git commit hash into the image.
-# Priority: explicit --build-arg > resolve from .git/HEAD + packed-refs.
+# Priority: explicit --build-arg > loose ref > packed-refs > detached HEAD.
+# Modern Git stores branch tips as loose files under refs/heads/ and only
+# populates packed-refs on `git gc`.  We copy both so resolution works
+# regardless of the repo's pack state.
 ARG GIT_COMMIT=unknown
 COPY .git/HEA[D] .git/packed-ref[s] /tmp/gitinfo/
+COPY .git/refs/heads/ /tmp/gitinfo/refs/heads/
 RUN set -e; commit="$GIT_COMMIT"; \
     if [ "$commit" = "unknown" ] && [ -f /tmp/gitinfo/HEAD ]; then \
         ref=$(cat /tmp/gitinfo/HEAD); \
         if printf '%s' "$ref" | grep -q '^ref:'; then \
             rp=$(printf '%s' "$ref" | sed 's/^ref: //'); \
-            if [ -f /tmp/gitinfo/packed-refs ]; then \
+    loose="/tmp/gitinfo/$rp"; \
+    if [ -f "$loose" ]; then \
+    commit=$(head -c 8 "$loose"); \
+    elif [ -f /tmp/gitinfo/packed-refs ]; then \
                 commit=$(grep "$rp" /tmp/gitinfo/packed-refs | head -1 | cut -c1-8); \
             fi; \
         else commit=$(printf '%s' "$ref" | head -c 8); fi; \

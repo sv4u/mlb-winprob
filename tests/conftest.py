@@ -56,6 +56,7 @@ def schedule_df() -> pd.DataFrame:
             "double_header": ["N", "N", "N"],
             "game_number": [1, 1, 1],
             "status": ["Final", "Final", "Scheduled"],
+            "game_type": ["R", "R", "R"],
             "season": [2024, 2024, 2024],
         }
     )
@@ -72,6 +73,7 @@ def raw_schedule_response() -> dict:
                     {
                         "gamePk": 745803,
                         "gameDate": "2024-04-01T17:10:00Z",
+                        "gameType": "R",
                         "teams": {
                             "home": {"team": {"id": 111}},
                             "away": {"team": {"id": 133}},
@@ -84,6 +86,7 @@ def raw_schedule_response() -> dict:
                     {
                         "gamePk": 745804,
                         "gameDate": "2024-04-01T19:40:00Z",
+                        "gameType": "R",
                         "teams": {
                             "home": {"team": {"id": 147}},
                             "away": {"team": {"id": 139}},

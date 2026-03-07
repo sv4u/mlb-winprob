@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.the-odds-api.com/v4"
 _SPORT_MLB = "baseball_mlb"
+_SPORT_MLB_PRESEASON = "baseball_mlb_preseason"
 _REQUESTS_REMAINING_HEADER = "x-requests-remaining"
 _QUOTA_WARN = 100
 _QUOTA_CIRCUIT_BREAK = 20
@@ -216,6 +217,34 @@ class OddsClient:
                 markets=markets,
             )
         )
+
+    async def get_all_mlb_odds(
+        self,
+        regions: str = "us",
+        odds_format: str = "american",
+        markets: str = "h2h",
+    ) -> list[dict[str, Any]]:
+        """Fetch odds from both regular-season and pre-season sport keys.
+
+        Tags each event with ``sport_key`` so callers can distinguish game types.
+        Falls back gracefully if either endpoint returns nothing.
+        """
+        combined: list[dict[str, Any]] = []
+        for sport in (_SPORT_MLB, _SPORT_MLB_PRESEASON):
+            original_sport = self._sport
+            self._sport = sport
+            try:
+                events = await self.get_game_odds(
+                    regions=regions, odds_format=odds_format, markets=markets
+                )
+                for ev in events:
+                    ev.setdefault("sport_key", sport)
+                combined.extend(events)
+            except Exception:
+                logger.warning("Failed to fetch odds for sport=%s", sport)
+            finally:
+                self._sport = original_sport
+        return combined
 
     def events_to_retro(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Add home_team_retro and away_team_retro to each event (in-place)."""

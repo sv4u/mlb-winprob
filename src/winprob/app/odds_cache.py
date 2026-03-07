@@ -82,7 +82,7 @@ async def get_cached_odds() -> list[dict[str, Any]]:
         stale = list(_cached_events)
         try:
             client = OddsClient()
-            events = await client.get_game_odds()
+            events = await client.get_all_mlb_odds()
             _cached_events = events
             _cache_ts = time.monotonic()
             logger.info("Odds cache refreshed: %d events", len(events))
