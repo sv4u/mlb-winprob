@@ -153,6 +153,8 @@ EXPOSE 8087 50051
 ENV MODEL=stacked \
     PORT=8087 \
     GRPC_PORT=50051 \
-    WINPROB_GRPC_ENABLED=1
+    WINPROB_GRPC_ENABLED=1 \
+    OLLAMA_HOST=http://localhost:11434 \
+    OLLAMA_CHAT_MODEL=llama3.1:8b
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

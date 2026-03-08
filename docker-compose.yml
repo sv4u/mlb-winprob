@@ -10,7 +10,7 @@
 #
 # Environment overrides (prefix with `MODEL=xgboost docker compose up`)
 #   MODEL  — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
-#   PORT   — host port to expose the dashboard on (default: 8087)
+#   PORT   — host port to expose the dashboard on (default: 30087)
 #
 # Data persistence
 # ----------------
@@ -21,10 +21,10 @@
 #
 # Chat / LLM
 # -----------
-# The chat feature requires the Ollama service below.  On first start, pull
-# the default model:
-#   docker exec mlb-ollama ollama pull qwen2.5:7b
-# The model is persisted in the ollama_data volume across restarts.
+# The ollama-init service automatically pulls the chat models on first start.
+# Models are persisted in the ollama_data volume across restarts — subsequent
+# starts skip the download.  Default: llama3.1:8b (primary), mistral:7b (alt).
+# Override via OLLAMA_CHAT_MODEL / OLLAMA_CHAT_MODEL_ALT env vars.
 # =============================================================================
 
 services:
@@ -37,7 +37,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
-    mem_limit: 6g
+    mem_limit: 8g
     cpus: 6
     healthcheck:
       test: ["CMD", "ollama", "list"]
@@ -45,6 +45,30 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Ollama init — auto-pull chat models (runs once, then exits)
+  #
+  # On first start this downloads the models (~5 GB each).  The ollama_data
+  # volume caches them so subsequent starts complete in seconds.
+  # ---------------------------------------------------------------------------
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: mlb-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[ollama-init] Pulling primary chat model (llama3.1:8b)..."
+        ollama pull ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
+        echo "[ollama-init] Pulling alternative chat model (mistral:7b)..."
+        ollama pull ${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}
+        echo "[ollama-init] All chat models ready."
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # Win Probability dashboard
@@ -60,6 +84,8 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     ports:
       - "${PORT:-30087}:30087"
     volumes:
@@ -70,11 +96,12 @@ services:
       MODEL: "${MODEL:-stacked}"
       PORT: "30087"
       OLLAMA_HOST: "http://ollama:11434"
-      OLLAMA_CHAT_MODEL: "qwen2.5:7b"
+      OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-llama3.1:8b}"
+      OLLAMA_CHAT_MODEL_ALT: "${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}"
       WINPROB_VERBOSE: true
       WINPROB_LOG_LEVEL: "DEBUG"
       WINPROB_LOG_FORMAT: "human"
-    restart: no
+    restart: unless-stopped
     mem_limit: 2g
     cpus: 2
     healthcheck:

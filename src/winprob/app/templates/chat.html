@@ -164,6 +164,12 @@
       <div id="chat-status" class="chat-status">
         <span class="dot"></span>
         <span id="chat-status-text">Checking…</span>
+        <select id="llm-model-select" title="Chat LLM model"
+          style="margin-left:auto;font-size:0.78rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);">
+          <option value="">Default</option>
+          <option value="llama3.1:8b">Llama 3.1 8B</option>
+          <option value="mistral:7b">Mistral 7B</option>
+        </select>
       </div>
       <div id="chat-messages" class="chat-messages"></div>
       <div class="chat-input-row">
@@ -180,6 +186,7 @@
       const sendBtn = document.getElementById('chat-send');
       const statusEl = document.getElementById('chat-status');
       const statusText = document.getElementById('chat-status-text');
+      const llmSelect = document.getElementById('llm-model-select');
       let sessionId = 'web-' + Math.random().toString(36).slice(2, 10);
       let streaming = false;
 
@@ -228,7 +235,7 @@
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, session_id: sessionId })
+            body: JSON.stringify({ message: text, session_id: sessionId, model: llmSelect.value || undefined })
           });
           if (!res.ok) {
             bubble.textContent = 'Request failed: ' + res.status;

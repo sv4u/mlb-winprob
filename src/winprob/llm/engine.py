@@ -21,7 +21,7 @@ from winprob.llm.tools import TOOL_SCHEMAS, run_tool
 logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-_DEFAULT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "qwen2.5:3b")
+_DEFAULT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "llama3.1:8b")
 _MAX_SESSION_MESSAGES = 20
 _MAX_SESSIONS = 50
 _MAX_TOOL_ROUNDS = 2

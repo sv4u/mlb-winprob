@@ -17,7 +17,7 @@ from winprob.llm.engine import ChatEngine
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "qwen2.5:3b")
+_DEFAULT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "llama3.1:8b")
 
 # Single shared engine (session store is in-process)
 _engine: ChatEngine | None = None
