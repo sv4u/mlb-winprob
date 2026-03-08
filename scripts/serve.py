@@ -6,7 +6,7 @@ WINPROB_GRPC_ENABLED=0 or use --no-grpc to run pure FastAPI (fallback mode).
 
 Usage
 -----
-    python scripts/serve.py                   # default: localhost:8087, gRPC :50051
+    python scripts/serve.py                   # default: localhost:30087, gRPC :50051
     python scripts/serve.py --port 9000       # custom HTTP port
     python scripts/serve.py --no-grpc         # disable gRPC (pure FastAPI)
     python scripts/serve.py --model xgboost   # use a different model type
@@ -23,7 +23,7 @@ Background / daemon
     # Kill the server
     kill $(cat server.pid)              # graceful
     kill -9 $(cat server.pid)           # force
-    kill $(lsof -ti:8087)              # by port
+    kill $(lsof -ti:30087)              # by port
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def main() -> None:
     """Parse arguments, configure logging, and start the Uvicorn server."""
     ap = argparse.ArgumentParser(description="Start the MLB Win Probability dashboard.")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8087)
+    ap.add_argument("--port", type=int, default=30087)
     ap.add_argument(
         "--no-grpc",
         action="store_true",

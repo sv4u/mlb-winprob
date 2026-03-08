@@ -5,7 +5,11 @@
 # Format: minute hour dom month dow command
 
 # 01:00 UTC — re-ingest yesterday's results and rebuild current-season features
-0 1 * * * /app/docker/ingest_daily.sh >> /app/logs/ingest_daily.log 2>&1
+# Logs are truncated to the latest 50 MB to prevent unbounded disk growth.
+# pipefail ensures supercronic sees a non-zero exit if the script fails.
+0 1 * * * bash -o pipefail -c '/app/docker/ingest_daily.sh 2>&1 | tail -c 50000000 > /app/logs/ingest_daily.log'
 
 # 20:00 UTC — retrain all models on the freshest data
-0 20 * * * /app/docker/retrain_daily.sh >> /app/logs/retrain_daily.log 2>&1
+# Logs are truncated to the latest 50 MB to prevent unbounded disk growth.
+# pipefail ensures supercronic sees a non-zero exit if the script fails.
+0 20 * * * bash -o pipefail -c '/app/docker/retrain_daily.sh 2>&1 | tail -c 50000000 > /app/logs/retrain_daily.log'

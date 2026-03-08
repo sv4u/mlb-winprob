@@ -48,7 +48,7 @@
    - Per-season `run_metrics.parquet` and global metrics log
 
 7. **Serving Layer** — web dashboard + CLI
-   - FastAPI / Jinja2 web dashboard (port 8087)
+   - FastAPI / Jinja2 web dashboard (port 30087)
    - Human-centric CLI query tool (`scripts/query_game.py`)
 
 ---

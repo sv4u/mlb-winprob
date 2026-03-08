@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# retrain_daily.sh — daily model retrain (runs at 23:00 UTC via supercronic)
+# retrain_daily.sh — daily model retrain (runs at 20:00 UTC via supercronic)
 #
 # Retrains the full production model stack on the freshest available data,
 # then restarts the web server to load the new artifacts.

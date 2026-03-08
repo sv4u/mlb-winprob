@@ -215,7 +215,11 @@ async def api_health(request: Request) -> dict | JSONResponse:
             return _grpc_dict(r)
         except grpc.RpcError as e:
             return _grpc_error_to_response(e)
-    return {"ready": is_ready(), "version": "3.0"}
+    ready = is_ready()
+    payload = {"ready": ready, "version": "3.0"}
+    if not ready:
+        return JSONResponse(payload, status_code=503)
+    return payload
 
 
 @app.get("/api/version", response_model=None)

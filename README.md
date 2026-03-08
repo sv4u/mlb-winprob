@@ -237,7 +237,7 @@ python scripts/train_model.py --models logistic xgboost stacked
 ### Launch the web dashboard
 
 ```bash
-python scripts/serve.py                   # default: stacked ensemble, http://localhost:8087
+python scripts/serve.py                   # default: stacked ensemble, http://localhost:30087
 python scripts/serve.py --model xgboost   # use XGBoost model
 python scripts/serve.py --model catboost  # use CatBoost model
 python scripts/serve.py --model mlp       # use MLP (neural network) model
@@ -245,11 +245,11 @@ python scripts/serve.py --model mlp       # use MLP (neural network) model
 
 Open:
 
-- `http://localhost:8087` — all-seasons games browser
-- `http://localhost:8087/season/2026` — 2026 schedule and predictions
-- `http://localhost:8087/standings` — predicted vs actual standings with team stats
-- `http://localhost:8087/dashboard` — admin dashboard (update season, full reingest, retrain, system status)
-- `http://localhost:8087/sitemap` — complete page and API index
+- `http://localhost:30087` — all-seasons games browser
+- `http://localhost:30087/season/2026` — 2026 schedule and predictions
+- `http://localhost:30087/standings` — predicted vs actual standings with team stats
+- `http://localhost:30087/dashboard` — admin dashboard (update season, full reingest, retrain, system status)
+- `http://localhost:30087/sitemap` — complete page and API index
 
 ### CLI query tool
 
@@ -301,10 +301,10 @@ kill $(cat server.pid)
 kill -9 $(cat server.pid)
 
 # Stop by port number (no PID file needed)
-kill $(lsof -ti:8087)
+kill $(lsof -ti:30087)
 
 # Force stop by port number
-kill -9 $(lsof -ti:8087)
+kill -9 $(lsof -ti:30087)
 
 # Stop all uvicorn/serve.py processes
 pkill -f "serve.py"
@@ -313,7 +313,7 @@ pkill -f "serve.py"
 ### Restart the server
 
 ```bash
-kill $(lsof -ti:8087) 2>/dev/null; sleep 2
+kill $(lsof -ti:30087) 2>/dev/null; sleep 2
 nohup python scripts/serve.py >> logs/server.log 2>&1 &
 echo $! > server.pid
 ```
@@ -322,7 +322,7 @@ echo $! > server.pid
 
 ```bash
 # Is the server running?
-lsof -i:8087
+lsof -i:30087
 
 # Tail the server log
 tail -f logs/server.log
@@ -432,7 +432,7 @@ The entire workflow — data ingestion, model training, web server, and schedule
 docker compose up --build
 
 # 2. Open the dashboard (once the bootstrap is complete)
-open http://localhost:8087
+open http://localhost:30087
 ```
 
 > **First-run notice**: On a cold start (no `data/` directory on the host) the container runs the full bootstrap pipeline — ingesting 25+ years of historical data and training all 6 models. **This can take several hours.** Subsequent starts are fast because the data volume persists on the host.
@@ -458,7 +458,7 @@ docker compose up -d                 # start again
 | Variable | Default   | Description |
 | -------- | --------- | ----------- |
 | `MODEL`  | `stacked` | Model served: `logistic \| lightgbm \| xgboost \| catboost \| mlp \| stacked` |
-| `PORT`   | `8087`    | Host port the dashboard is exposed on |
+| `PORT`   | `30087`   | Host port the dashboard is exposed on |
 
 ```bash
 # Serve on port 9000 with the XGBoost model
@@ -473,7 +473,7 @@ To enable live game and futures odds from [The Odds API](https://the-odds-api.co
 - **Admin dashboard:** Dashboard → “Live Odds API Key” → enter key → Save (writes `data/processed/odds/config.json`)
 - **Config file:** Create `data/processed/odds/config.json` with `{"api_key": "your-key"}` (the `data/` directory is git-ignored)
 
-Without a key, the app runs normally; odds features are simply unavailable. See the [Wiki → Data Sources → Live Odds](http://localhost:8087/wiki#ds-live-odds) for full instructions.
+Without a key, the app runs normally; odds features are simply unavailable. See the [Wiki → Data Sources → Live Odds](http://localhost:30087/wiki#ds-live-odds) for full instructions.
 
 ### Force a full re-bootstrap
 
@@ -492,7 +492,7 @@ The container runs two cron jobs via `supercronic`:
 | Schedule   | Script                      | What it does |
 | ---------- | --------------------------- | ------------ |
 | 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs (incl. spring training), rebuild 119-feature matrix and spring features, restart server |
-| 23:00 UTC  | `docker/retrain_daily.sh`   | Retrain all 6 models on fresh data, restart server |
+| 20:00 UTC  | `docker/retrain_daily.sh`   | Retrain all 6 models on fresh data, restart server |
 
 Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on the host.
 
@@ -519,7 +519,7 @@ All data is accessible on the host machine at all times. The container itself is
 
 ```bash
 docker build -t mlb-winprob .
-docker run -p 8087:8087 \
+docker run -p 30087:30087 \
     -v "$(pwd)/data:/app/data" \
     -v "$(pwd)/logs:/app/logs" \
     -e MODEL=stacked \
@@ -535,7 +535,7 @@ The CI pipeline automatically builds and publishes the production image to GHCR 
 docker pull ghcr.io/sv4u/mlb-winprob:main
 
 # Run directly from GHCR (no local build needed)
-docker run -p 8087:8087 \
+docker run -p 30087:30087 \
     -v "$(pwd)/data:/app/data" \
     -v "$(pwd)/logs:/app/logs" \
     ghcr.io/sv4u/mlb-winprob:main
@@ -666,21 +666,21 @@ print(dfh.groupby(pd.cut(dfh["prob"].clip(0.5, 0.99), 5))["fav_won"].mean())
 
 ## Web dashboard
 
-Start the dashboard with `python scripts/serve.py`, then open `http://localhost:8087`.
+Start the dashboard with `python scripts/serve.py`, then open `http://localhost:30087`.
 
 ### Pages
 
 | URL | Description |
 | --- | --- |
-| `http://localhost:8087/` | All-seasons games browser (2000–2026) |
-| `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, standings summary, and Elo power rankings |
-| `http://localhost:8087/standings` | Predicted vs actual divisional standings, league leaders, team batting and pitching stats |
-| `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution and embedded EV calculator |
-| `http://localhost:8087/tools/ev-calculator` | Expected value calculator for sports bets (American, decimal, fractional odds; edge, ROI, Kelly criterion) |
-| `http://localhost:8087/wiki` | Technical wiki: models, data sources, features, training pipeline |
-| `http://localhost:8087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
-| `http://localhost:8087/sitemap` | Complete index of all pages and API endpoints |
-| `http://localhost:8087/sitemap.xml` | XML sitemap for search engine crawlers |
+| `http://localhost:30087/` | All-seasons games browser (2000–2026) |
+| `http://localhost:30087/season/2026` | 2026 schedule, pre-season predictions, standings summary, and Elo power rankings |
+| `http://localhost:30087/standings` | Predicted vs actual divisional standings, league leaders, team batting and pitching stats |
+| `http://localhost:30087/game/{game_pk}` | Individual game detail with SHAP feature attribution and embedded EV calculator |
+| `http://localhost:30087/tools/ev-calculator` | Expected value calculator for sports bets (American, decimal, fractional odds; edge, ROI, Kelly criterion) |
+| `http://localhost:30087/wiki` | Technical wiki: models, data sources, features, training pipeline |
+| `http://localhost:30087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
+| `http://localhost:30087/sitemap` | Complete index of all pages and API endpoints |
+| `http://localhost:30087/sitemap.xml` | XML sitemap for search engine crawlers |
 
 ### Features
 

@@ -59,8 +59,9 @@ RUN curl -fsSL \
 
 # ---------------------------------------------------------------------------
 # uv — fast Python package installer (10-100x faster than pip)
+# Pinned to a specific version for reproducible builds (AGENTS.md §2 rule 1).
 # ---------------------------------------------------------------------------
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.8 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -108,9 +109,9 @@ COPY docker/  docker/
 COPY proto/   proto/
 
 # Proto codegen — generate gRPC stubs (grpcio-tools required at build time).
-# grpcio-tools left installed; uv pip uninstall has no non-interactive flag in this image.
 RUN uv pip install --system --no-cache grpcio-tools \
-    && PYTHON=python ./scripts/gen_proto.sh
+    && PYTHON=python ./scripts/gen_proto.sh \
+    && uv pip uninstall --system grpcio-tools
 
 # Bake the git commit hash into the image.
 # Priority: explicit --build-arg > loose ref > packed-refs > detached HEAD.
@@ -148,10 +149,10 @@ RUN mkdir -p data/raw data/processed data/processed/statcast_player \
 
 VOLUME ["/app/data", "/app/logs"]
 
-EXPOSE 8087 50051
+EXPOSE 30087 50051
 
 ENV MODEL=stacked \
-    PORT=8087 \
+    PORT=30087 \
     GRPC_PORT=50051 \
     WINPROB_GRPC_ENABLED=1 \
     OLLAMA_HOST=http://localhost:11434 \

@@ -150,7 +150,7 @@ async def test_xml_sitemap_contains_expected_paths() -> None:
         "root_path": "",
         "headers": [(b"host", b"localhost")],
         "query_string": b"",
-        "server": ("localhost", 8087),
+        "server": ("localhost", 30087),
     }
     req = Request(scope)
     resp = await xml_sitemap(req)

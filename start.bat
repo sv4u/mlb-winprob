@@ -17,7 +17,7 @@ REM ============================================================================
 setlocal enabledelayedexpansion
 
 set "MODEL=stacked"
-set "PORT=8087"
+set "PORT=30087"
 set "REBUILD=false"
 set "ACTION=start"
 
@@ -211,6 +211,6 @@ echo   --stop          Stop running containers
 echo   --status        Show container status
 echo   --rebuild       Force rebuild the Docker image
 echo   --model TYPE    Model type: logistic^|lightgbm^|xgboost^|catboost^|mlp^|stacked (default: stacked)
-echo   --port PORT     Host port (default: 8087)
+echo   --port PORT     Host port (default: 30087)
 echo   -h, --help      Show this help
 goto :eof

@@ -10,7 +10,9 @@ PROTO_DIR="$REPO_ROOT/proto"
 OUT_DIR="$REPO_ROOT/src/winprob/grpc/generated"
 
 # Prefer uv run python so project dev deps (grpcio-tools) are used
-if command -v uv >/dev/null 2>&1 && uv run python -c "import grpc_tools.protoc" 2>/dev/null; then
+if [ -n "${PYTHON:-}" ]; then
+  : # PYTHON already set by caller (e.g. Dockerfile)
+elif command -v uv >/dev/null 2>&1 && uv run python -c "import grpc_tools.protoc" 2>/dev/null; then
   PYTHON="uv run python"
 elif ! python -c "import grpc_tools.protoc" 2>/dev/null; then
   echo "grpcio-tools not installed. Run: uv pip install -e '.[dev]' or pip install -e '.[dev]'" >&2

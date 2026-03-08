@@ -39,6 +39,11 @@ services:
     restart: unless-stopped
     mem_limit: 8g
     cpus: 6
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+          cpus: "6"
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s
@@ -106,8 +111,13 @@ services:
     restart: unless-stopped
     mem_limit: 2g
     cpus: 2
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:30087/api/seasons"]
+      test: ["CMD", "curl", "-f", "http://localhost:30087/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5

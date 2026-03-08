@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 MODEL="${MODEL:-stacked}"
-PORT="${PORT:-8087}"
+PORT="${PORT:-30087}"
 REBUILD=false
 ACTION="start"
 
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --status        Show container status"
       echo "  --rebuild       Force rebuild the Docker image"
       echo "  --model TYPE    Model type: logistic|lightgbm|xgboost|catboost|mlp|stacked (default: stacked)"
-      echo "  --port PORT     Host port (default: 8087)"
+      echo "  --port PORT     Host port (default: 30087)"
       echo "  -h, --help      Show this help"
       exit 0
       ;;

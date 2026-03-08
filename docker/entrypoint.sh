@@ -7,7 +7,7 @@
 #      bootstrap pipeline (ingest all historical data + train every model).
 #      This can take several hours on a cold first run.
 #   2. Start supervisord, which launches:
-#        - winprob-server  (uvicorn FastAPI dashboard, port 8087)
+#        - winprob-server  (uvicorn FastAPI dashboard, port 30087)
 #        - cron            (supercronic executing docker/crontab)
 #
 # Skip the bootstrap by pre-populating ./data on the host before the first
@@ -19,7 +19,7 @@ set -euo pipefail
 cd /app
 
 export MODEL="${MODEL:-stacked}"
-export PORT="${PORT:-8087}"
+export PORT="${PORT:-30087}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,8 +91,10 @@ else
         run_step "Build spring training features (all seasons)" \
             python scripts/build_spring_features.py
 
-        run_step "Build 2026 pre-season features" \
-            python scripts/build_features_2026.py
+        if [ "$YEAR" = "2026" ] && [ -f scripts/build_features_2026.py ]; then
+            run_step "Build 2026 pre-season features" \
+                python scripts/build_features_2026.py
+        fi
 
         run_step "Train all models (logistic, lightgbm, xgboost, catboost, mlp, stacked)" \
             python scripts/train_model.py --models logistic lightgbm xgboost catboost mlp stacked

@@ -23,7 +23,7 @@
 # -----------
 # REPO   — absolute path to the project root (default: directory of this script)
 # PYTHON — python3 binary to use (default: pyenv version in .python-version)
-# PORT   — dashboard port (default: 8087)
+# PORT   — dashboard port (default: 30087)
 # MODEL  — model type: logistic | lightgbm | xgboost (default: xgboost)
 # =============================================================================
 
@@ -34,7 +34,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PYTHON="${PYTHON:-/Users/sasank.vishnubhatla/.pyenv/versions/3.11.14/bin/python3}"
-PORT="${PORT:-8087}"
+PORT="${PORT:-30087}"
 MODEL="${MODEL:-stacked}"
 LOG_DIR="$REPO/logs"
 PID_FILE="$REPO/server.pid"
@@ -107,8 +107,10 @@ run "Build $YEAR spring training features" \
 #    During the 2026 season this updates predictions game-by-game using the
 #    end-of-last-game team state; before the season it uses 2025 end-of-year.
 # ---------------------------------------------------------------------------
-run "Build 2026 pre-season features" \
-    "$PYTHON" scripts/build_features_2026.py
+if [ "$YEAR" = "2026" ] && [ -f scripts/build_features_2026.py ]; then
+    run "Build 2026 pre-season features" \
+        "$PYTHON" scripts/build_features_2026.py
+fi
 
 # ---------------------------------------------------------------------------
 # 7. Restart the web server

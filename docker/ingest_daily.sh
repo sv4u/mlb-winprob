@@ -45,8 +45,10 @@ run_step "Rebuild $YEAR feature matrix (incl. Statcast, Vegas, weather)" \
 run_step "Build $YEAR spring training features" \
     python scripts/build_spring_features.py --seasons "$YEAR"
 
-run_step "Rebuild 2026 pre-season features" \
-    python scripts/build_features_2026.py
+if [ "$YEAR" = "2026" ] && [ -f scripts/build_features_2026.py ]; then
+    run_step "Rebuild 2026 pre-season features" \
+        python scripts/build_features_2026.py
+fi
 
 # Write a timestamp marker so the dashboard can show last-ingest time
 date -u '+%Y-%m-%dT%H:%M:%SZ' > /app/data/processed/.last_ingest
