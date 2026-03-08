@@ -1,4 +1,7 @@
 {
-  "ready": false,
-  "version": "3.0"
+  "_status": 503,
+  "body": {
+    "ready": false,
+    "version": "3.0"
+  }
 }
