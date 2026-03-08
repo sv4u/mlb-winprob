@@ -71,6 +71,9 @@ services:
       PORT: "30087"
       OLLAMA_HOST: "http://ollama:11434"
       OLLAMA_CHAT_MODEL: "qwen2.5:7b"
+      WINPROB_VERBOSE: true
+      WINPROB_LOG_LEVEL: "DEBUG"
+      WINPROB_LOG_FORMAT: "human"
     restart: no
     mem_limit: 2g
     cpus: 2
