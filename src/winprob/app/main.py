@@ -46,6 +46,7 @@ from winprob.app.data_cache import (
     try_startup,
 )
 from winprob.app.timing import TimingMiddleware, timed_operation
+from winprob.mcp import create_mcp_app
 from winprob.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
@@ -129,8 +130,6 @@ async def _lifespan(app: FastAPI):
 
 
 # MCP server (Streamable HTTP) — same process as web UI; mount at /mcp for Cursor/home network
-from winprob.mcp import create_mcp_app
-
 _mcp_app = create_mcp_app()
 
 
