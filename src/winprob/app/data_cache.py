@@ -198,8 +198,12 @@ def startup(model_type: str = "logistic") -> None:
         _features["date"] = pd.to_datetime(_features["date"], errors="coerce").dt.date
         if "game_type" not in _features.columns:
             _features["game_type"] = "R"
+        else:
+            _features["game_type"] = _features["game_type"].fillna("R")
         if "is_spring" not in _features.columns:
             _features["is_spring"] = 0.0
+        else:
+            _features["is_spring"] = _features["is_spring"].fillna(0.0)
 
         from winprob.model.artifacts import latest_artifact, load_model
         from winprob.model.train import _predict_proba

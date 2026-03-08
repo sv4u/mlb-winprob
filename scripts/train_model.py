@@ -147,6 +147,7 @@ def main() -> None:
                 model_type=mt,
                 n_trials=args.hpo_trials,
                 model_dir=args.model_dir,
+                spring_weight=args.spring_weight,
             )
             print(f"  Best {mt} params: {best}")
             if mt == "lightgbm":

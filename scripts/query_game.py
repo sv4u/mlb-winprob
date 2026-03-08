@@ -151,11 +151,18 @@ def _load_features(season: int | None = None) -> pd.DataFrame:
         path = feat_dir / f"features_{season}.parquet"
         if not path.exists():
             sys.exit(f"No feature data for season {season}.  Run build_features.py first.")
-        return pd.read_parquet(path)
-    frames = [pd.read_parquet(f) for f in sorted(feat_dir.glob("features_*.parquet"))]
-    df = pd.concat(frames, ignore_index=True)
+        df = pd.read_parquet(path)
+    else:
+        frames = [pd.read_parquet(f) for f in sorted(feat_dir.glob("features_*.parquet"))]
+        df = pd.concat(frames, ignore_index=True)
     if "is_spring" not in df.columns:
         df["is_spring"] = 0.0
+    else:
+        df["is_spring"] = df["is_spring"].fillna(0.0)
+    if "game_type" not in df.columns:
+        df["game_type"] = "R"
+    else:
+        df["game_type"] = df["game_type"].fillna("R")
     return df
 
 

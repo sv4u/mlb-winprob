@@ -154,11 +154,12 @@ _AWAY_COL_MAP: dict[str, str] = {
 }
 
 
-def _build_mlb_to_retro() -> dict[int, str]:
+def _build_mlb_to_retro(processed_dir: Path | None = None) -> dict[int, str]:
     """MLB team ID -> Retrosheet code, preferring the most recent valid entry."""
-    if not _TEAM_MAP.exists():
+    team_map = (processed_dir or _PROCESSED) / "team_id_map_retro_to_mlb.csv"
+    if not team_map.exists():
         return {}
-    tm = pd.read_csv(_TEAM_MAP)
+    tm = pd.read_csv(team_map)
     tm = tm.sort_values("valid_to_season").drop_duplicates("mlb_team_id", keep="last")
     return dict(zip(tm["mlb_team_id"].astype(int), tm["retro_team_code"]))
 
@@ -179,20 +180,55 @@ def _extract_state_from_role(
     return result
 
 
+def _last_game_dates(
+    features_all: pd.DataFrame,
+    team_col: str,
+) -> dict[str, object]:
+    """Return the date of each team's chronologically last game in a given role."""
+    tmp = features_all.copy()
+    tmp["_date"] = pd.to_datetime(tmp["date"], errors="coerce").dt.date
+    return (
+        tmp.dropna(subset=["_date"])
+        .sort_values("_date")
+        .groupby(team_col)["_date"]
+        .last()
+        .to_dict()
+    )
+
+
 def _build_team_state(features_all: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """Merge home- and away-role states into a single per-team dict."""
+    """Merge home- and away-role states into a single per-team dict.
+
+    For role-agnostic stats (Elo, rolling win pct, pitcher metrics, etc.),
+    the value from whichever role had the more recent game is preferred so
+    that prior-season carry-forward uses the freshest team state.
+    Role-specific splits (home-only, away-only) always come from their
+    respective roles.
+    """
     home_states = _extract_state_from_role(features_all, "home_retro", _HOME_COL_MAP)
     away_states = _extract_state_from_role(features_all, "away_retro", _AWAY_COL_MAP)
+    home_dates = _last_game_dates(features_all, "home_retro")
+    away_dates = _last_game_dates(features_all, "away_retro")
     teams = set(home_states) | set(away_states)
     merged: dict[str, dict[str, float]] = {}
     for team in teams:
         h = home_states.get(team, {})
         a = away_states.get(team, {})
+        h_date = home_dates.get(team)
+        a_date = away_dates.get(team)
+        away_more_recent = a_date is not None and (h_date is None or a_date > h_date)
         state: dict[str, float] = {}
         for key in set(h) | set(a):
             h_val = h.get(key, np.nan)
             a_val = a.get(key, np.nan)
-            state[key] = h_val if not np.isnan(h_val) else a_val
+            h_ok = not np.isnan(h_val)
+            a_ok = not np.isnan(a_val)
+            if h_ok and a_ok:
+                state[key] = a_val if away_more_recent else h_val
+            elif h_ok:
+                state[key] = h_val
+            else:
+                state[key] = a_val
         state["win_pct_home_only"] = h.get("win_pct_home_only", np.nan)
         state["pythag_home_only"] = h.get("pythag_home_only", np.nan)
         state["win_pct_away_only"] = a.get("win_pct_away_only", np.nan)
@@ -242,6 +278,8 @@ def _build_game_row(
     away_score = g.get("away_score")
     if pd.isna(home_score) or pd.isna(away_score):
         return None
+    if int(home_score) == int(away_score):
+        return None
 
     h_code = mlb_to_retro.get(int(g["home_mlb_id"]), "")
     a_code = mlb_to_retro.get(int(g["away_mlb_id"]), "")
@@ -275,6 +313,7 @@ def _build_game_row(
         "away_mlb_id": int(g["away_mlb_id"]),
         "home_retro": h_code,
         "away_retro": a_code,
+        "game_type": "S",
         "home_win": float(int(home_score) > int(away_score)),
         "is_spring": 1.0,
         # Elo
@@ -422,12 +461,14 @@ def build_spring_features_for_season(
     team_state: dict[str, dict[str, float]],
     park_factors: dict[str, float],
     mlb_to_retro: dict[int, str],
+    processed_dir: Path | None = None,
 ) -> pd.DataFrame | None:
     """Build spring training features for a single season.
 
     Returns None if no completed spring training games are found.
     """
-    sched_path = _PROCESSED / "schedule" / f"games_{season}.parquet"
+    base = processed_dir or _PROCESSED
+    sched_path = base / "schedule" / f"games_{season}.parquet"
     if not sched_path.exists():
         log.info("  %d: schedule not found — skipping", season)
         return None
@@ -505,7 +546,7 @@ def main() -> None:
     team_state_by_season: dict[int, dict[str, dict[str, float]]] = {}
     park_factors_by_season: dict[int, dict[str, float]] = {}
 
-    mlb_to_retro = _build_mlb_to_retro()
+    mlb_to_retro = _build_mlb_to_retro(processed_dir=args.processed_dir)
 
     results = []
     for season in seasons:
@@ -523,7 +564,12 @@ def main() -> None:
         park_factors = park_factors_by_season[prior_season]
 
         df = build_spring_features_for_season(
-            season, features_all, team_state, park_factors, mlb_to_retro
+            season,
+            features_all,
+            team_state,
+            park_factors,
+            mlb_to_retro,
+            processed_dir=args.processed_dir,
         )
 
         if df is None or df.empty:

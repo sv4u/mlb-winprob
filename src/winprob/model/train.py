@@ -436,6 +436,7 @@ def run_optuna_hpo(
     n_trials: int = 200,
     eval_seasons: list[int] | None = None,
     model_dir: Path = Path("data/models"),
+    spring_weight: float = _DEFAULT_SPRING_WEIGHT,
 ) -> dict[str, Any]:
     """Find optimal hyperparameters via Optuna on a subset of expanding seasons.
 
@@ -515,7 +516,7 @@ def run_optuna_hpo(
                 train_df,
                 feature_cols=feat_cols,
                 time_decay=time_decay,
-                spring_weight=_DEFAULT_SPRING_WEIGHT,
+                spring_weight=spring_weight,
             )
             eval_df = season_dfs[eval_s]
             eval_clean = eval_df.dropna(subset=feat_cols + ["home_win"])
