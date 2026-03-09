@@ -27,6 +27,7 @@ services:
   # ---------------------------------------------------------------------------
   mlb-predict:
     image: ${COMPOSE_IMAGE:-ghcr.io/sv4u/mlb-predict:main}
+    platform: linux/amd64
     container_name: mlb-predict
     ports:
       - "${PORT:-30087}:30087"
@@ -34,14 +35,14 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
-      GIT_COMMIT: "${GIT_COMMIT:-unknown}"
       MODEL: "${MODEL:-stacked}"
       PORT: "30087"
       MLB_PREDICT_VERBOSE: true
       MLB_PREDICT_LOG_LEVEL: "DEBUG"
       MLB_PREDICT_LOG_FORMAT: "human"
       MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
-    restart: unless-stopped
+    restart: no
+    pull_policy: always
     mem_limit: ${MEM_LIMIT:-1536m}
     cpus: ${CPUS:-2}
     deploy:

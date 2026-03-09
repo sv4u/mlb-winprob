@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
@@ -53,16 +54,30 @@ def save_model(
     return out_dir
 
 
+def _register_winprob_compat() -> None:
+    """Register sys.modules so pickles saved as 'winprob.*' resolve to mlb_predict.*."""
+    if "winprob" in sys.modules:
+        return
+    # Ensure top-level package is loaded so getattr(winprob, 'model') etc. work
+    import mlb_predict  # noqa: F401
+
+    sys.modules["winprob"] = sys.modules["mlb_predict"]
+
+
 def load_model(artifact_dir: Path) -> tuple[Any, ModelMetadata]:
     """Load a model and its metadata from *artifact_dir*.
 
     Handles legacy metadata that used ``train_brier`` instead of
     ``eval_brier`` by mapping the old field name.
 
+    Supports models pickled when the package was named ``winprob`` by
+    registering ``winprob`` -> ``mlb_predict`` in sys.modules before load.
+
     Returns
     -------
     tuple[model, ModelMetadata]
     """
+    _register_winprob_compat()
     model = joblib.load(artifact_dir / "model.joblib")
     raw = json.loads((artifact_dir / "metadata.json").read_text(encoding="utf-8"))
     # Legacy compat: old artifacts have train_brier but not eval_brier
