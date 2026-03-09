@@ -1,4 +1,4 @@
-"""Tests for winprob.mlbapi.client.MLBAPIClient."""
+"""Tests for mlb_predict.mlbapi.client.MLBAPIClient."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from aioresponses import aioresponses as aioresponses_ctx
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.client import (
+from mlb_predict.mlbapi.client import (
     MLBAPIClient,
     MLBAPIConfig,
     MLBAPIError,

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## MLB Win Probability Modeling System
+## MLB Prediction System
 
 ### Full Engineering Specification (v3)
 
@@ -48,7 +48,7 @@ All agents must preserve the following invariants:
 
 ## 3.1 MLB Stats API Wrapper
 
-Location: src/winprob/mlbapi/
+Location: src/mlb_predict/mlbapi/
 
 Requirements:
 
@@ -322,7 +322,7 @@ Implemented modules:
 3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
 5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page, technical wiki, and admin dashboard (update season, full reingest, retrain with cleanup, fine-grained pipeline options, shell runner, Python REPL)
-6. Live standings comparison (predicted vs actual divisional standings, league leaders, team batting/pitching stats via MLB Stats API; `src/winprob/standings.py` + `src/winprob/mlbapi/standings.py`)
+6. Live standings comparison (predicted vs actual divisional standings, league leaders, team batting/pitching stats via MLB Stats API; `src/mlb_predict/standings.py` + `src/mlb_predict/mlbapi/standings.py`)
 7. Sitemap (HTML visual sitemap at `/sitemap` + XML sitemap at `/sitemap.xml`; linked from all page navigation)
 8. CLI query tool (`scripts/query_game.py`)
 9. Daily automation (`scripts/update_daily.sh` + cron)

@@ -27,7 +27,7 @@ GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
 def capture() -> None:
     from fastapi.testclient import TestClient
 
-    from winprob.app.main import app
+    from mlb_predict.app.main import app
 
     client = TestClient(app)
     # Trigger lifespan so startup runs

@@ -1,4 +1,4 @@
-"""Tests for winprob.crosswalk.build."""
+"""Tests for mlb_predict.crosswalk.build."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import pandas as pd
 if TYPE_CHECKING:
     pass
 
-from winprob.crosswalk.build import CrosswalkResult, _prep_schedule, build_crosswalk
-from winprob.ingest.id_map import load_retro_team_map
+from mlb_predict.crosswalk.build import CrosswalkResult, _prep_schedule, build_crosswalk
+from mlb_predict.ingest.id_map import load_retro_team_map
 
 
 # ---------------------------------------------------------------------------

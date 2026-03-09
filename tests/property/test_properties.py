@@ -19,11 +19,11 @@ from hypothesis import strategies as st
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.client import MLBAPIClient
-from winprob.mlbapi.schedule import normalize_schedule
-from winprob.mlbapi.teams import build_team_maps
-from winprob.retrosheet.gamelogs import sha256_bytes
-from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
+from mlb_predict.mlbapi.client import MLBAPIClient
+from mlb_predict.mlbapi.schedule import normalize_schedule
+from mlb_predict.mlbapi.teams import build_team_maps
+from mlb_predict.retrosheet.gamelogs import sha256_bytes
+from mlb_predict.util.hashing import sha256_aggregate_of_files, sha256_file
 
 
 # ---------------------------------------------------------------------------

@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.features.builder import (
+from mlb_predict.features.builder import (
     build_feature_matrix,
     load_all_gamelogs,
     load_or_build_park_factors,
     _load_api_pitcher_map,
 )
-from winprob.statcast.fangraphs import load_fg_team_map
+from mlb_predict.statcast.fangraphs import load_fg_team_map
 
 
 def main() -> None:

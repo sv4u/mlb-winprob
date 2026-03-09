@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# update_daily.sh — MLB Win Probability daily data refresh
+# update_daily.sh — MLB Prediction System daily data refresh
 #
 # Refreshes yesterday's game results, rebuilds features, and restarts the
 # web server.  Designed to be run from cron at 01:00 each day during the
@@ -14,7 +14,7 @@
 # 2. Install the cron job (runs at 01:00 daily):
 #       crontab -e
 #    Add the following line (adjust REPO path):
-#       0 1 * * * /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/scripts/update_daily.sh >> /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/logs/cron.log 2>&1
+#       0 1 * * * /path/to/mlb-predict/scripts/update_daily.sh >> /path/to/mlb-predict/logs/cron.log 2>&1
 #
 # 3. Verify cron is registered:
 #       crontab -l

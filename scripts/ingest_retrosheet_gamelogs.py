@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.retrosheet.gamelogs import RetrosheetGLSource, download_gamelog_txt, parse_gamelog_txt
-from winprob.util.hashing import sha256_file
+from mlb_predict.retrosheet.gamelogs import RetrosheetGLSource, download_gamelog_txt, parse_gamelog_txt
+from mlb_predict.util.hashing import sha256_file
 
 
 async def ingest_one(

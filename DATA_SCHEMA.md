@@ -1,5 +1,6 @@
 # DATA_SCHEMA.md
-## MLB Win Probability Modeling System — Data Contracts
+
+## MLB Prediction System — Data Contracts
 
 This document defines on-disk schemas and invariants for all persisted datasets.
 

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     pass
 
 
-_TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "src" / "winprob" / "app" / "templates"
+_TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "src" / "mlb_predict" / "app" / "templates"
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ def test_template_has_sitemap_nav_link(template_name: str) -> None:
 
 def test_sitemap_route_registered() -> None:
     """The /sitemap GET route must be registered on the FastAPI app."""
-    from winprob.app.main import app
+    from mlb_predict.app.main import app
 
     paths = {route.path for route in app.routes if hasattr(route, "path")}  # type: ignore[union-attr]
     assert "/sitemap" in paths
@@ -131,7 +131,7 @@ def test_sitemap_route_registered() -> None:
 
 def test_xml_sitemap_route_registered() -> None:
     """The /sitemap.xml GET route must be registered on the FastAPI app."""
-    from winprob.app.main import app
+    from mlb_predict.app.main import app
 
     paths = {route.path for route in app.routes if hasattr(route, "path")}  # type: ignore[union-attr]
     assert "/sitemap.xml" in paths
@@ -141,7 +141,7 @@ def test_mcp_mount_registered() -> None:
     """The /mcp mount must be registered for the MCP Streamable HTTP server."""
     from starlette.routing import Mount
 
-    from winprob.app.main import app
+    from mlb_predict.app.main import app
 
     mounts = [r for r in app.routes if isinstance(r, Mount)]
     mcp_mounts = [m for m in mounts if m.path == "/mcp"]
@@ -162,7 +162,7 @@ async def test_xml_sitemap_contains_expected_paths() -> None:
     """The xml_sitemap handler must emit all static page paths."""
     from starlette.requests import Request
 
-    from winprob.app.main import xml_sitemap
+    from mlb_predict.app.main import xml_sitemap
 
     scope = {
         "type": "http",

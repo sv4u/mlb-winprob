@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
-from winprob.mlbapi.pitcher_stats import fetch_pitcher_season_stats
+from mlb_predict.mlbapi.client import MLBAPIClient, MLBAPIConfig
+from mlb_predict.mlbapi.pitcher_stats import fetch_pitcher_season_stats
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

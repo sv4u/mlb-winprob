@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mlb-winprob"
+name = "mlb-predict"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -55,13 +55,13 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/winprob"]
+packages = ["src/mlb_predict"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 # Generated protobuf/grpc code; do not lint or format.
-exclude = ["src/winprob/grpc/generated"]
+exclude = ["src/mlb_predict/grpc/generated"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -78,7 +78,7 @@ exclude = [
 # gRPC services and generated code use protobuf modules; symbols are runtime-injected.
 # Silence attr-defined and name-defined so CI passes; can add mypy-protobuf stubs later.
 [[tool.mypy.overrides]]
-module = ["winprob.grpc.services.*", "winprob.grpc.generated.*"]
+module = ["mlb_predict.grpc.services.*", "mlb_predict.grpc.generated.*"]
 disable_error_code = ["attr-defined", "name-defined"]
 
 [tool.pytest.ini_options]

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Odds & Smart Bets — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <link rel="stylesheet" href="/static/ev-calculator.css" />
+  <style>
+    .hub-header { margin-bottom: 1.5rem; }
+    .hub-header h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.3rem; letter-spacing: -0.02em; }
+    .hub-header p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; max-width: 700px; }
+    .hub-status { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .hub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
+    .hub-tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color var(--transition), border-color var(--transition); }
+    .hub-tab:hover { color: var(--text-secondary); }
+    .hub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .hub-panel { display: none; }
+    .hub-panel.active { display: block; }
+    .ev-opp-row-positive { background: rgba(52,211,153,.04); }
+    .ev-edge { font-weight: 700; }
+    .ev-edge-pos { color: var(--green); }
+    .ev-edge-neg { color: var(--red); }
+
+    .ev-summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .ev-summary-card { background: var(--card); border-radius: var(--radius-sm); padding: 0.75rem; text-align: center; }
+    .ev-summary-val { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ev-summary-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.15rem; }
+
+    .odds-board-game { margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .odds-board-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--card); }
+    .odds-board-header .matchup { font-weight: 700; font-size: 0.92rem; }
+    .odds-board-header .time { font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
+
+    @media (max-width: 768px) {
+      .hub-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .hub-tab { white-space: nowrap; font-size: 0.82rem; padding: 0.5rem 0.9rem; }
+      .ev-summary-cards { grid-template-columns: repeat(2, 1fr); }
+      .hub-header p { max-width: 100%; }
+      .odds-board-header { flex-wrap: wrap; gap: 0.5rem; }
+    }
+    @media (max-width: 480px) {
+      .ev-summary-cards { grid-template-columns: 1fr; }
+      .odds-board-game { margin-bottom: 1rem; }
+    }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/odds" class="active">Odds & Bets</a>
+    <span class="nav-divider"></span>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="hub-header">
+    <h1>Odds & Smart Bets</h1>
+    <p>
+      Compare model win probabilities against live sportsbook lines.
+      Positive expected value (+EV) bets are highlighted — these are games where
+      the model sees a meaningful edge over the market.
+    </p>
+    <div class="hub-status">
+      <div class="freshness">
+        <span class="freshness-dot" id="odds-status-dot"></span>
+        <span id="odds-status-text">Checking odds…</span>
+      </div>
+      <div class="freshness" id="odds-last-updated" style="display:none">
+        <span>Last updated: </span>
+        <span id="odds-update-time"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hub-tabs" id="hub-tabs">
+    <div class="hub-tab active" data-tab="ev">Smart Bets (+EV)</div>
+    <div class="hub-tab" data-tab="board">All Odds</div>
+    <div class="hub-tab" data-tab="calc">EV Calculator</div>
+  </div>
+
+  <!-- Tab 1: EV+ Opportunities -->
+  <div class="hub-panel active" id="panel-ev">
+    <div id="ev-summary-area"></div>
+    <div class="filter-panel" id="ev-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="ev-filter-search">Search</label>
+          <input type="text" id="ev-filter-search" placeholder="Matchup or team…" aria-label="Search matchup" />
+        </div>
+        <div class="filter-group">
+          <label>Edge (pp)</label>
+          <input type="number" id="ev-edge-min" min="0" max="50" step="0.1" placeholder="Min" aria-label="Edge min" />
+          <span class="range-hint">–</span>
+          <input type="number" id="ev-edge-max" min="0" max="50" step="0.1" placeholder="Max" aria-label="Edge max" />
+        </div>
+        <button type="button" class="btn" onclick="applyEVFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetEVFilters()">Reset</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
+        <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">Positive Expected Value Bets</h2>
+        <span id="ev-count" style="font-size:.78rem;color:var(--muted)"></span>
+      </div>
+      <div id="ev-table-wrap">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: All Odds Board -->
+  <div class="hub-panel" id="panel-board">
+    <div class="filter-panel" id="board-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="board-filter-search">Search</label>
+          <input type="text" id="board-filter-search" placeholder="Matchup or team…" aria-label="Search matchup" />
+        </div>
+        <button type="button" class="btn" onclick="applyBoardFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetBoardFilters()">Reset</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
+        <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">All Game Odds</h2>
+        <span id="board-count" style="font-size:.78rem;color:var(--muted)"></span>
+      </div>
+      <div id="board-wrap">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3: EV Calculator -->
+  <div class="hub-panel" id="panel-calc">
+    <div class="card" style="margin-bottom:1rem">
+      <h2 style="font-size:1rem;margin-bottom:0.35rem;text-transform:none;letter-spacing:0">Expected Value Calculator</h2>
+      <p style="color:var(--text-secondary);font-size:0.85rem;margin:0">
+        Calculate the expected value, edge, ROI, and optimal Kelly stake for any bet.
+      </p>
+    </div>
+    <div class="card">
+      <div class="ev-calc">
+        <div class="ev-input-group">
+          <div class="ev-field">
+            <label>Odds Format</label>
+            <div class="ev-format-row">
+              <button type="button" class="ev-format-btn active" data-ev-format="american" data-ev-prefix="ev">American</button>
+              <button type="button" class="ev-format-btn" data-ev-format="decimal" data-ev-prefix="ev">Decimal</button>
+              <button type="button" class="ev-format-btn" data-ev-format="fractional" data-ev-prefix="ev">Fractional</button>
+            </div>
+          </div>
+          <div class="ev-field">
+            <label for="ev-odds">Odds</label>
+            <input type="text" id="ev-odds" value="-110" placeholder="-110" autocomplete="off" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-prob">Win Probability (%)</label>
+            <input type="number" id="ev-prob" value="50" min="0.1" max="99.9" step="0.1" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-bet">Bet Amount ($)</label>
+            <input type="number" id="ev-bet" value="10" min="0.01" step="0.01" />
+          </div>
+          <div class="ev-field">
+            <label for="ev-bankroll">Bankroll ($) <span style="font-weight:400;opacity:0.6">— optional</span></label>
+            <input type="number" id="ev-bankroll" placeholder="e.g. 1000" min="0" step="1" />
+          </div>
+        </div>
+        <div class="ev-results">
+          <div class="ev-primary">
+            <div class="ev-primary-label">Expected Value per Bet</div>
+            <div class="ev-primary-value" id="ev-ev-value">—</div>
+            <div class="ev-primary-verdict" id="ev-ev-verdict"></div>
+          </div>
+          <div class="ev-metric"><span class="ev-metric-label">Implied Probability</span><span class="ev-metric-value" id="ev-metric-implied-prob">—</span></div>
+          <div class="ev-metric"><span class="ev-metric-label">Your Edge</span><span class="ev-metric-value" id="ev-metric-edge">—</span></div>
+          <div class="ev-metric"><span class="ev-metric-label">ROI per Bet</span><span class="ev-metric-value" id="ev-metric-roi">—</span></div>
+          <div class="ev-metric"><span class="ev-metric-label">Break-even Probability</span><span class="ev-metric-value" id="ev-metric-breakeven">—</span></div>
+          <div class="ev-kelly-section">
+            <div class="ev-kelly-header"><span class="ev-kelly-title">Kelly Criterion</span><span class="ev-kelly-pct" id="ev-kelly-pct">—</span></div>
+            <div class="ev-slider-wrap">
+              <span style="font-size:0.75rem;color:var(--muted)">10%</span>
+              <input type="range" id="ev-kelly-slider" min="10" max="100" value="100" step="5" />
+              <span style="font-size:0.75rem;color:var(--muted)">100%</span>
+              <span class="ev-slider-label" id="ev-kelly-slider-label">100%</span>
+            </div>
+            <div class="ev-kelly-nobet" id="ev-kelly-nobet" style="display:none"></div>
+            <div class="ev-kelly-results" id="ev-kelly-stats">
+              <div class="ev-kelly-stat"><div class="ev-kelly-stat-label">Stake % of Bankroll</div><div class="ev-kelly-stat-value" id="ev-kelly-stake-pct">—</div></div>
+              <div class="ev-kelly-stat"><div class="ev-kelly-stat-label">Recommended Wager</div><div class="ev-kelly-stat-value" id="ev-kelly-wager">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Prediction System · Odds via The Odds API · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
+<script src="/static/base.js"></script>
+<script src="/static/ev-calculator.js"></script>
+<script>
+// ── Tab switching ──────────────────────────────────────────────────
+document.querySelectorAll('.hub-tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.hub-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.hub-panel').forEach(function(p) { p.classList.remove('active'); });
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+    var evOppsFull = null;
+    var oddsEventsFull = null;
+
+    function renderEVTable(opps) {
+      var wrap = document.getElementById('ev-table-wrap');
+      var countEl = document.getElementById('ev-count');
+      if (!opps || !opps.length) {
+        if (countEl) countEl.textContent = '0 opportunities';
+        wrap.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets match the current filters.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
+      return;
+    }
+    if (countEl) countEl.textContent = opps.length + ' opportunit' + (opps.length !== 1 ? 'ies' : 'y');
+    var html = '<div class="table-wrap"><table><thead><tr>' +
+      '<th data-sort="string">Game</th>' +
+      '<th data-sort="string">Pick</th>' +
+      '<th data-sort="string">Book</th>' +
+      '<th class="num" data-sort="number">Odds</th>' +
+      '<th class="num" data-sort="number">Model %</th>' +
+      '<th class="num" data-sort="number">Market %</th>' +
+      '<th class="num" data-sort="number">Edge</th>' +
+      '<th class="num" data-sort="number">EV/unit</th>' +
+      '<th class="num" data-sort="number">Kelly</th>' +
+      '</tr></thead><tbody>';
+    opps.forEach(function (o) {
+      var edgeCls = o.edge > 0 ? 'ev-edge-pos' : 'ev-edge-neg';
+      var edgeSign = o.edge > 0 ? '+' : '';
+      html += '<tr class="' + (o.edge > 0 ? 'ev-opp-row-positive' : '') + '">' +
+        '<td><a href="/game/' + o.game_pk + '">' + o.away_team + ' @ ' + o.home_team + '</a></td>' +
+        '<td><span class="badge ' + (o.selection === 'home' ? 'badge-home' : 'badge-away') + '">' + o.team + '</span></td>' +
+        '<td style="font-size:0.78rem">' + o.sportsbook + '</td>' +
+        '<td class="num text-mono">' + fmtOdds(o.odds) + '</td>' +
+        '<td class="num">' + (o.model_prob * 100).toFixed(1) + '%</td>' +
+        '<td class="num">' + (o.implied_prob * 100).toFixed(1) + '%</td>' +
+        '<td class="num ev-edge ' + edgeCls + '">' + edgeSign + (o.edge * 100).toFixed(1) + 'pp</td>' +
+        '<td class="num ' + edgeCls + ' text-mono">' + edgeSign + '$' + Math.abs(o.ev_per_unit).toFixed(3) + '</td>' +
+        '<td class="num text-mono">' + o.kelly_pct.toFixed(1) + '%</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+    initAllSortables();
+    }
+
+    function getEVFilters() {
+      var el = document.getElementById('ev-filter-search');
+      var q = el && el.value ? el.value.trim().toLowerCase() : '';
+      var edgeMin = document.getElementById('ev-edge-min');
+      var edgeMax = document.getElementById('ev-edge-max');
+      return { search: q, edgeMin: edgeMin && edgeMin.value !== '' ? parseFloat(edgeMin.value, 10) : null, edgeMax: edgeMax && edgeMax.value !== '' ? parseFloat(edgeMax.value, 10) : null };
+    }
+
+    function applyEVFilters() {
+      var wrap = document.getElementById('ev-table-wrap');
+      if (!evOppsFull) return;
+      if (!evOppsFull.length) {
+        wrap.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets right now. The model does not see an edge over any current market lines.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
+        return;
+      }
+      var f = getEVFilters();
+      var filtered = evOppsFull.filter(function (o) {
+        if (f.search) {
+          var s = (o.away_team + ' ' + o.home_team + ' ' + (o.team || '')).toLowerCase();
+          if (s.indexOf(f.search) === -1) return false;
+        }
+        var edgePp = (o.edge || 0) * 100;
+        if (f.edgeMin != null && edgePp < f.edgeMin) return false;
+        if (f.edgeMax != null && edgePp > f.edgeMax) return false;
+        return true;
+      });
+      renderEVTable(filtered);
+    }
+
+    function resetEVFilters() {
+      var el = document.getElementById('ev-filter-search'); if (el) el.value = '';
+      el = document.getElementById('ev-edge-min'); if (el) el.value = '';
+      el = document.getElementById('ev-edge-max'); if (el) el.value = '';
+      applyEVFilters();
+    }
+
+    // ── Load EV+ opportunities ────────────────────────────────────────
+    async function loadEVOpportunities() {
+      try {
+        var data = await timedFetch('/api/ev-opportunities');
+        if (!data.configured) {
+          evOppsFull = null;
+          document.getElementById('ev-table-wrap').innerHTML =
+            '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a> to see +EV opportunities.</p></div>';
+          return;
+        }
+        evOppsFull = data.opportunities || [];
+        document.getElementById('ev-count').textContent = evOppsFull.length + ' opportunit' + (evOppsFull.length !== 1 ? 'ies' : 'y');
+
+        if (evOppsFull.length) {
+          var avgEdge = evOppsFull.reduce(function (s, o) { return s + o.edge; }, 0) / evOppsFull.length;
+          var bestEdge = Math.max.apply(null, evOppsFull.map(function (o) { return o.edge; }));
+          var avgKelly = evOppsFull.reduce(function (s, o) { return s + o.kelly_pct; }, 0) / evOppsFull.length;
+          document.getElementById('ev-summary-area').innerHTML =
+            '<div class="ev-summary-cards">' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">' + evOppsFull.length + '</div><div class="ev-summary-lbl">+EV Bets Found</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (avgEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Edge</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (bestEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Best Edge</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-accent">' + avgKelly.toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Kelly %</div></div>' +
+            '</div>';
+        } else {
+          document.getElementById('ev-summary-area').innerHTML = '';
+        }
+
+        applyEVFilters();
+  } catch (e) {
+      evOppsFull = null;
+    document.getElementById('ev-table-wrap').innerHTML =
+      '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
+  }
+}
+
+    function getBoardFilters() {
+      var el = document.getElementById('board-filter-search');
+      return { search: el && el.value ? el.value.trim().toLowerCase() : '' };
+    }
+
+  function renderOddsBoard(events) {
+    var wrap = document.getElementById('board-wrap');
+    var countEl = document.getElementById('board-count');
+    if (!events || !events.length) {
+      countEl.textContent = '0 games';
+      wrap.innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No games match the current filters.</p></div>';
+      return;
+    }
+    countEl.textContent = events.length + ' game' + (events.length !== 1 ? 's' : '');
+    var html = '';
+    events.forEach(function (ev) {
+      var lt = ev.commence_time ? formatLocalTime(ev.commence_time) : { time: '—', tzAbbr: '' };
+      var timeStr = lt.time + (lt.tzAbbr ? ' ' + lt.tzAbbr : '');
+      if (lt.relative) timeStr += ' (' + lt.relative + ')';
+      html += '<div class="odds-board-game">';
+      html += '<div class="odds-board-header">';
+    html += '<span class="matchup">' + (ev.away_team || '') + ' @ ' + (ev.home_team || '') + '</span>';
+    html += '<span class="time">' + timeStr + '</span>';
+    html += '</div>';
+    if (ev.bookmakers && ev.bookmakers.length) {
+      html += '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Sportsbook</th>' +
+        '<th class="num">' + (ev.home_team || 'Home') + '</th>' +
+        '<th class="num">' + (ev.away_team || 'Away') + '</th>' +
+        '</tr></thead><tbody>';
+      ev.bookmakers.forEach(function (bm) {
+        var hCls = bm.home_price === ev.best_home_price ? 'num odds-best' : 'num';
+        var aCls = bm.away_price === ev.best_away_price ? 'num odds-best' : 'num';
+        html += '<tr><td>' + bm.title + '</td>' +
+          '<td class="' + hCls + ' text-mono">' + fmtOdds(bm.home_price) + '</td>' +
+          '<td class="' + aCls + ' text-mono">' + fmtOdds(bm.away_price) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  });
+          wrap.innerHTML = html;
+        }
+
+        function applyBoardFilters() {
+          if (!oddsEventsFull) return;
+          var wrap = document.getElementById('board-wrap');
+          if (!oddsEventsFull.length) {
+            document.getElementById('board-count').textContent = '0 games';
+            wrap.innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No live odds available right now.<br>Odds are typically posted 12–24 hours before game time.</p></div>';
+            return;
+          }
+          var f = getBoardFilters();
+          var filtered = f.search
+            ? oddsEventsFull.filter(function (ev) {
+              var s = ((ev.away_team || '') + ' ' + (ev.home_team || '')).toLowerCase();
+              return s.indexOf(f.search) !== -1;
+            })
+            : oddsEventsFull;
+          renderOddsBoard(filtered);
+        }
+
+        function resetBoardFilters() {
+          var el = document.getElementById('board-filter-search');
+          if (el) el.value = '';
+          applyBoardFilters();
+        }
+
+        // ── Load All Odds board ───────────────────────────────────────────
+        async function loadOddsBoard() {
+          try {
+            var data = await timedFetch('/api/odds');
+            if (!data.configured) {
+              oddsEventsFull = null;
+              document.getElementById('board-wrap').innerHTML =
+                '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a></p></div>';
+              return;
+            }
+            oddsEventsFull = data.events || [];
+            applyBoardFilters();
+  } catch (e) {
+        oddsEventsFull = null;
+    document.getElementById('board-wrap').innerHTML =
+      '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
+  }
+}
+
+// ── Status indicator ──────────────────────────────────────────────
+async function checkOddsStatus() {
+  try {
+    var data = await timedFetch('/api/odds');
+    var dot = document.getElementById('odds-status-dot');
+    var txt = document.getElementById('odds-status-text');
+    if (!data.configured) {
+      dot.className = 'freshness-dot offline';
+      txt.textContent = 'Odds API not configured';
+    } else if (data.count > 0) {
+      dot.className = 'freshness-dot live';
+      txt.textContent = data.count + ' game' + (data.count!==1?'s':'') + ' with live odds';
+      var updEl = document.getElementById('odds-last-updated');
+      if (updEl && data.fetched_at) {
+        updEl.style.display = '';
+        document.getElementById('odds-update-time').textContent = formatLocalTime(data.fetched_at).full;
+      }
+    } else {
+      dot.className = 'freshness-dot stale';
+      txt.textContent = 'No live odds available';
+    }
+  } catch (e) {
+    document.getElementById('odds-status-dot').className = 'freshness-dot offline';
+    document.getElementById('odds-status-text').textContent = 'Could not reach odds API';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+checkOddsStatus();
+loadEVOpportunities();
+loadOddsBoard();
+initEVCalculator('ev');
+</script>
+</body>
+</html>

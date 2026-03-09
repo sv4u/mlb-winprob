@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate Python gRPC and protobuf code from proto/winprob/v1/*.proto.
+# Generate Python gRPC and protobuf code from proto/mlb_predict/v1/*.proto.
 # Run from repository root. Requires grpcio-tools (pip install -e ".[dev]").
 set -euo pipefail
 
@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PROTO_DIR="$REPO_ROOT/proto"
-OUT_DIR="$REPO_ROOT/src/winprob/grpc/generated"
+OUT_DIR="$REPO_ROOT/src/mlb_predict/grpc/generated"
 
 # Prefer uv run python so project dev deps (grpcio-tools) are used
 if [ -n "${PYTHON:-}" ]; then
@@ -27,11 +27,11 @@ if [[ ! -d "$PROTO_DIR" ]]; then
 fi
 
 # Generate *_pb2.py and *_pb2_grpc.py into OUT_DIR.
-# -I proto makes proto/ the root for imports; package winprob.v1 -> winprob/v1/ under OUT_DIR.
+# -I proto makes proto/ the root for imports; package mlb_predict.v1 -> mlb_predict/v1/ under OUT_DIR.
 "$PYTHON" -m grpc_tools.protoc \
   -I "$PROTO_DIR" \
   --python_out="$OUT_DIR" \
   --grpc_python_out="$OUT_DIR" \
-  "$PROTO_DIR"/winprob/v1/*.proto
+  "$PROTO_DIR"/mlb_predict/v1/*.proto
 
 echo "Generated code in $OUT_DIR"

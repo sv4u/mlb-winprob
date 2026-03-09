@@ -7,7 +7,7 @@
 #      bootstrap pipeline (ingest all historical data + train every model).
 #      This can take several hours on a cold first run.
 #   2. Start supervisord, which launches:
-#        - winprob-server  (uvicorn FastAPI dashboard, port 30087)
+#        - mlb-predict-server  (uvicorn FastAPI dashboard, port 30087)
 #        - cron            (supercronic executing docker/crontab)
 #
 # Skip the bootstrap by pre-populating ./data on the host before the first

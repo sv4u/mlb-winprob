@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict
 from pathlib import Path
 
-from winprob.drift.compute import compute_drift
+from mlb_predict.drift.compute import compute_drift
 
 
 def main() -> None:

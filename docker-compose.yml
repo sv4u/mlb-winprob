@@ -1,16 +1,19 @@
 # =============================================================================
-# MLB Win Probability — Docker Compose
+# MLB Prediction System — Docker Compose
 #
 # Usage
 # -----
 #   docker compose up --build          # first run (builds image)
 #   docker compose up -d               # detached / daemon mode
-#   docker compose logs -f winprob     # follow logs
+#   docker compose logs -f mlb-predict     # follow logs
 #   docker compose down                # stop and remove container
 #
 # Environment overrides (prefix with `MODEL=xgboost docker compose up`)
-#   MODEL  — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
-#   PORT   — host port to expose the dashboard on (default: 30087)
+#   MODEL               — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
+#   PORT                — host port to expose the dashboard on (default: 30087)
+#   MEM_LIMIT           — container memory limit (default: 1536m). Use 2g for training/bootstrap; 1g may OOM under load.
+#   CPUS                — container CPU limit (default: 2)
+#   MLB_PREDICT_LIVE_API — set to 0 to disable live MLB/Odds API calls at runtime (minimize network; see README)
 #
 # Data persistence
 # ----------------
@@ -18,81 +21,20 @@
 # ./logs  is mounted at /app/logs   inside the container.
 # Both directories are created automatically by Docker Compose on first run.
 # Deleting ./data/models/ forces a full re-ingest and re-train on next start.
-#
-# Chat / LLM
-# -----------
-# The ollama-init service automatically pulls the chat models on first start.
-# Models are persisted in the ollama_data volume across restarts — subsequent
-# starts skip the download.  Default: llama3.1:8b (primary), mistral:7b (alt).
-# Override via OLLAMA_CHAT_MODEL / OLLAMA_CHAT_MODEL_ALT env vars.
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # Ollama — local LLM backend for the chat feature
+  # MLB Prediction System dashboard
   # ---------------------------------------------------------------------------
-  ollama:
-    image: ollama/ollama:latest
-    container_name: mlb-ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    mem_limit: 8g
-    cpus: 6
-    deploy:
-      resources:
-        limits:
-          memory: 8g
-          cpus: "6"
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ---------------------------------------------------------------------------
-  # Ollama init — auto-pull chat models (runs once, then exits)
-  #
-  # On first start this downloads the models (~5 GB each).  The ollama_data
-  # volume caches them so subsequent starts complete in seconds.
-  # ---------------------------------------------------------------------------
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: mlb-ollama-init
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      OLLAMA_HOST: "http://ollama:11434"
-      OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-llama3.1:8b}"
-      OLLAMA_CHAT_MODEL_ALT: "${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "[ollama-init] Pulling primary chat model (llama3.1:8b)..."
-        ollama pull ${OLLAMA_CHAT_MODEL:-llama3.1:8b}
-        echo "[ollama-init] Pulling alternative chat model (mistral:7b)..."
-        ollama pull ${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}
-        echo "[ollama-init] All chat models ready."
-    restart: "no"
-
-  # ---------------------------------------------------------------------------
-  # Win Probability dashboard
-  # ---------------------------------------------------------------------------
-  winprob:
+  mlb-predict:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         GIT_COMMIT: "${GIT_COMMIT:-unknown}"
-    image: mlb-winprob:latest
-    container_name: mlb-winprob
-    depends_on:
-      ollama:
-        condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+    image: mlb-predict:latest
+    container_name: mlb-predict
     ports:
       - "${PORT:-30087}:30087"
     volumes:
@@ -102,26 +44,22 @@ services:
       GIT_COMMIT: "${GIT_COMMIT:-unknown}"
       MODEL: "${MODEL:-stacked}"
       PORT: "30087"
-      OLLAMA_HOST: "http://ollama:11434"
-      OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-llama3.1:8b}"
-      OLLAMA_CHAT_MODEL_ALT: "${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}"
-      WINPROB_VERBOSE: true
-      WINPROB_LOG_LEVEL: "DEBUG"
-      WINPROB_LOG_FORMAT: "human"
+      MLB_PREDICT_VERBOSE: true
+      MLB_PREDICT_LOG_LEVEL: "DEBUG"
+      MLB_PREDICT_LOG_FORMAT: "human"
+      # Set to "0" to disable live MLB Stats API and Odds API calls (minimize network footprint)
+      MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
     restart: unless-stopped
-    mem_limit: 2g
-    cpus: 2
+    mem_limit: ${MEM_LIMIT:-1536m}
+    cpus: ${CPUS:-2}
     deploy:
       resources:
         limits:
-          memory: 2g
-          cpus: "2"
+          memory: ${MEM_LIMIT:-1536m}
+          cpus: "${CPUS:-2}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:30087/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 600s
-
-volumes:
-  ollama_data:

@@ -12,16 +12,16 @@ from zoneinfo import ZoneInfo
 
 import logging
 
-from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
-from winprob.mlbapi.schedule import (
+from mlb_predict.mlbapi.client import MLBAPIClient, MLBAPIConfig
+from mlb_predict.mlbapi.schedule import (
     ALL_GAME_TYPES,
     GAME_TYPE_REGULAR,
     fetch_schedule_chunk,
     parse_utc_iso,
     schedule_bounds,
 )
-from winprob.mlbapi.teams import build_team_maps, get_teams_df
-from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
+from mlb_predict.mlbapi.teams import build_team_maps, get_teams_df
+from mlb_predict.util.hashing import sha256_aggregate_of_files, sha256_file
 
 log = logging.getLogger(__name__)
 

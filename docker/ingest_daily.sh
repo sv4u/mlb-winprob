@@ -54,7 +54,7 @@ fi
 date -u '+%Y-%m-%dT%H:%M:%SZ' > /app/data/processed/.last_ingest
 
 log "→ Restarting web server to reload updated features..."
-supervisorctl -c /app/docker/supervisord.conf restart winprob-server \
+supervisorctl -c /app/docker/supervisord.conf restart mlb-predict-server \
     || die "supervisorctl restart failed"
 log "  ✓ Web server restarted"
 

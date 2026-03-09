@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the mlb-winprob test suite."""
+"""Shared pytest fixtures for the mlb-predict test suite."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.retrosheet.gamelogs import GAMELOG_COLUMNS
+from mlb_predict.retrosheet.gamelogs import GAMELOG_COLUMNS
 
 
 # ---------------------------------------------------------------------------

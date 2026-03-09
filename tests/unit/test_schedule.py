@@ -1,4 +1,4 @@
-"""Tests for winprob.mlbapi.schedule."""
+"""Tests for mlb_predict.mlbapi.schedule."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.schedule import (
+from mlb_predict.mlbapi.schedule import (
     GAME_TYPE_REGULAR,
     GAME_TYPE_SPRING,
     SCHEDULE_FIELDS_MIN,

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.model.train import (
+from mlb_predict.model.train import (
     _load_all_feature_files,
     run_expanding_cv,
     run_optuna_hpo,

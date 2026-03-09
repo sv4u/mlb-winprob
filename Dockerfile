@@ -74,7 +74,7 @@ WORKDIR /app
 # code changes (deps stay cached).
 # ---------------------------------------------------------------------------
 COPY pyproject.toml .
-RUN mkdir -p src/winprob && touch src/winprob/__init__.py
+RUN mkdir -p src/mlb_predict && touch src/mlb_predict/__init__.py
 RUN uv pip install --system --no-cache --compile-bytecode -e .
 
 # ---------------------------------------------------------------------------
@@ -154,8 +154,6 @@ EXPOSE 30087 50051
 ENV MODEL=stacked \
     PORT=30087 \
     GRPC_PORT=50051 \
-    WINPROB_GRPC_ENABLED=1 \
-    OLLAMA_HOST=http://localhost:11434 \
-    OLLAMA_CHAT_MODEL=llama3.1:8b
+    MLB_PREDICT_GRPC_ENABLED=1
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

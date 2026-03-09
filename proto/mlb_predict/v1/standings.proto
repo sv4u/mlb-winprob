@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package mlb_predict.v1;
+
+import "mlb_predict/v1/common.proto";
+
+service StandingsService {
+  rpc GetStandings(GetStandingsRequest) returns (StandingsResponse);
+  rpc GetTeamStats(GetTeamStatsRequest) returns (TeamStatsResponse);
+}
+
+message GetStandingsRequest {
+  int32 season = 1;
+}
+
+message StandingsResponse {
+  int32 season = 1;
+  repeated DivisionStandings divisions = 2;
+  LeagueLeaders league_leaders = 3;
+}
+
+message GetTeamStatsRequest {
+  int32 season = 1;
+}
+
+message BattingStats {
+  double avg = 1;
+  double obp = 2;
+  double slg = 3;
+  double ops = 4;
+  int32 runs = 5;
+  int32 hits = 6;
+  int32 doubles = 7;
+  int32 triples = 8;
+  int32 hr = 9;
+  int32 rbi = 10;
+  int32 sb = 11;
+  int32 bb = 12;
+  int32 so = 13;
+}
+
+message PitchingStats {
+  double era = 1;
+  int32 wins = 2;
+  int32 losses = 3;
+  int32 saves = 4;
+  string ip = 5;
+  int32 hits = 6;
+  int32 bb = 7;
+  int32 so = 8;
+  double whip = 9;
+  int32 hr = 10;
+}
+
+message TeamStatsEntry {
+  int32 team_id = 1;
+  string team_name = 2;
+  string division_name = 3;
+  string league_name = 4;
+  string record = 5;
+  double pct = 6;
+  int32 run_diff = 7;
+  BattingStats batting = 8;
+  PitchingStats pitching = 9;
+}
+
+message TeamStatsResponse {
+  int32 season = 1;
+  repeated TeamStatsEntry teams = 2;
+  optional string message = 3;
+  optional string error = 4;
+}

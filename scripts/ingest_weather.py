@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.external.weather import (
+from mlb_predict.external.weather import (
     PARK_LATLON,
     _NEUTRAL_HUMIDITY,
     _NEUTRAL_TEMP_F,

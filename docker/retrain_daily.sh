@@ -35,7 +35,7 @@ log "  ✓ Training complete"
 date -u '+%Y-%m-%dT%H:%M:%SZ' > /app/data/models/.last_retrain
 
 log "→ Restarting web server to load new model artifacts..."
-supervisorctl -c /app/docker/supervisord.conf restart winprob-server \
+supervisorctl -c /app/docker/supervisord.conf restart mlb-predict-server \
     || die "supervisorctl restart failed"
 log "  ✓ Web server restarted with new model"
 

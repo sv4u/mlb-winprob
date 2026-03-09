@@ -1,4 +1,4 @@
-"""Tests for winprob.retrosheet.gamelogs."""
+"""Tests for mlb_predict.retrosheet.gamelogs."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from aioresponses import aioresponses as aioresponses_ctx
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.client import TokenBucket
-from winprob.retrosheet.gamelogs import (
+from mlb_predict.mlbapi.client import TokenBucket
+from mlb_predict.retrosheet.gamelogs import (
     GAMELOG_COLUMNS,
     RetrosheetGLSource,
     _extract_gl_txt_from_zip,

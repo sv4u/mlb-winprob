@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from winprob.mcp.server import _create_server, create_mcp_app, get_mcp_server
+from mlb_predict.mcp.server import _create_server, create_mcp_app, get_mcp_server
 
 
 def test_create_mcp_app_returns_starlette_app() -> None:
@@ -35,8 +35,8 @@ def test_server_creation() -> None:
 
 
 def test_run_tool_via_import() -> None:
-    """run_tool from winprob.tools returns JSON string (smoke test)."""
-    from winprob.tools import run_tool
+    """run_tool from mlb_predict.tools returns JSON string (smoke test)."""
+    from mlb_predict.tools import run_tool
 
     out = run_tool("get_model_info", {"model_type": "stacked"})
     data = json.loads(out)

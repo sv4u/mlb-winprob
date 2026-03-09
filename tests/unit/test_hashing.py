@@ -1,4 +1,4 @@
-"""Tests for winprob.util.hashing — sha256 utilities."""
+"""Tests for mlb_predict.util.hashing — sha256 utilities."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
+from mlb_predict.util.hashing import sha256_aggregate_of_files, sha256_file
 
 
 def _write(path: Path, content: bytes) -> Path:

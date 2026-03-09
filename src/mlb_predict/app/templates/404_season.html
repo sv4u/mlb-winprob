@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Season Not Found — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .error-wrap {
+      max-width: 600px;
+      margin: 3rem auto;
+      text-align: center;
+    }
+
+    .error-code {
+      font-size: 5rem;
+      font-weight: 800;
+      color: var(--accent);
+      opacity: .15;
+      line-height: 1;
+    }
+
+    .error-msg {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0.5rem 0 1rem;
+    }
+
+    .error-detail {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .season-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+
+    .season-chip {
+      display: inline-block;
+      padding: 0.3rem 0.7rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: border-color 0.15s;
+    }
+
+    .season-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="site-header">
+    <a href="/" class="logo">⚾ MLB Prediction System</a>
+    <code class="git-hash">{{ git_commit }}</code>
+    <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+    <nav class="site-nav">
+      <a href="/">All Seasons</a>
+      <a href="/season/2026">2026 Season</a>
+      <a href="/standings">Standings</a>
+      <a href="/leaders">Leaders</a>
+      <a href="/players">Players</a>
+      <a href="/odds">Odds Hub</a>
+      <a href="/wiki">Wiki</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/sitemap">Sitemap</a>
+      <div class="model-selector">
+        <span>Model:</span>
+        <select id="model-select">
+          <option value="logistic">Logistic</option>
+          <option value="lightgbm">LightGBM</option>
+          <option value="xgboost">XGBoost</option>
+          <option value="catboost">CatBoost</option>
+          <option value="mlp">MLP</option>
+          <option value="stacked">Stacked</option>
+        </select>
+        <span id="model-switching" class="switching" style="display:none">switching…</span>
+      </div>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="error-wrap">
+      <div class="error-code">404</div>
+      <div class="error-msg">Season {{ season }} Not Found</div>
+      <div class="error-detail">
+        No data is available for the {{ season }} season.
+        The system covers seasons 2000&ndash;2026 (regular season only).
+      </div>
+      <div>
+        <strong style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Available
+          seasons</strong>
+        <div class="season-chips">
+          {% for s in available_seasons %}
+          <a class="season-chip" href="/season/{{ s }}">{{ s }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      <a href="/" class="back-link">&larr; Back to All Seasons</a>
+    </div>
+  </div>
+  <script src="/static/base.js"></script>
+</body>
+
+</html>

@@ -1,4 +1,4 @@
-"""Unit tests for winprob.app.odds_cache."""
+"""Unit tests for mlb_predict.app.odds_cache."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from winprob.app.odds_cache import (
+from mlb_predict.app.odds_cache import (
     american_to_decimal,
     american_to_implied,
     compute_ev_opportunities,
@@ -200,7 +200,7 @@ def test_match_odds_no_h2h_market() -> None:
 def test_is_odds_configured_true() -> None:
     """Returns True when config status indicates configured."""
     with patch(
-        "winprob.app.odds_cache.get_odds_config_status",
+        "mlb_predict.app.odds_cache.get_odds_config_status",
         return_value={"configured": True, "source": "env"},
     ):
         assert is_odds_configured() is True
@@ -209,7 +209,7 @@ def test_is_odds_configured_true() -> None:
 def test_is_odds_configured_false() -> None:
     """Returns False when config status indicates not configured."""
     with patch(
-        "winprob.app.odds_cache.get_odds_config_status",
+        "mlb_predict.app.odds_cache.get_odds_config_status",
         return_value={"configured": False, "source": None},
     ):
         assert is_odds_configured() is False
@@ -262,7 +262,7 @@ def test_compute_ev_finds_positive_edge() -> None:
     """Opportunities are returned when model probability exceeds implied."""
     events = [_make_event()]
     df = _make_features_df()
-    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+    with patch("mlb_predict.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
         opps = compute_ev_opportunities(events, df, min_edge=0.0)
     home_opps = [o for o in opps if o["selection"] == "home"]
     assert len(home_opps) >= 1
@@ -273,7 +273,7 @@ def test_compute_ev_filters_by_min_edge() -> None:
     """Opportunities below min_edge are excluded."""
     events = [_make_event()]
     df = _make_features_df()
-    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+    with patch("mlb_predict.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
         opps = compute_ev_opportunities(events, df, min_edge=0.99)
     assert len(opps) == 0
 
@@ -296,7 +296,7 @@ def test_compute_ev_sorted_by_edge() -> None:
     """Opportunities are sorted by edge descending."""
     events = [_make_event()]
     df = _make_features_df()
-    with patch("winprob.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
+    with patch("mlb_predict.app.data_cache.TEAM_NAMES", _MOCK_NAMES):
         opps = compute_ev_opportunities(events, df, min_edge=0.0)
     if len(opps) >= 2:
         assert opps[0]["edge"] >= opps[1]["edge"]

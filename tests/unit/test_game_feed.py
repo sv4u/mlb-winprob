@@ -1,8 +1,8 @@
-"""Tests for winprob.mlbapi.game_feed — play-by-play normalization."""
+"""Tests for mlb_predict.mlbapi.game_feed — play-by-play normalization."""
 
 from __future__ import annotations
 
-from winprob.mlbapi.game_feed import _normalize_play, _normalize_plays
+from mlb_predict.mlbapi.game_feed import _normalize_play, _normalize_plays
 
 
 def test_normalize_play_minimal() -> None:

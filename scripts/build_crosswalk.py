@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.crosswalk.build import build_crosswalk
-from winprob.ingest.id_map import load_retro_team_map
+from mlb_predict.crosswalk.build import build_crosswalk
+from mlb_predict.ingest.id_map import load_retro_team_map
 
 logger = logging.getLogger(__name__)
 

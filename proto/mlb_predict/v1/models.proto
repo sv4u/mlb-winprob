@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package mlb_predict.v1;
+
+import "mlb_predict/v1/common.proto";
+
+service ModelService {
+  rpc GetActiveModel(Empty) returns (ActiveModelResponse);
+  rpc SwitchModel(SwitchModelRequest) returns (SwitchModelResponse);
+  rpc GetCVSummary(Empty) returns (CVSummaryResponse);
+}
+
+message ActiveModelResponse {
+  string model_type = 1;
+  repeated string available = 2;
+}
+
+message SwitchModelRequest {
+  string model_type = 1;
+}
+
+message SwitchModelResponse {
+  bool ok = 1;
+  string model_type = 2;
+  string message = 3;
+}
+
+message CVSummaryResponse {
+  string json = 1;
+}

@@ -18,15 +18,15 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Repo root on path for winprob
+# Repo root on path for mlb_predict
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
 async def _run(refresh: bool) -> int:
-    from winprob.external.odds import OddsClient
-    from winprob.external.odds_config import get_odds_api_key
+    from mlb_predict.external.odds import OddsClient
+    from mlb_predict.external.odds_config import get_odds_api_key
 
     if not get_odds_api_key():
         print(

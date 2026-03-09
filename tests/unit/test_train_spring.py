@@ -1,4 +1,4 @@
-"""Tests for spring training integration in winprob.model.train.
+"""Tests for spring training integration in mlb_predict.model.train.
 
 Covers ``_load_all_feature_files``, ``_prep`` with ``spring_weight``,
 backward compatibility for the ``is_spring`` column, and
@@ -17,8 +17,8 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.features.builder import FEATURE_COLS
-from winprob.model.train import (
+from mlb_predict.features.builder import FEATURE_COLS
+from mlb_predict.model.train import (
     _DEFAULT_SPRING_WEIGHT,
     _load_all_feature_files,
     _prep,

@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from winprob.features.builder import FEATURE_COLS
-from winprob.model.artifacts import load_model, latest_artifact
-from winprob.model.train import PlattCalibrator
+from mlb_predict.features.builder import FEATURE_COLS
+from mlb_predict.model.artifacts import load_model, latest_artifact
+from mlb_predict.model.train import PlattCalibrator
 
 
 def _get_base_model(model: object) -> object:

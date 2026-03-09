@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sitemap — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
+    .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
+    .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .hero p { font-size: 0.88rem; color: var(--muted); max-width: 600px; line-height: 1.6; }
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .section h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .section-icon { font-size: 1rem; }
+    .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+    .link-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; transition: border-color 0.15s; }
+    .link-card:hover { border-color: var(--accent); }
+    .link-card a { font-size: 0.92rem; font-weight: 600; display: block; margin-bottom: 0.3rem; }
+    .link-card .path { font-size: 0.75rem; color: var(--muted); font-family: 'SF Mono', 'Fira Code', monospace; margin-bottom: 0.3rem; }
+    .link-card .desc { font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+    .method-badge { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; font-family: monospace; margin-right: 0.35rem; }
+    .method-get { background: rgba(46,204,113,.12); color: var(--green); }
+    .method-post { background: rgba(231,76,60,.12); color: var(--red); }
+    @media (max-width: 768px) {
+      .link-grid { grid-template-columns: 1fr; }
+      .hero { padding: 1.25rem; }
+      .hero h2 { font-size: 1.3rem; }
+      .link-card { padding: 1rem; }
+    }
+    @media (max-width: 480px) {
+      .link-card .path { font-size: 0.7rem; word-break: break-all; }
+      .link-card .desc { font-size: 0.78rem; }
+    }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Prediction System</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">All Seasons</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/sitemap" class="active">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
+  </nav>
+</header>
+
+<div class="container-narrow">
+  <div class="hero">
+    <div class="hero-badge">Navigation</div>
+    <h2>Sitemap</h2>
+    <p>Complete index of all pages and API endpoints in the MLB Prediction System platform.
+       Also available as an <a href="/sitemap.xml">XML sitemap</a> for search engines.</p>
+  </div>
+
+  <div class="section">
+    <h3><span class="section-icon">&#128196;</span> Pages</h3>
+    <div class="link-grid">
+      <div class="link-card">
+        <a href="/">All Seasons</a>
+        <div class="path">/</div>
+        <div class="desc">Home page with season browser, model cards, cross-validation results, and game search across all seasons (2000&ndash;2026).</div>
+      </div>
+      <div class="link-card">
+        <a href="/season/2026">2026 Season</a>
+        <div class="path">/season/2026</div>
+        <div class="desc">Dedicated 2026 schedule with per-game win probabilities, standings summary, power rankings, and date filters.</div>
+      </div>
+      <div class="link-card">
+        <a href="/standings">Standings</a>
+        <div class="path">/standings</div>
+        <div class="desc">Predicted vs actual divisional standings, league leaders, and full team batting and pitching statistics.</div>
+      </div>
+      <div class="link-card">
+        <a href="/leaders">Leaders</a>
+        <div class="path">/leaders</div>
+        <div class="desc">League leaders by hitting and pitching categories (top N per stat). Season and league filters. Data
+          from MLB Stats API.</div>
+        </div>
+        <div class="link-card">
+          <a href="/players">Players</a>
+          <div class="path">/players</div>
+          <div class="desc">Full player stat tables (batting and pitching) by season. Sortable columns. Data from MLB Stats API.
+          </div>
+        </div>
+        <div class="link-card">
+        <a href="/odds">Odds Hub</a>
+        <div class="path">/odds</div>
+        <div class="desc">Live odds board, positive-EV bet finder, and EV calculator. Shows moneyline odds from multiple
+          sportsbooks, model-vs-market edge analysis, and Kelly criterion sizing.</div>
+        </div>
+        <div class="link-card">
+        <a href="/wiki">Wiki</a>
+        <div class="path">/wiki</div>
+        <div class="desc">Technical documentation: model architecture, feature engineering, data sources, calibration, and training pipeline.</div>
+      </div>
+      <div class="link-card">
+        <a href="/wiki#mcp-server">MCP Server</a>
+        <div class="path">/mcp (Streamable HTTP)</div>
+        <div class="desc">Model Context Protocol server on the same host as the web UI. Exposes tools for predictions,
+          standings, SHAP, odds, and model info. Use from Cursor or other MCP clients when on your home network. See <a
+            href="/wiki#mcp-server">Wiki → MCP Server</a>.</div>
+        </div>
+        <div class="link-card">
+        <a href="/dashboard">Dashboard</a>
+        <div class="path">/dashboard</div>
+        <div class="desc">Admin dashboard with system status, data coverage, model inventory, and pipeline controls (ingest, update, retrain).</div>
+      </div>
+      <div class="link-card">
+        <a href="/sitemap">Sitemap</a>
+        <div class="path">/sitemap</div>
+        <div class="desc">This page &mdash; complete index of all pages and API endpoints.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3><span class="section-icon">&#128270;</span> Dynamic Pages</h3>
+    <div class="link-grid">
+      <div class="link-card">
+        <div class="path">/game/{game_pk}</div>
+        <div class="desc">Game detail page with win probability, full feature breakdown, and SHAP attribution chart for a single game. Access via game links on other pages.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3><span class="section-icon">&#9889;</span> Data API</h3>
+    <div class="link-grid">
+      <div class="link-card">
+        <a href="/api/version"><span class="method-badge method-get">GET</span>/api/version</a>
+        <div class="desc">Application version and git commit hash.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/seasons"><span class="method-badge method-get">GET</span>/api/seasons</a>
+        <div class="desc">List of all available seasons with data.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/teams"><span class="method-badge method-get">GET</span>/api/teams</a>
+        <div class="desc">All teams with Retrosheet codes and full names.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/games?season=2026&limit=10"><span class="method-badge method-get">GET</span>/api/games</a>
+        <div class="desc">Query games with filters: season, home/away team, date, pagination, and sort order.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-get">GET</span>/api/games/{game_pk}</div>
+        <div class="desc">Full feature breakdown and SHAP attribution for a single game by game_pk.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/odds"><span class="method-badge method-get">GET</span>/api/odds</a>
+        <div class="desc">Live MLB game odds from The Odds API (cached, 5-min TTL). Requires API key configuration.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/ev-opportunities"><span class="method-badge method-get">GET</span>/api/ev-opportunities</a>
+        <div class="desc">Positive-EV moneyline bets where the model's win probability exceeds the market implied probability. Supports min_edge filter.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/upsets?season=2025"><span class="method-badge method-get">GET</span>/api/upsets</a>
+        <div class="desc">Biggest upsets: heavy favorites that lost. Filter by season, team, and minimum probability.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/cv-summary"><span class="method-badge method-get">GET</span>/api/cv-summary</a>
+        <div class="desc">Cross-validation results from the latest model training run.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/standings?season=2026"><span class="method-badge method-get">GET</span>/api/standings</a>
+        <div class="desc">Predicted vs actual standings by division with league leaders. Supports season parameter.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/team-stats?season=2025"><span class="method-badge method-get">GET</span>/api/team-stats</a>
+        <div class="desc">Team batting and pitching statistics for a given season from the MLB Stats API.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-get">GET</span>/api/games/{game_pk}/play-by-play</div>
+        <div class="desc">Play-by-play data for a game from the MLB Stats API (feed/live). Inning, outs, score,
+          batter/pitcher, description.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/leaders?season=2026&amp;stat_group=hitting"><span
+            class="method-badge method-get">GET</span>/api/leaders</a>
+        <div class="desc">League leaders by category (hitting or pitching). Params: season, league_id, limit, stat_group.
+        </div>
+      </div>
+      <div class="link-card">
+        <a href="/api/player-stats?season=2026&amp;group=hitting"><span
+            class="method-badge method-get">GET</span>/api/player-stats</a>
+        <div class="desc">Full player stats table (batting or pitching) for a season. Params: season, group, league_id, limit,
+          offset.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3><span class="section-icon">&#128736;</span> Admin API</h3>
+    <div class="link-grid">
+      <div class="link-card">
+        <a href="/api/admin/status"><span class="method-badge method-get">GET</span>/api/admin/status</a>
+        <div class="desc">Full system status: data coverage, model inventory, and pipeline states.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/ingest</div>
+        <div class="desc">Trigger full re-ingestion. Accepts options: seasons, include_preseason, refresh flags.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/update</div>
+        <div class="desc">Update season data (non-destructive). Accepts options: seasons, include_preseason, refresh flags.
+        </div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/retrain</div>
+        <div class="desc">Clear all model artifacts and retrain all models from scratch.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-ws" style="background:#22c55e">WS</span>/ws/admin/shell</div>
+        <div class="desc">WebSocket shell runner — execute commands with streaming output.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-ws" style="background:#a855f7">WS</span>/ws/admin/repl</div>
+        <div class="desc">WebSocket Python REPL — interactive console with persistent session state.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3><span class="section-icon">&#128450;</span> Machine-Readable</h3>
+    <div class="link-grid">
+      <div class="link-card">
+        <a href="/sitemap.xml"><span class="method-badge method-get">GET</span>/sitemap.xml</a>
+        <div class="desc">XML sitemap following the sitemaps.org protocol for search engine crawlers.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/base.js"></script>
+</body>
+</html>

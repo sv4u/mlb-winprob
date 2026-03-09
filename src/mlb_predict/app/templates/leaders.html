@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>League Leaders — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .filter-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .filter-group label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .filter-panel select {
+      font-size: 0.85rem;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+    }
+
+    .leaders-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .leader-table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+    }
+
+    .leader-table-card h3 {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-weight: 600;
+    }
+
+    .leader-table-card table {
+      width: 100%;
+      font-size: 0.85rem;
+    }
+
+    .leader-table-card th {
+      text-align: left;
+      padding: 0.35rem 0.5rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .leader-table-card td {
+      padding: 0.4rem 0.5rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .leader-table-card .num {
+      text-align: right;
+    }
+
+    .leader-table-card .rank {
+      width: 2.5rem;
+    }
+
+    .timing-badge {
+      margin-left: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .filter-panel {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0.75rem 1rem;
+      }
+
+      .filter-group {
+        flex-wrap: wrap;
+      }
+
+      .leaders-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .leader-table-card {
+        padding: 0.85rem 1rem;
+      }
+
+      .leader-table-card table {
+        font-size: 0.82rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .leaders-grid {
+        gap: 0.75rem;
+      }
+
+      .leader-table-card h3 {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="site-header">
+    <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+    <code class="git-hash">{{ git_commit }}</code>
+    <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/season/2026">2026 Season</a>
+      <a href="/standings">Standings</a>
+      <a href="/leaders" class="active">Leaders</a>
+      <a href="/players">Players</a>
+      <a href="/odds">Odds & Bets</a>
+      <span class="nav-divider"></span>
+      <a href="/wiki">Wiki</a>
+      <a href="/dashboard">Admin</a>
+      <a href="/sitemap">Sitemap</a>
+      <div class="model-selector">
+        <span>Model:</span>
+        <select id="model-select">
+          <option value="logistic">Logistic</option>
+          <option value="lightgbm">LightGBM</option>
+          <option value="xgboost">XGBoost</option>
+          <option value="catboost">CatBoost</option>
+          <option value="mlp">MLP</option>
+          <option value="stacked">Stacked</option>
+        </select>
+        <span id="model-switching" class="switching" style="display:none">switching…</span>
+      </div>
+    </nav>
+  </header>
+
+  <div class="container-wide">
+    <div class="hero">
+      <div class="hero-badge">MLB Stats API</div>
+      <h2>League Leaders</h2>
+      <p>
+        Top player rankings by hitting and pitching categories for a given season.
+        Data is loaded live from the MLB Stats API.
+      </p>
+    </div>
+
+    <div class="filter-panel">
+      <div class="filter-group">
+        <label for="leaders-season">Season</label>
+        <select id="leaders-season"></select>
+      </div>
+      <div class="filter-group">
+        <label for="leaders-league">League</label>
+        <select id="leaders-league">
+          <option value="">All (MLB)</option>
+          <option value="103">American League</option>
+          <option value="104">National League</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="leaders-stat-group">Type</label>
+        <select id="leaders-stat-group">
+          <option value="hitting">Hitting</option>
+          <option value="pitching">Pitching</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="leaders-limit">Top</label>
+        <select id="leaders-limit">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <button type="button" class="btn" id="leaders-load-btn" onclick="loadLeaders()">Load leaders</button>
+      <span class="timing-badge" id="timing-leaders" style="display:none"></span>
+    </div>
+
+    <div id="leaders-error" class="error-msg" style="display:none"></div>
+    <div id="leaders-area" class="leaders-grid"></div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="/season/2026">2026 Season</a>
+      <a href="/standings">Standings</a>
+      <a href="/leaders">Leaders</a>
+      <a href="/players">Players</a>
+      <a href="/odds">Odds Hub</a>
+      <a href="/wiki">Wiki</a>
+    </div>
+    <div>MLB Prediction System · League leaders from MLB Stats API</div>
+    <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+  </footer>
+
+  <script src="/static/base.js"></script>
+  <script>
+    (function () {
+      var seasonSelect = document.getElementById('leaders-season');
+      var y = new Date().getFullYear();
+      for (var i = y; i >= 2000; i--) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = i;
+        if (i === y) opt.selected = true;
+        seasonSelect.appendChild(opt);
+      }
+    })();
+
+    async function loadLeaders() {
+      var btn = document.getElementById('leaders-load-btn');
+      var errEl = document.getElementById('leaders-error');
+      var area = document.getElementById('leaders-area');
+      var timingEl = document.getElementById('timing-leaders');
+      var season = parseInt(document.getElementById('leaders-season').value, 10);
+      var leagueVal = document.getElementById('leaders-league').value;
+      var leagueId = leagueVal === '' ? null : parseInt(leagueVal, 10);
+      var statGroup = document.getElementById('leaders-stat-group').value;
+      var limit = parseInt(document.getElementById('leaders-limit').value, 10);
+
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+      area.innerHTML = '<div class="skeleton skeleton-card" style="height:200px;grid-column:1/-1"></div>';
+
+      var params = 'season=' + season + '&stat_group=' + encodeURIComponent(statGroup) + '&limit=' + limit;
+      if (leagueId != null) params += '&league_id=' + leagueId;
+      var start = performance.now();
+      try {
+        var r = await fetch('/api/leaders?' + params);
+        var serverMs = r.headers.get('X-Process-Time-Ms');
+        if (serverMs && timingEl) showTiming('timing-leaders', serverMs, performance.now() - start);
+        var data = await r.json();
+        if (data.error) {
+          errEl.textContent = data.error;
+          errEl.style.display = 'block';
+          area.innerHTML = '';
+          btn.disabled = false;
+          btn.textContent = 'Load leaders';
+          return;
+        }
+        var tables = data.leader_tables || [];
+        area.innerHTML = tables.map(function (t) {
+          var rows = (t.leaders || []).map(function (l) {
+            return '<tr><td class="rank num">' + l.rank + '</td><td>' + (l.name || '—') + '</td><td>' + (l.team_abbrev || l.team_name || '—') + '</td><td class="num">' + (l.value != null ? l.value : '—') + '</td></tr>';
+          }).join('');
+          return '<div class="leader-table-card"><h3>' + (t.label || t.category) + '</h3><table><thead><tr><th class="rank">#</th><th>Player</th><th>Team</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        }).join('');
+        if (tables.length === 0) {
+          area.innerHTML = '<p class="muted">No leader data returned. Try a different season or league.</p>';
+        }
+      } catch (e) {
+        errEl.textContent = 'Failed to load leaders: ' + (e.message || String(e));
+        errEl.style.display = 'block';
+        area.innerHTML = '';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Load leaders';
+    }
+
+    loadLeaders();
+  </script>
+</body>
+
+</html>

@@ -1,6 +1,6 @@
-# MLB Win Probability
+# MLB Prediction System
 
-Research-grade pre-game win probability model for MLB regular season and spring training games, 2000–2026.
+Research-grade MLB prediction system for pre-game win probability, standings, and related analysis — regular season and spring training, 2000–2026.
 
 ## Model performance (v3 — out-of-sample, expanding-window CV)
 
@@ -171,7 +171,7 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 
 ```bash
 git clone <repo>
-cd mlb-winprob
+cd mlb-predict
 pip install -e .
 ```
 
@@ -373,7 +373,7 @@ crontab -e
 Add this line (replace the path with your actual project root):
 
 ```cron
-0 1 * * * /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/scripts/update_daily.sh >> /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/logs/cron.log 2>&1
+0 1 * * * /path/to/mlb-predict/scripts/update_daily.sh >> /path/to/mlb-predict/logs/cron.log 2>&1
 ```
 
 The format is `minute hour day month weekday command`:
@@ -441,15 +441,15 @@ open http://localhost:30087
 
 ```bash
 docker compose up --build -d        # start in background
-docker compose logs -f winprob      # follow all logs
-docker compose logs -f winprob | grep '\[server\]'   # server logs only
+docker compose logs -f mlb-predict      # follow all logs
+docker compose logs -f mlb-predict | grep '\[server\]'   # server logs only
 ```
 
 ### Stop / restart
 
 ```bash
 docker compose down                  # stop and remove container (data is preserved)
-docker compose restart winprob       # restart without rebuilding
+docker compose restart mlb-predict       # restart without rebuilding
 docker compose up -d                 # start again
 ```
 
@@ -459,11 +459,21 @@ docker compose up -d                 # start again
 | -------- | --------- | ----------- |
 | `MODEL`  | `stacked` | Model served: `logistic \| lightgbm \| xgboost \| catboost \| mlp \| stacked` |
 | `PORT`   | `30087`   | Host port the dashboard is exposed on |
+| `MEM_LIMIT` | `1536m` | Container memory limit (use `2g` for training/bootstrap) |
+| `CPUS`   | `2`      | Container CPU limit |
+| `MLB_PREDICT_LIVE_API` | `1` | Set to `0` to disable live MLB Stats API and Odds API calls at runtime (minimize network) |
 
 ```bash
 # Serve on port 9000 with the XGBoost model
 PORT=9000 MODEL=xgboost docker compose up -d
 ```
+
+### Minimize network footprint
+
+To reduce outbound traffic when the app is running:
+
+1. **Disable live API calls at runtime** — set `MLB_PREDICT_LIVE_API=0`. The dashboard will serve predicted standings and game lists from precomputed data only; play-by-play, live standings, league leaders, team stats, and odds refresh will not call external APIs. Standings pages show predicted standings without live actuals; other live endpoints return a “live data disabled” message.
+2. **Reduce scheduled network use** — the container runs cron at 01:00 UTC (ingest) and 20:00 UTC (retrain). To avoid that traffic, you can comment out the two entries in `docker/crontab` and rebuild the image, or run the container without supercronic (custom entrypoint). Data will then only change when you run ingest/train manually or via the admin pipeline.
 
 ### Live Odds (optional)
 
@@ -499,9 +509,9 @@ Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on 
 ### Inspect or restart processes inside the container
 
 ```bash
-docker exec -it mlb-winprob supervisorctl status
-docker exec -it mlb-winprob supervisorctl restart winprob-server
-docker exec -it mlb-winprob supervisorctl tail -f winprob-server
+docker exec -it mlb-predict supervisorctl status
+docker exec -it mlb-predict supervisorctl restart mlb-predict-server
+docker exec -it mlb-predict supervisorctl tail -f mlb-predict-server
 ```
 
 ### Data volume layout
@@ -518,12 +528,12 @@ All data is accessible on the host machine at all times. The container itself is
 ### Build the image without Compose
 
 ```bash
-docker build -t mlb-winprob .
+docker build -t mlb-predict .
 docker run -p 30087:30087 \
     -v "$(pwd)/data:/app/data" \
     -v "$(pwd)/logs:/app/logs" \
     -e MODEL=stacked \
-    mlb-winprob
+    mlb-predict
 ```
 
 ### GitHub Container Registry (GHCR)
@@ -532,13 +542,17 @@ The CI pipeline automatically builds and publishes the production image to GHCR 
 
 ```bash
 # Pull the latest image from GHCR
-docker pull ghcr.io/sv4u/mlb-winprob:main
+docker pull ghcr.io/sv4u/mlb-predict:main
 
 # Run directly from GHCR (no local build needed)
 docker run -p 30087:30087 \
     -v "$(pwd)/data:/app/data" \
     -v "$(pwd)/logs:/app/logs" \
-    ghcr.io/sv4u/mlb-winprob:main
+    ghcr.io/sv4u/mlb-predict:main
+
+# Or use the image-only Compose file (same env/volumes as docker-compose.yml, no build)
+docker compose -f docker-compose.image.yml pull
+docker compose -f docker-compose.image.yml up -d
 
 | Git event | Image tag(s) published |
 |---|---|
@@ -561,8 +575,8 @@ The `Dockerfile` uses a multi-stage build:
 To build only the test stage locally:
 
 ```bash
-docker build --target test -t mlb-winprob:test .
-docker run --rm --entrypoint python mlb-winprob:test -m pytest tests/ -v
+docker build --target test -t mlb-predict:test .
+docker run --rm --entrypoint python mlb-predict:test -m pytest tests/ -v
 ```
 
 ---
@@ -642,8 +656,8 @@ df = pd.concat(frames, ignore_index=True)
 if "is_spring" not in df.columns:
     df["is_spring"] = 0.0
 
-from winprob.model.artifacts import latest_artifact, load_model
-from winprob.model.train import _predict_proba
+from mlb_predict.model.artifacts import latest_artifact, load_model
+from mlb_predict.model.train import _predict_proba
 
 model, meta = load_model(latest_artifact("logistic", version="v3"))
 df["prob"] = _predict_proba(model, df[meta.feature_cols].fillna(0.5))
@@ -719,8 +733,8 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 ## Project structure
 
 ```
-mlb-winprob/
-├── src/winprob/
+mlb-predict/
+├── src/mlb_predict/
 │   ├── mlbapi/          # MLB Stats API client (async, rate-limited)
 │   │   ├── client.py
 │   │   ├── schedule.py

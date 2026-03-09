@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from winprob.app.main import app
+from mlb_predict.app.main import app
 
 
 def test_mcp_mount_registered_in_app() -> None:

@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.external.vegas import money_line_to_implied_prob
+from mlb_predict.external.vegas import money_line_to_implied_prob
 
 
 def main() -> None:

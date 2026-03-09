@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Detail — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <link rel="stylesheet" href="/static/ev-calculator.css" />
+  <style>
+    .game-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .game-date-display {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .game-time-tz {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--card);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+    }
+    .matchup {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 1.5rem;
+    }
+    .team-block {
+      text-align: center;
+      flex: 1;
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .team-block-home { background: rgba(52, 211, 153, 0.03); border-radius: var(--radius) 0 0 var(--radius); }
+    .team-block-away { background: rgba(248, 113, 113, 0.03); border-radius: 0 var(--radius) var(--radius) 0; }
+    .team-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.35rem; font-weight: 600; }
+    .team-name { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .prob-gauge-wrap { position: relative; margin-bottom: 0.5rem; }
+    .prob-big {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .prob-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+    .vs-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 50px;
+      background: var(--card);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .confidence-badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-xl);
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 0.5rem;
+    }
+
+    .comparison-section { margin-bottom: 0.5rem; }
+    .bar-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+    .bar-row label { width: 140px; font-size: 0.78rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+    .bar-outer { flex: 1; background: var(--border); border-radius: 4px; height: 8px; }
+    .bar-inner { height: 8px; border-radius: 4px; transition: width .4s; }
+    .bar-row span { width: 55px; font-size: 0.82rem; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .shap-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .shap-label { width: 200px; font-size: 0.78rem; color: var(--text-secondary); text-align: right; flex-shrink: 0; }
+    .shap-bar-wrap { flex: 1; position: relative; height: 10px; }
+    .shap-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+    .shap-bar { position: absolute; top: 0; height: 10px; border-radius: 3px; transition: width .3s; }
+    .shap-val { width: 55px; font-size: 0.78rem; text-align: right; font-family: var(--font-mono); }
+
+    .shap-legend {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .shap-legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .shap-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+    .result-badge { display: inline-block; padding: .3rem .8rem; border-radius: var(--radius-xl); font-weight: 700; font-size: .85rem; }
+
+    .odds-freshness {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    @media (max-width: 768px) {
+      #playbyplay-content .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-height: 50vh; }
+    }
+    @media (max-width: 640px) {
+      .matchup { flex-direction: column; }
+      .vs-divider { width: 100%; height: 40px; }
+      .team-block-home { border-radius: var(--radius) var(--radius) 0 0; }
+      .team-block-away { border-radius: 0 0 var(--radius) var(--radius); }
+      .prob-big { font-size: 1.6rem; }
+      .team-name { font-size: 1.05rem; }
+      .shap-label { width: 120px; font-size: 0.72rem; }
+      .shap-val { width: 40px; font-size: 0.72rem; }
+      .bar-row label { width: 100px; font-size: 0.72rem; }
+    }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+  <span id="header-sub" class="meta">Loading…</span>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
+  </nav>
+</header>
+
+<div class="container-narrow">
+
+  <!-- Matchup overview -->
+  <div class="card" id="matchup-card">
+    <div class="game-header-bar">
+      <div class="game-date-display">
+        <span id="game-date-friendly"></span>
+        <span class="game-time-tz" id="game-time-local"></span>
+      </div>
+      <span id="result-badge"></span>
+    </div>
+    <div class="matchup">
+      <div class="team-block team-block-home">
+        <div class="team-label">Home</div>
+        <div class="team-name" id="home-name">—</div>
+        <div class="prob-big" id="home-prob" style="color:var(--green)">—</div>
+        <div class="prob-sub">predicted win probability</div>
+        <div id="home-confidence"></div>
+      </div>
+      <div class="vs-divider">VS</div>
+      <div class="team-block team-block-away">
+        <div class="team-label">Away</div>
+        <div class="team-name" id="away-name">—</div>
+        <div class="prob-big" id="away-prob" style="color:var(--red)">—</div>
+        <div class="prob-sub">predicted win probability</div>
+        <div id="away-confidence"></div>
+      </div>
+    </div>
+    <div class="comparison-section" id="comparison-bars"></div>
+  </div>
+
+  <!-- Live Odds (hidden until populated by JS) -->
+  <div class="card" id="odds-card" style="display:none">
+    <div class="flex-between mb-md">
+      <h2 style="margin:0">Live Moneyline Odds</h2>
+      <div class="odds-freshness">
+        <span class="freshness-dot live" id="odds-freshness-dot"></span>
+        <span id="odds-updated"></span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Sportsbook</th>
+          <th class="num" id="odds-home-header">Home ML</th>
+          <th class="num" id="odds-away-header">Away ML</th>
+        </tr></thead>
+        <tbody id="odds-tbody"></tbody>
+      </table>
+    </div>
+    <div id="market-vs-model" style="margin-top:1rem"></div>
+  </div>
+
+  <div class="grid-2">
+    <!-- SHAP Attribution -->
+    <div class="card">
+      <h2>Why This Prediction?</h2>
+      <div id="shap-chart"></div>
+      <div class="shap-legend">
+        <div class="shap-legend-item">
+          <div class="shap-legend-dot" style="background:var(--accent)"></div> Favors home
+        </div>
+        <div class="shap-legend-item">
+          <div class="shap-legend-dot" style="background:var(--red)"></div> Favors away
+        </div>
+      </div>
+    </div>
+
+    <!-- Key stats -->
+    <div class="card">
+      <h2>Key Statistics <span class="timing-badge" id="timing-game" style="display:none"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="string">Metric</th>
+              <th data-sort="number">Home</th>
+              <th data-sort="number">Away</th>
+            </tr>
+          </thead>
+        <tbody id="stats-table"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EV Calculator widget -->
+  <div class="card ev-calc-embedded">
+    <div class="flex-between mb-md">
+      <h2 style="margin:0">Bet Calculator</h2>
+      <a href="/odds" class="btn btn-sm sec">Full Odds Hub →</a>
+    </div>
+    <div class="ev-field" style="margin-bottom:1rem">
+      <label>Bet Side</label>
+      <div class="ev-side-row">
+        <button type="button" class="ev-side-btn active-home" data-ev-side="home" data-ev-prefix="gev" data-ev-prob=""
+          id="gev-side-home">
+          <span id="gev-side-home-label">Home</span>
+        </button>
+        <button type="button" class="ev-side-btn" data-ev-side="away" data-ev-prefix="gev" data-ev-prob=""
+          id="gev-side-away">
+          <span id="gev-side-away-label">Away</span>
+        </button>
+      </div>
+    </div>
+    <div class="ev-calc">
+      <div class="ev-input-group">
+        <div class="ev-field">
+          <label>Odds Format</label>
+          <div class="ev-format-row">
+            <button type="button" class="ev-format-btn active" data-ev-format="american"
+              data-ev-prefix="gev">American</button>
+            <button type="button" class="ev-format-btn" data-ev-format="decimal" data-ev-prefix="gev">Decimal</button>
+            <button type="button" class="ev-format-btn" data-ev-format="fractional"
+              data-ev-prefix="gev">Fractional</button>
+          </div>
+        </div>
+        <div class="ev-field">
+          <label for="gev-odds">Odds</label>
+          <input type="text" id="gev-odds" value="-110" placeholder="-110" autocomplete="off" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-prob">Win Probability (%) <span style="font-weight:400;color:var(--muted);font-size:0.72rem">from
+              model</span></label>
+          <input type="number" id="gev-prob" value="50" min="0.1" max="99.9" step="0.1" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-bet">Bet Amount ($)</label>
+          <input type="number" id="gev-bet" value="10" min="0.01" step="0.01" />
+        </div>
+        <div class="ev-field">
+          <label for="gev-bankroll">Bankroll ($) <span style="font-weight:400;opacity:0.6">— optional</span></label>
+          <input type="number" id="gev-bankroll" placeholder="e.g. 1000" min="0" step="1" />
+        </div>
+      </div>
+      <div class="ev-results">
+        <div class="ev-primary">
+          <div class="ev-primary-label">Expected Value per Bet</div>
+          <div class="ev-primary-value" id="gev-ev-value">—</div>
+          <div class="ev-primary-verdict" id="gev-ev-verdict"></div>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Implied Probability</span>
+          <span class="ev-metric-value" id="gev-metric-implied-prob">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Your Edge</span>
+          <span class="ev-metric-value" id="gev-metric-edge">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">ROI per Bet</span>
+          <span class="ev-metric-value" id="gev-metric-roi">—</span>
+        </div>
+        <div class="ev-metric">
+          <span class="ev-metric-label">Break-even Probability</span>
+          <span class="ev-metric-value" id="gev-metric-breakeven">—</span>
+        </div>
+        <div class="ev-kelly-section">
+          <div class="ev-kelly-header">
+            <span class="ev-kelly-title">Kelly Criterion</span>
+            <span class="ev-kelly-pct" id="gev-kelly-pct">—</span>
+          </div>
+          <div class="ev-slider-wrap">
+            <span style="font-size:0.75rem;color:var(--muted)">10%</span>
+            <input type="range" id="gev-kelly-slider" min="10" max="100" value="100" step="5" />
+            <span style="font-size:0.75rem;color:var(--muted)">100%</span>
+            <span class="ev-slider-label" id="gev-kelly-slider-label">100%</span>
+          </div>
+          <div class="ev-kelly-nobet" id="gev-kelly-nobet" style="display:none"></div>
+          <div class="ev-kelly-results" id="gev-kelly-stats">
+            <div class="ev-kelly-stat">
+              <div class="ev-kelly-stat-label">Stake % of Bankroll</div>
+              <div class="ev-kelly-stat-value" id="gev-kelly-stake-pct">—</div>
+            </div>
+            <div class="ev-kelly-stat">
+              <div class="ev-kelly-stat-label">Recommended Wager</div>
+              <div class="ev-kelly-stat-value" id="gev-kelly-wager">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Play-by-play (loaded on demand from MLB API) -->
+  <div class="card" id="playbyplay-card">
+    <h2>Play-by-play <span class="timing-badge" id="timing-pbp" style="display:none"></span></h2>
+    <p class="muted" style="font-size:0.85rem;margin-bottom:1rem">Inning-by-inning events from the MLB Stats API.
+      Available for completed and in-progress games.</p>
+    <div id="playbyplay-load-wrap">
+      <button type="button" class="btn btn-sm sec" id="playbyplay-load-btn" onclick="loadPlayByPlay()">Load
+        play-by-play</button>
+    </div>
+    <div id="playbyplay-error" class="error-msg" style="display:none"></div>
+    <div id="playbyplay-content" style="display:none">
+      <div class="table-wrap" style="max-height: 60vh; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Inning</th>
+              <th>Outs</th>
+              <th>Score</th>
+              <th>Batter / Pitcher</th>
+              <th>Play</th>
+            </tr>
+          </thead>
+          <tbody id="playbyplay-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Prediction System · All predictions fully out-of-sample</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
+<script src="/static/base.js"></script>
+<script src="/static/ev-calculator.js"></script>
+<script>
+const gamePk = {{ game_pk }};
+
+const FEATURE_LABELS = {
+  home_elo:'Home Elo',away_elo:'Away Elo',elo_diff:'Elo edge (H−A)',
+  home_win_pct_30: 'Home 30g win%', away_win_pct_30: 'Away 30g win%',
+  home_win_pct_ewm:'Home recent form',away_win_pct_ewm:'Away recent form',
+  home_win_pct_home_only:'Home at-home win%',away_win_pct_away_only:'Away on-road win%',
+  home_pythag_30: 'Home 30g Pythagorean', away_pythag_30: 'Away 30g Pythagorean',
+  home_sp_era:'Home SP ERA',away_sp_era:'Away SP ERA',
+  home_sp_k9:'Home SP K/9',away_sp_k9:'Away SP K/9',
+  home_bat_woba:'Home batting wOBA',away_bat_woba:'Away batting wOBA',
+  home_pit_fip:'Home pitching FIP',away_pit_fip:'Away pitching FIP',
+  pythag_diff_30:'Pythagorean edge',pythag_diff_ewm:'Recent Pythagorean edge',
+  home_away_split_diff:'Home/road split edge',
+  sp_era_diff:'Pitcher ERA edge',woba_diff:'Batting edge (wOBA)',
+  fip_diff:'Pitching edge (FIP)',park_run_factor:'Park run factor',
+  season_progress:'Season progress',
+  home_streak:'Home streak',away_streak:'Away streak',
+  home_rest_days:'Home rest days',away_rest_days:'Away rest days',
+  home_sp_era_window: 'Home SP ERA', away_sp_era_window: 'Away SP ERA',
+};
+
+const STAT_PAIRS = [
+  ['Elo rating','home_elo','away_elo','%.0f'],
+  ['30g win%','home_win_pct_30','away_win_pct_30','pct'],
+  ['30g Pythagorean','home_pythag_30','away_pythag_30','pct'],
+  ['At-home / on-road win%','home_win_pct_home_only','away_win_pct_away_only','pct'],
+  ['SP ERA (prior season)','home_sp_era','away_sp_era','%.2f'],
+  ['SP K/9 (prior season)','home_sp_k9','away_sp_k9','%.2f'],
+  ['Team wOBA','home_bat_woba','away_bat_woba','%.3f'],
+  ['Team FIP','home_pit_fip','away_pit_fip','%.2f'],
+  ['Park run factor',null,null,'park_run_factor'],
+  ['Rest days','home_rest_days','away_rest_days','%.0f'],
+  ['Win streak','home_streak','away_streak','+%.0f'],
+];
+
+function fmt(v, f, key) {
+  if (v == null) return '—';
+  if (key === 'park_run_factor') return v.toFixed(3);
+  if (f === 'pct') return (v*100).toFixed(1)+'%';
+  return f.replace('%',v+'').replace('%.0f',Math.round(v)).replace('%.2f',v.toFixed(2)).replace('%.3f',v.toFixed(3)).replace('+%.0f',(v>=0?'+':'')+Math.round(v));
+}
+
+async function load() {
+  const start = performance.now();
+  const r = await fetch('/api/games/' + gamePk);
+  const serverMs = r.headers.get("X-Process-Time-Ms");
+  const g = await r.json();
+  showTiming('timing-game', serverMs, performance.now() - start);
+  if (g.error) { document.body.innerHTML = '<div style="padding:2rem;color:var(--red)">' + g.error + '</div>'; return; }
+
+  document.getElementById('header-sub').textContent = g.away_name + ' @ ' + g.home_name;
+  document.title = g.away_name + ' @ ' + g.home_name + ' — MLB Predict';
+
+  // Date and time display
+  var dateDisplay = formatGameDate(g.date);
+  document.getElementById('game-date-friendly').textContent = dateDisplay;
+
+  if (g.commence_time || (g.live_odds && g.live_odds.commence_time)) {
+    var ct = g.commence_time || g.live_odds.commence_time;
+    var lt = formatLocalTime(ct);
+    document.getElementById('game-time-local').textContent = lt.time + ' ' + lt.tzAbbr;
+  } else {
+    document.getElementById('game-time-local').style.display = 'none';
+  }
+
+  if (g.game_type === 'S') {
+    var caveat = document.createElement('div');
+    caveat.className = 'caveat';
+    caveat.innerHTML = '<span class="caveat-icon">⚠</span><div><strong>Spring Training</strong> — This is a pre-season exhibition game. Predictions use prior-season team strength and may not reflect spring roster decisions.</div>';
+    document.getElementById('matchup-card').prepend(caveat);
+  }
+
+  document.getElementById('home-name').textContent = g.home_name;
+  document.getElementById('away-name').textContent = g.away_name;
+
+  const ph = g.prob_home ?? 0.5;
+  const pa = 1 - ph;
+  document.getElementById('home-prob').textContent = (ph*100).toFixed(1)+'%';
+  document.getElementById('home-prob').style.color = ph >= 0.5 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('away-prob').textContent = (pa*100).toFixed(1)+'%';
+  document.getElementById('away-prob').style.color = pa >= 0.5 ? 'var(--green)' : 'var(--red)';
+
+  // Confidence badges — "Toss-up" stands alone; only non-toss-up gets " favorite"
+  var homeConf = probConfidence(ph);
+  var awayConf = probConfidence(pa);
+  var favSide = ph >= 0.5 ? 'home' : 'away';
+  if (homeConf.label === 'Toss-up') {
+    document.getElementById('home-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--accent-dim);color:var(--accent)">Toss-up</span>';
+    document.getElementById('away-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--accent-dim);color:var(--accent)">Toss-up</span>';
+  } else if (favSide === 'home') {
+    document.getElementById('home-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + homeConf.label + ' favorite</span>';
+  } else {
+    document.getElementById('away-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + awayConf.label + ' favorite</span>';
+  }
+
+  if (g.home_win != null) {
+    var rb = document.getElementById('result-badge');
+    rb.innerHTML = g.home_win === 1
+      ? '<span class="result-badge badge-home">HOME WIN</span>'
+      : '<span class="result-badge badge-away">AWAY WIN</span>';
+  }
+
+  // Comparison bars
+  var bars = document.getElementById('comparison-bars');
+  var barsData = [
+    ['Model prediction', ph, 1 - ph],
+    ['30-game win%', g.stats?.home_win_pct_30, g.stats?.away_win_pct_30],
+    ['Pythagorean (30g)', g.stats?.home_pythag_30, g.stats?.away_pythag_30],
+    ['Batting wOBA', g.stats?.home_bat_woba ? (g.stats.home_bat_woba - 0.28) / 0.1 : null, g.stats?.away_bat_woba ? (g.stats.away_bat_woba - 0.28) / 0.1 : null],
+  ];
+  bars.innerHTML = barsData.map(function (row) {
+    var lbl = row[0], h = row[1], a = row[2];
+    if (h == null || a == null) return '';
+    var tot = (h || 0) + (a || 0);
+    var hp = tot > 0 ? Math.round(h / tot * 100) : 50;
+    return '<div class="bar-row">' +
+      '<label>' + lbl + '</label>' +
+      '<div class="bar-outer"><div class="bar-inner" style="width:' + hp + '%;background:var(--accent)"></div></div>' +
+      '<span>' + (h.toFixed ? (h * 100 < 10 ? h.toFixed(3) : (h * 100).toFixed(1) + '%') : h) + '</span>' +
+      '</div>';
+  }).join('');
+
+  // Live Odds card
+  if (g.live_odds && g.live_odds.bookmakers && g.live_odds.bookmakers.length > 0) {
+    var oddsCard = document.getElementById('odds-card');
+    oddsCard.style.display = '';
+    document.getElementById('odds-home-header').textContent = (g.home_name || 'Home') + ' ML';
+    document.getElementById('odds-away-header').textContent = (g.away_name || 'Away') + ' ML';
+    if (g.live_odds.commence_time) {
+      var ct2 = formatLocalTime(g.live_odds.commence_time);
+      document.getElementById('odds-updated').textContent = 'Game: ' + ct2.full;
+    }
+    var bestH = g.live_odds.best_home_price;
+    var bestA = g.live_odds.best_away_price;
+    document.getElementById('odds-tbody').innerHTML = g.live_odds.bookmakers.map(function(bm) {
+      var hCls = bm.home_price === bestH ? 'num odds-best' : 'num';
+      var aCls = bm.away_price === bestA ? 'num odds-best' : 'num';
+      return '<tr><td>' + bm.title + '</td>' +
+        '<td class="' + hCls + '">' + fmtOdds(bm.home_price) + '</td>' +
+        '<td class="' + aCls + '">' + fmtOdds(bm.away_price) + '</td></tr>';
+    }).join('');
+
+    var mktProb = g.live_odds.home_implied_prob;
+    if (mktProb != null && g.prob_home != null) {
+      var edgePp = ((ph - mktProb) * 100).toFixed(1);
+      var edgeCls = ph > mktProb ? 'edge-positive' : 'edge-negative';
+      var edgeSign = ph > mktProb ? '+' : '';
+      var evLabel = ph > mktProb
+        ? '<span class="ev-chip ev-chip-positive">+EV Opportunity</span>'
+        : '<span class="ev-chip ev-chip-negative">-EV</span>';
+      document.getElementById('market-vs-model').innerHTML =
+        '<div class="market-compare">' +
+        '<span>Model: <strong>' + (ph * 100).toFixed(1) + '%</strong></span>' +
+        '<span>Market: <strong>' + (mktProb * 100).toFixed(1) + '%</strong></span>' +
+        '<span>Edge: <span class="' + edgeCls + '">' + edgeSign + edgePp + 'pp</span></span>' +
+        evLabel +
+        '</div>';
+    }
+  }
+
+  // SHAP chart
+  var shap = document.getElementById('shap-chart');
+  var factors = (g.top_factors || []).slice(0, 10);
+  var maxAbs = Math.max.apply(null, factors.map(function (f) { return Math.abs(f.value); }).concat([0.01]));
+  shap.innerHTML = factors.map(function (f) {
+    var pct = Math.abs(f.value) / maxAbs * 45;
+    var label = FEATURE_LABELS[f.feature] || f.feature.replace(/_/g, ' ');
+    var color = f.value >= 0 ? 'var(--accent)' : 'var(--red)';
+    var left = f.value >= 0 ? '50%' : (50 - pct) + '%';
+    return '<div class="shap-row">' +
+      '<div class="shap-label">' + label + '</div>' +
+      '<div class="shap-bar-wrap">' +
+      '<div class="shap-center"></div>' +
+      '<div class="shap-bar" style="left:' + left + ';width:' + pct + '%;background:' + color + '"></div>' +
+      '</div>' +
+      '<div class="shap-val" style="color:' + color + '">' + (f.value >= 0 ? '+' : '') + f.value.toFixed(3) + '</div>' +
+      '</div>';
+  }).join('');
+
+  // Stats table
+  var tbody = document.getElementById('stats-table');
+  tbody.innerHTML = STAT_PAIRS.map(function (row) {
+    var label = row[0], hk = row[1], ak = row[2], f = row[3];
+    if (hk === null) {
+      var v = g.stats?.[f];
+      return '<tr><td>' + label + '</td><td colspan="2" style="text-align:center">' + fmt(v, f, f) + '</td></tr>';
+    }
+    var hv = g.stats?.[hk], av = g.stats?.[ak];
+    var better_h = (hk.includes('era') || hk.includes('fip')) ? hv < av : hv > av;
+    var hStyle = better_h ? 'color:var(--green);font-weight:600' : '';
+    var aStyle = !better_h ? 'color:var(--green);font-weight:600' : '';
+    return '<tr><td>' + label + '</td><td style="' + hStyle + '">' + fmt(hv, f, hk) + '</td><td style="' + aStyle + '">' + fmt(av, f, ak) + '</td></tr>';
+  }).join('');
+  initAllSortables();
+
+  // Auto-populate EV calculator
+  var homeProb = (ph * 100).toFixed(1);
+  var awayProb = (pa * 100).toFixed(1);
+
+  var sideHomeBtn = document.getElementById('gev-side-home');
+  var sideAwayBtn = document.getElementById('gev-side-away');
+  if (sideHomeBtn) {
+    sideHomeBtn.dataset.evProb = homeProb;
+    document.getElementById('gev-side-home-label').textContent = g.home_name || 'Home';
+  }
+  if (sideAwayBtn) {
+    sideAwayBtn.dataset.evProb = awayProb;
+    document.getElementById('gev-side-away-label').textContent = g.away_name || 'Away';
+  }
+
+  var gevOdds = document.getElementById('gev-odds');
+  if (g.live_odds && gevOdds) {
+    gevOdds.value = g.live_odds.best_home_price;
+    if (sideHomeBtn) sideHomeBtn.dataset.evOdds = g.live_odds.best_home_price;
+    if (sideAwayBtn) sideAwayBtn.dataset.evOdds = g.live_odds.best_away_price;
+  }
+
+  var gevProb = document.getElementById('gev-prob');
+  if (gevProb) gevProb.value = homeProb;
+
+  initEVCalculator('gev');
+
+  if (g.odds_configured === false) {
+    var evCard = document.querySelector('.ev-calc-embedded');
+    if (evCard) {
+      var note = document.createElement('p');
+      note.className = 'odds-note';
+      note.innerHTML = 'Configure <a href="/dashboard">The Odds API key</a> in Dashboard for live odds auto-population.';
+      evCard.appendChild(note);
+    }
+  }
+}
+
+      async function loadPlayByPlay() {
+        var btn = document.getElementById('playbyplay-load-btn');
+        var wrap = document.getElementById('playbyplay-load-wrap');
+        var errEl = document.getElementById('playbyplay-error');
+        var content = document.getElementById('playbyplay-content');
+        var tbody = document.getElementById('playbyplay-tbody');
+        var timingEl = document.getElementById('timing-pbp');
+        if (!btn || !wrap || !errEl || !content || !tbody) return;
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        btn.disabled = true;
+        btn.textContent = 'Loading…';
+        var start = performance.now();
+        try {
+          var r = await fetch('/api/games/' + gamePk + '/play-by-play');
+          var serverMs = r.headers.get('X-Process-Time-Ms');
+          if (serverMs) showTiming('timing-pbp', serverMs, performance.now() - start);
+          var data = await r.json();
+          if (data.error) {
+            errEl.textContent = data.error + (data.detail ? ' ' + data.detail : '');
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Retry play-by-play';
+            return;
+          }
+          wrap.style.display = 'none';
+          content.style.display = 'block';
+          var plays = data.plays || [];
+          tbody.innerHTML = plays.map(function (p) {
+            var score = (p.away_score != null && p.home_score != null) ? p.away_score + '-' + p.home_score : '—';
+            var batterPitcher = [p.batter_name, p.pitcher_name].filter(Boolean).join(' vs ') || '—';
+            return '<tr>' +
+              '<td>' + (p.inning_label || p.inning + ' ' + (p.half === 'top' ? 'Top' : 'Bottom')) + '</td>' +
+              '<td class="num">' + (p.outs != null ? p.outs : '—') + '</td>' +
+              '<td class="num">' + score + '</td>' +
+              '<td style="font-size:0.82rem">' + batterPitcher + '</td>' +
+              '<td>' + (p.description || p.event || '—') + '</td>' +
+              '</tr>';
+          }).join('');
+          if (plays.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="muted">No play-by-play data for this game.</td></tr>';
+          }
+        } catch (e) {
+          errEl.textContent = 'Failed to load play-by-play: ' + (e.message || String(e));
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Retry play-by-play';
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = 'Reload play-by-play';
+      }
+
+load();
+</script>
+</body>
+</html>

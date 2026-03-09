@@ -1,5 +1,6 @@
 # MODEL_SPEC.md
-## MLB Win Probability Modeling System — Modeling Specification
+
+## MLB Prediction System — Modeling Specification
 
 This document defines the mathematical and engineering contracts for modeling pre-game
 win probabilities across MLB regular seasons 2000–2026.

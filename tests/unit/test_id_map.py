@@ -1,4 +1,4 @@
-"""Tests for winprob.ingest.id_map."""
+"""Tests for mlb_predict.ingest.id_map."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.ingest.id_map import RetroTeamMap, load_retro_team_map
+from mlb_predict.ingest.id_map import RetroTeamMap, load_retro_team_map
 
 
 # ---------------------------------------------------------------------------

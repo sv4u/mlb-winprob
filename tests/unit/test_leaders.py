@@ -1,8 +1,8 @@
-"""Tests for winprob.mlbapi.leaders — league leaders and player stats normalization."""
+"""Tests for mlb_predict.mlbapi.leaders — league leaders and player stats normalization."""
 
 from __future__ import annotations
 
-from winprob.mlbapi.leaders import (
+from mlb_predict.mlbapi.leaders import (
     HITTING_LEADER_CATEGORIES,
     PITCHING_LEADER_CATEGORIES,
     _normalize_leader_entry,

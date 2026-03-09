@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def api_client() -> TestClient:
     """TestClient for the FastAPI app."""
-    from winprob.app.main import app
+    from mlb_predict.app.main import app
 
     return TestClient(app)
 

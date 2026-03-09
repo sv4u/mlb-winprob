@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.model.artifacts import latest_artifact, load_model
-from winprob.model.train import _predict_proba
-from winprob.predict.snapshot import write_snapshot
+from mlb_predict.model.artifacts import latest_artifact, load_model
+from mlb_predict.model.train import _predict_proba
+from mlb_predict.predict.snapshot import write_snapshot
 
 
 def main() -> None:

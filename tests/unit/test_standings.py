@@ -1,4 +1,4 @@
-"""Tests for winprob.standings — predicted standings computation and merging."""
+"""Tests for mlb_predict.standings — predicted standings computation and merging."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.standings import (
+from mlb_predict.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
     RETRO_TO_DIVISION,

@@ -65,7 +65,7 @@ jobs:
         run: uv pip install -e ".[dev]"
 
       - name: mypy
-        run: uv run mypy src/winprob
+        run: uv run mypy src/mlb_predict
 
   # ---------------------------------------------------------------------------
   # Tests — pytest across Python 3.11 and 3.12 (native, preserves matrix)

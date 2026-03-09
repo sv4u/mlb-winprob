@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Initializing — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .init-container { max-width: 720px; margin: 3rem auto; padding: 0 1.5rem; }
+    .init-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2.25rem; position: relative; overflow: hidden; }
+    .init-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--orange)); }
+    .init-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .init-sub { font-size: 0.88rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; }
+    .init-status { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; font-size: 0.9rem; }
+    .init-status .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .dot.running { background: var(--orange); animation: dot-pulse 1.5s ease-in-out infinite; }
+    .dot.success { background: var(--green); }
+    .dot.failed { background: var(--red); }
+    .dot.idle { background: var(--muted); }
+    @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .init-step { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .init-elapsed { font-size: 0.78rem; color: var(--muted); margin-bottom: 1rem; }
+    .log-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; max-height: 320px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; line-height: 1.6; color: var(--code-fg); white-space: pre-wrap; word-break: break-all; }
+    .log-box:empty::after { content: 'Waiting for pipeline output…'; font-style: italic; }
+    .init-ready { display: none; margin-top: 1.25rem; text-align: center; }
+    .init-ready a { display: inline-block; background: var(--accent); color: #fff; padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; text-decoration: none; }
+    .init-ready a:hover { opacity: 0.9; }
+    .init-actions { margin-top: 1rem; text-align: center; }
+    .init-actions a { font-size: 0.82rem; color: var(--muted); text-decoration: underline; }
+    .spinner-inline { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Prediction System</a>
+  <span class="meta">System Setup • <code class="git-hash">{{ git_commit }}</code></span>
+</header>
+
+<div class="init-container">
+  <div class="init-card">
+    <div class="init-title">System Initializing</div>
+    <div class="init-sub">
+      The system is setting up for first use. Data ingestion and model training
+      are running automatically. This page will redirect once everything is ready.
+    </div>
+
+    <div class="init-status">
+      <span class="dot" id="dot-ingest"></span>
+      <span id="label-ingest">Ingest: waiting…</span>
+    </div>
+    <div class="init-status">
+      <span class="dot" id="dot-retrain"></span>
+      <span id="label-retrain">Retrain: waiting…</span>
+    </div>
+
+    <div class="init-step" id="current-step"></div>
+    <div class="init-elapsed" id="elapsed"></div>
+
+    <div class="log-box" id="log-output"></div>
+
+    <div class="init-ready" id="ready-banner">
+      <p style="margin-bottom:0.75rem;color:var(--green);font-weight:600">Setup complete!</p>
+      <a href="/">Open MLB Prediction System</a>
+    </div>
+
+    <div class="init-actions">
+      <a href="/dashboard">Open full dashboard</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/base.js"></script>
+<script>
+var pollInterval = 2000;
+var prevLogCount = 0;
+
+function fmtDuration(secs) {
+  if (secs == null) return '';
+  return secs < 60
+    ? secs.toFixed(1) + 's'
+    : Math.floor(secs / 60) + 'm ' + Math.round(secs % 60) + 's';
+}
+
+function statusLabel(name, p) {
+  var s = p.status;
+  if (s === 'running') {
+    var el = '';
+    if (p.elapsed_seconds != null) el = ' (' + fmtDuration(p.elapsed_seconds) + ')';
+    return name + ': <span class="spinner-inline"></span>running…' + el;
+  }
+  if (s === 'success') {
+    var dur = p.elapsed_seconds != null ? ' in ' + fmtDuration(p.elapsed_seconds) : '';
+    return name + ': complete' + dur;
+  }
+  if (s === 'failed') return name + ': <span style="color:var(--red)">failed</span>';
+  return name + ': waiting…';
+}
+
+function updateStep(pipelines) {
+  var step = '';
+  var active = pipelines.ingest.status === 'running' ? pipelines.ingest
+             : pipelines.retrain.status === 'running' ? pipelines.retrain
+             : null;
+  if (active && active.log_tail && active.log_tail.length) {
+    for (var i = active.log_tail.length - 1; i >= 0; i--) {
+      if (active.log_tail[i].indexOf('>>>') === 0) {
+        step = active.log_tail[i];
+        break;
+      }
+    }
+  }
+  document.getElementById('current-step').textContent = step;
+}
+
+async function poll() {
+  try {
+    var r = await fetch('/api/admin/status');
+    var s = await r.json();
+    var p = s.pipelines;
+
+    document.getElementById('dot-ingest').className = 'dot ' + p.ingest.status;
+    document.getElementById('dot-retrain').className = 'dot ' + p.retrain.status;
+    document.getElementById('label-ingest').innerHTML = statusLabel('Ingest', p.ingest);
+    document.getElementById('label-retrain').innerHTML = statusLabel('Retrain', p.retrain);
+
+    updateStep(p);
+
+    var active = p.ingest.status === 'running' ? p.ingest
+               : p.retrain.status === 'running' ? p.retrain : null;
+    if (active && active.log_tail) {
+      var box = document.getElementById('log-output');
+      box.textContent = active.log_tail.join('\n');
+      if (active.log_line_count > prevLogCount) {
+        box.scrollTop = box.scrollHeight;
+        prevLogCount = active.log_line_count;
+      }
+    }
+
+    var ready = await fetch('/api/health');
+    var h = await ready.json();
+    if (h.ready) {
+      document.getElementById('ready-banner').style.display = 'block';
+      setTimeout(function() { window.location.href = '/'; }, 3000);
+      return;
+    }
+  } catch (e) {}
+  setTimeout(poll, pollInterval);
+}
+
+poll();
+</script>
+</body>
+</html>

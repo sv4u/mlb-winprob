@@ -1,4 +1,4 @@
-"""Tests for winprob.mlbapi.teams."""
+"""Tests for mlb_predict.mlbapi.teams."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.teams import build_team_maps, get_teams_df
+from mlb_predict.mlbapi.teams import build_team_maps, get_teams_df
 
 
 # ---------------------------------------------------------------------------

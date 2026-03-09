@@ -1,5 +1,6 @@
 # SYSTEM_ARCHITECTURE.md
-## MLB Win Probability Modeling System — Architecture and Data Flow
+
+## MLB Prediction System — Architecture and Data Flow
 
 ---
 
@@ -110,7 +111,7 @@ features + model
 
 All external HTTP calls must:
 
-- go through async clients (`src/winprob/mlbapi/client.py`)
+- go through async clients (`src/mlb_predict/mlbapi/client.py`)
 - be token-bucket throttled (rate=5.0 req/s, burst=10)
 - use bounded concurrency
 - implement retries with exponential backoff
@@ -129,31 +130,31 @@ in sequence and exits nonzero on any failure.
 
 # 4. Module Responsibilities
 
-## 4.1 `src/winprob/mlbapi`
+## 4.1 `src/mlb_predict/mlbapi`
 
 - Async Stats API wrapper
 - Cache responses keyed by endpoint + params (SHA256 filename)
 - Append-only `metadata.jsonl` for audit trail
 - Clients: `schedule.py`, `pitcher_stats.py`, `teams.py`
 
-## 4.2 `src/winprob/retrosheet`
+## 4.2 `src/mlb_predict/retrosheet`
 
 - Download + parse Retrosheet GL logs
 - Multiple source support with automatic fallback
 - Persist provenance metadata (source URL, raw SHA256)
 
-## 4.3 `src/winprob/crosswalk`
+## 4.3 `src/mlb_predict/crosswalk`
 
 - Deterministically map Retrosheet game rows to MLB `game_pk`
 - Emit unresolved lists per season
 - Produce coverage report; enforce ≥ 99.0% match threshold
 
-## 4.4 `src/winprob/statcast`
+## 4.4 `src/mlb_predict/statcast`
 
 - FanGraphs team advanced metrics via `pybaseball`
 - Persists `fangraphs_YYYY.parquet` (wOBA, FIP, xFIP, K%, BB%, …)
 
-## 4.5 `src/winprob/features`
+## 4.5 `src/mlb_predict/features`
 
 - `elo.py` — sequential cross-season Elo with home-field HFA offset
 - `team_stats.py` — rolling windows (15/30/60 games), EWMA, home/away splits, streaks, rest
@@ -161,7 +162,7 @@ in sequence and exits nonzero on any failure.
 - `park_factors.py` — median runs-per-game park factor from historical gamelogs
 - `builder.py` — assembles the 119-feature matrix with is_spring indicator and saves per-season Parquet
 
-## 4.6 `src/winprob/model`
+## 4.6 `src/mlb_predict/model`
 
 - `train.py` — logistic, LightGBM, XGBoost, CatBoost, MLP, stacked ensemble; calibration (isotonic for tree models, Platt for linear/neural);
   time-weighted sample weights; Optuna HPO; expanding-window cross-validation;
@@ -169,16 +170,16 @@ in sequence and exits nonzero on any failure.
 - `evaluate.py` — Brier score, accuracy, calibration error
 - `artifacts.py` — save / load model artifacts (joblib + JSON metadata)
 
-## 4.7 `src/winprob/predict`
+## 4.7 `src/mlb_predict/predict`
 
 - `snapshot.py` — produces immutable prediction Parquet files with
   provenance hashes (`model_version`, `feature_hash`, `schedule_hash`, `git_commit`)
 
-## 4.8 `src/winprob/drift`
+## 4.8 `src/mlb_predict/drift`
 
 - `compute.py` — incremental and baseline diffs; per-season and global run metrics
 
-## 4.9 `src/winprob/app`
+## 4.9 `src/mlb_predict/app`
 
 - `main.py` — FastAPI application: game browser, 2026 season page, game detail,
   upsets, CV summary; SHAP attribution on game detail
@@ -220,4 +221,4 @@ Any new module must:
 - Define deterministic hashes for all derived artifacts
 - Provide tests for schema stability (`tests/unit/`)
 - Document provenance and versioning behavior
-- Route all external HTTP through `src/winprob/mlbapi/client.py`
+- Route all external HTTP through `src/mlb_predict/mlbapi/client.py`

@@ -168,7 +168,7 @@ def _load_features(season: int | None = None) -> pd.DataFrame:
 
 def _load_model(model_dir: Path = Path("data/models"), model_type: str = "stacked"):
     """Load the production model."""
-    from winprob.model.artifacts import latest_artifact, load_model
+    from mlb_predict.model.artifacts import latest_artifact, load_model
 
     art = latest_artifact(model_type, model_dir=model_dir, version="v3")
     if art is None:
@@ -282,7 +282,7 @@ def _format_game(
     lines = [
         "",
         f"  {'─' * 60}",
-        f"  {'MLB Win Probability':^60}",
+        f"  {'MLB Prediction System':^60}",
         f"  {'─' * 60}",
         f"  Date   : {date}",
         f"  Matchup: {away} @ {home}",
@@ -344,7 +344,7 @@ def _format_game(
 
 
 def _predict_row(model: object, row: pd.Series, feature_cols: list[str]) -> float:
-    from winprob.model.train import _predict_proba
+    from mlb_predict.model.train import _predict_proba
 
     X = row[feature_cols].values.astype(float).reshape(1, -1)
     X_df = pd.DataFrame(X, columns=feature_cols)
@@ -358,7 +358,7 @@ def _predict_row(model: object, row: pd.Series, feature_cols: list[str]) -> floa
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Query MLB win probability predictions in human-readable form.",
+        description="Query MLB Prediction System predictions in human-readable form.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -385,7 +385,7 @@ def main() -> None:
 
     # Compute predictions for all rows
     X = df[feature_cols].astype(float)
-    from winprob.model.train import _predict_proba
+    from mlb_predict.model.train import _predict_proba
 
     probs = _predict_proba(model, X)
     df = df.copy()

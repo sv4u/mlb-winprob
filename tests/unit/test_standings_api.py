@@ -1,4 +1,4 @@
-"""Tests for winprob.mlbapi.standings — MLB Stats API standings and team stats."""
+"""Tests for mlb_predict.mlbapi.standings — MLB Stats API standings and team stats."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 if TYPE_CHECKING:
     pass
 
-from winprob.mlbapi.standings import (
+from mlb_predict.mlbapi.standings import (
     fetch_all_team_stats,
     fetch_standings,
     fetch_team_batting_stats,

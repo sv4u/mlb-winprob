@@ -47,7 +47,7 @@ class TestTeamStatsSplits:
 
     def test_away_split_differs_from_home_split(self) -> None:
         """The away team's away-only win% must not equal their home-only win%."""
-        from winprob.features.team_stats import build_team_rolling_stats
+        from mlb_predict.features.team_stats import build_team_rolling_stats
 
         gl = _make_gamelogs(60)
         result = build_team_rolling_stats(gl)
@@ -60,7 +60,7 @@ class TestTeamStatsSplits:
 
     def test_split_columns_exist(self) -> None:
         """All four split columns must exist in the output."""
-        from winprob.features.team_stats import build_team_rolling_stats
+        from mlb_predict.features.team_stats import build_team_rolling_stats
 
         gl = _make_gamelogs(30)
         result = build_team_rolling_stats(gl)
@@ -85,7 +85,7 @@ class TestLineupContinuityCrossVenue:
     def test_continuity_uses_most_recent_game(self) -> None:
         """If a team plays home then away with same lineup, away continuity
         should be high (not the neutral default)."""
-        from winprob.features.lineup import build_lineup_continuity
+        from mlb_predict.features.lineup import build_lineup_continuity
 
         id_cols_h = [f"home_{i}_id" for i in range(1, 10)]
         id_cols_a = [f"visiting_{i}_id" for i in range(1, 10)]
@@ -115,7 +115,7 @@ class TestTokenBucketOverCapacity:
 
     @pytest.mark.asyncio
     async def test_acquire_over_capacity_raises(self) -> None:
-        from winprob.mlbapi.client import TokenBucket
+        from mlb_predict.mlbapi.client import TokenBucket
 
         bucket = TokenBucket(rate=5.0, capacity=10.0)
         with pytest.raises(ValueError, match="exceeds bucket capacity"):
@@ -134,7 +134,7 @@ class TestClientNonRetryable4xx:
     async def test_400_raises_immediately(self, tmp_path: "FixtureRequest") -> None:
         from aioresponses import aioresponses
 
-        from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig, MLBAPIError
+        from mlb_predict.mlbapi.client import MLBAPIClient, MLBAPIConfig, MLBAPIError
 
         cfg = MLBAPIConfig(max_retries=3)
         async with MLBAPIClient(config=cfg, cache_dir=tmp_path, refresh=True) as client:
@@ -156,7 +156,7 @@ class TestDriftDedup:
     def test_global_dedup_preserves_different_model_versions(
         self, tmp_path: "FixtureRequest"
     ) -> None:
-        from winprob.drift.compute import DriftMetrics, _append_global_metrics
+        from mlb_predict.drift.compute import DriftMetrics, _append_global_metrics
 
         path = tmp_path / "global.parquet"
         m1 = DriftMetrics(
@@ -190,7 +190,7 @@ class TestDriftDedup:
 
     def test_empty_diff_produces_zero_metrics(self) -> None:
         """Empty diff DataFrame should produce zero-valued metrics, not NaN."""
-        from winprob.drift.compute import _metrics_from_diff
+        from mlb_predict.drift.compute import _metrics_from_diff
 
         empty_diff = pd.DataFrame(columns=["game_pk", "p_old", "p_new", "delta", "abs_delta"])
         m = _metrics_from_diff(
@@ -216,7 +216,7 @@ class TestStandingsNullRank:
     async def test_null_division_rank_does_not_crash(self) -> None:
         from unittest.mock import AsyncMock
 
-        from winprob.mlbapi.standings import fetch_standings
+        from mlb_predict.mlbapi.standings import fetch_standings
 
         raw = {
             "records": [
@@ -259,7 +259,7 @@ class TestTeamsNanAbbrev:
     async def test_null_abbrev_filtered_from_df(self) -> None:
         from unittest.mock import AsyncMock
 
-        from winprob.mlbapi.teams import get_teams_df
+        from mlb_predict.mlbapi.teams import get_teams_df
 
         raw = {
             "teams": [
@@ -283,7 +283,7 @@ class TestFeatureHashInf:
     """ISSUE-16: Feature hash must not crash on inf/-inf values."""
 
     def test_hash_with_inf_does_not_raise(self) -> None:
-        from winprob.features.builder import FEATURE_COLS, _hash_feature_row
+        from mlb_predict.features.builder import FEATURE_COLS, _hash_feature_row
 
         row = pd.Series({c: 0.5 for c in FEATURE_COLS})
         row.iloc[0] = float("inf")
@@ -292,7 +292,7 @@ class TestFeatureHashInf:
         assert len(result) == 64
 
     def test_hash_with_neg_inf_does_not_raise(self) -> None:
-        from winprob.features.builder import FEATURE_COLS, _hash_feature_row
+        from mlb_predict.features.builder import FEATURE_COLS, _hash_feature_row
 
         row = pd.Series({c: 0.5 for c in FEATURE_COLS})
         row.iloc[0] = float("-inf")
@@ -313,9 +313,9 @@ class TestSnapshotCollision:
     ) -> None:
         from datetime import datetime, timezone
 
-        from winprob.errors import SnapshotIntegrityError
-        from winprob.predict import snapshot as snap_mod
-        from winprob.predict.snapshot import write_snapshot
+        from mlb_predict.errors import SnapshotIntegrityError
+        from mlb_predict.predict import snapshot as snap_mod
+        from mlb_predict.predict.snapshot import write_snapshot
 
         fixed_ts = datetime(2024, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
         monkeypatch.setattr(
@@ -372,16 +372,16 @@ class TestSnapshotCollision:
 
 
 class TestAPIErrorExported:
-    """ISSUE-26: APIError must be importable from winprob.errors."""
+    """ISSUE-26: APIError must be importable from mlb_predict.errors."""
 
     def test_import_api_error(self) -> None:
-        from winprob.errors import APIError
+        from mlb_predict.errors import APIError
 
         assert issubclass(APIError, Exception)
 
     def test_mlbapi_error_inherits_api_error(self) -> None:
-        from winprob.errors import APIError
-        from winprob.mlbapi.client import MLBAPIError
+        from mlb_predict.errors import APIError
+        from mlb_predict.mlbapi.client import MLBAPIError
 
         assert issubclass(MLBAPIError, APIError)
 
@@ -395,7 +395,7 @@ class TestPlatformIndependentHash:
     """ISSUE-28: Aggregate hash must use POSIX paths for cross-platform determinism."""
 
     def test_aggregate_uses_posix_sort(self, tmp_path: "FixtureRequest") -> None:
-        from winprob.util.hashing import sha256_aggregate_of_files
+        from mlb_predict.util.hashing import sha256_aggregate_of_files
 
         f1 = tmp_path / "a.txt"
         f2 = tmp_path / "b.txt"
@@ -406,7 +406,7 @@ class TestPlatformIndependentHash:
         assert h1 == h2
 
     def test_aggregate_docstring_mentions_posix(self) -> None:
-        from winprob.util.hashing import sha256_aggregate_of_files
+        from mlb_predict.util.hashing import sha256_aggregate_of_files
 
         assert "POSIX" in (sha256_aggregate_of_files.__doc__ or "")
 
@@ -420,7 +420,7 @@ class TestModelMetadataEvalBrier:
     """ISSUE-5/6: ModelMetadata must use eval_brier, with legacy compat."""
 
     def test_eval_brier_field_exists(self) -> None:
-        from winprob.model.artifacts import ModelMetadata
+        from mlb_predict.model.artifacts import ModelMetadata
 
         meta = ModelMetadata(
             model_version="v3",
@@ -440,7 +440,7 @@ class TestModelMetadataEvalBrier:
 
         import joblib
 
-        from winprob.model.artifacts import load_model
+        from mlb_predict.model.artifacts import load_model
 
         art_dir = tmp_path / "test_v3_train2024"
         art_dir.mkdir()
@@ -470,7 +470,7 @@ class TestBullpenCrossVenue:
     """ISSUE-11: Bullpen usage must accumulate across home and away games."""
 
     def test_bullpen_usage_includes_road_games(self) -> None:
-        from winprob.features.bullpen import build_bullpen_features
+        from mlb_predict.features.bullpen import build_bullpen_features
 
         rows = []
         for i in range(20):
@@ -505,19 +505,19 @@ class TestWeatherGameHour:
     """ISSUE-12: Game-hour estimation must use longitude-based timezone offset."""
 
     def test_east_coast_game_hour(self) -> None:
-        from winprob.external.weather import _game_hour_utc
+        from mlb_predict.external.weather import _game_hour_utc
 
         hour = _game_hour_utc(lat=40.83, lon=-73.93)
         assert 22 <= hour or hour <= 2, f"East coast 7PM should be ~23-0 UTC, got {hour}"
 
     def test_west_coast_game_hour(self) -> None:
-        from winprob.external.weather import _game_hour_utc
+        from mlb_predict.external.weather import _game_hour_utc
 
         hour = _game_hour_utc(lat=37.78, lon=-122.39)
         assert 1 <= hour <= 5, f"West coast 7PM should be ~2-3 UTC, got {hour}"
 
     def test_central_game_hour(self) -> None:
-        from winprob.external.weather import _game_hour_utc
+        from mlb_predict.external.weather import _game_hour_utc
 
         hour = _game_hour_utc(lat=41.83, lon=-87.63)
         assert 0 <= hour <= 3, f"Central 7PM should be ~0-1 UTC, got {hour}"

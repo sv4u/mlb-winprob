@@ -1,0 +1,57 @@
+# =============================================================================
+# MLB Prediction System — Docker Compose (image only, no build)
+#
+# Uses the latest pre-built image from GitHub Container Registry. No Dockerfile
+# or build context required — useful for deployment or when you don't need to
+# build locally.
+#
+# Usage
+# -----
+#   docker compose -f docker-compose.image.yml pull    # pull latest image
+#   docker compose -f docker-compose.image.yml up -d   # start (no build)
+#   docker compose -f docker-compose.image.yml logs -f mlb-predict
+#   docker compose -f docker-compose.image.yml down
+#
+# Image
+# -----
+#   ghcr.io/sv4u/mlb-predict:main  (default; override with COMPOSE_IMAGE or
+#   image: in this file)
+#
+# Environment overrides: same as docker-compose.yml (MODEL, PORT, MEM_LIMIT,
+# CPUS, MLB_PREDICT_LIVE_API). Data and logs still use ./data and ./logs.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MLB Prediction System dashboard (pre-built image from GHCR)
+  # ---------------------------------------------------------------------------
+  mlb-predict:
+    image: ${COMPOSE_IMAGE:-ghcr.io/sv4u/mlb-predict:main}
+    container_name: mlb-predict
+    ports:
+      - "${PORT:-30087}:30087"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+      MODEL: "${MODEL:-stacked}"
+      PORT: "30087"
+      MLB_PREDICT_VERBOSE: true
+      MLB_PREDICT_LOG_LEVEL: "DEBUG"
+      MLB_PREDICT_LOG_FORMAT: "human"
+      MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT:-1536m}
+    cpus: ${CPUS:-2}
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT:-1536m}
+          cpus: "${CPUS:-2}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:30087/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from winprob.statcast.fangraphs import fetch_team_advanced_stats
+from mlb_predict.statcast.fangraphs import fetch_team_advanced_stats
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
