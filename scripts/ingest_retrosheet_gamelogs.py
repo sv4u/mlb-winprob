@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from mlb_predict.retrosheet.gamelogs import RetrosheetGLSource, download_gamelog_txt, parse_gamelog_txt
+from mlb_predict.retrosheet.gamelogs import (
+    RetrosheetGLSource,
+    download_gamelog_txt,
+    parse_gamelog_txt,
+)
 from mlb_predict.util.hashing import sha256_file
 
 

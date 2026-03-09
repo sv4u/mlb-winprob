@@ -546,7 +546,10 @@ async def api_game_play_by_play(game_pk: int) -> dict | JSONResponse:
     """Return play-by-play data for a game from the MLB Stats API (feed/live)."""
     if not _live_api_enabled():
         return JSONResponse(
-            {"error": "Live data disabled.", "detail": "Set MLB_PREDICT_LIVE_API=1 to enable play-by-play."},
+            {
+                "error": "Live data disabled.",
+                "detail": "Set MLB_PREDICT_LIVE_API=1 to enable play-by-play.",
+            },
             status_code=503,
         )
     from mlb_predict.mlbapi.client import MLBAPIClient, MLBNotFoundError
@@ -859,7 +862,11 @@ async def api_team_stats(
         except grpc.RpcError as e:
             return _grpc_error_to_response(e)
     if not _live_api_enabled():
-        return {"season": season, "teams": [], "message": "Live data disabled. Set MLB_PREDICT_LIVE_API=1 to enable."}
+        return {
+            "season": season,
+            "teams": [],
+            "message": "Live data disabled. Set MLB_PREDICT_LIVE_API=1 to enable.",
+        }
     from mlb_predict.mlbapi.client import MLBAPIClient
     from mlb_predict.mlbapi.standings import fetch_all_team_stats, fetch_standings
 

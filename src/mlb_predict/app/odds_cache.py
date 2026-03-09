@@ -28,6 +28,7 @@ def _live_api_enabled() -> bool:
     """True if live external API calls (e.g. Odds API) are allowed."""
     return os.environ.get("MLB_PREDICT_LIVE_API", "1").strip() != "0"
 
+
 logger = logging.getLogger(__name__)
 
 _TTL_SECONDS = 300  # 5 minutes
