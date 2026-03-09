@@ -125,6 +125,7 @@ def switch_model(model_type: str) -> None:
 
     Thread-safe: acquires the global lock, loads new model artifacts,
     recomputes probabilities, then releases the lock.
+    Clears response and game-detail caches so new model is reflected.
     """
     global _features, _model, _meta, _feature_cols, _active_model_type
 
@@ -163,6 +164,13 @@ def switch_model(model_type: str) -> None:
             _feature_cols = prev_feature_cols
             _active_model_type = prev_active
             raise
+
+    # Only invalidate caches after a successful switch so failed attempts don't wipe them
+    from winprob.app.game_detail_cache import clear_game_detail_cache
+    from winprob.app.response_cache import clear_response_cache
+
+    clear_response_cache()
+    clear_game_detail_cache()
 
     elapsed_ms = (time.monotonic() - t0) * 1000
     logger.info(
@@ -237,6 +245,13 @@ def startup(model_type: str = "logistic") -> None:
             model_type,
             elapsed_ms,
         )
+
+    # Invalidate caches so responses reflect this load (reload after pipeline / auto-bootstrap)
+    from winprob.app.game_detail_cache import clear_game_detail_cache
+    from winprob.app.response_cache import clear_response_cache
+
+    clear_response_cache()
+    clear_game_detail_cache()
 
 
 def try_startup(model_type: str = "logistic") -> bool:

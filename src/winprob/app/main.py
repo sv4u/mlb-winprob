@@ -45,6 +45,8 @@ from winprob.app.data_cache import (
     switch_model,
     try_startup,
 )
+from winprob.app.game_detail_cache import get_game_detail_cached, set_game_detail_cached
+from winprob.app.response_cache import cache_get_response
 from winprob.app.timing import TimingMiddleware, timed_operation
 from winprob.mcp import create_mcp_app
 from winprob.standings import (
@@ -258,6 +260,7 @@ def _not_ready_json() -> JSONResponse:
 
 
 @app.get("/api/seasons", response_model=None)
+@cache_get_response(ttl_seconds=60)
 async def api_seasons(request: Request) -> list[int] | dict | JSONResponse:
     """List all available seasons."""
     stubs = _stubs(request)
@@ -279,6 +282,7 @@ async def api_seasons(request: Request) -> list[int] | dict | JSONResponse:
 
 
 @app.get("/api/teams", response_model=None)
+@cache_get_response(ttl_seconds=60)
 async def api_teams(request: Request) -> list[dict] | JSONResponse:
     """List all known teams with their Retrosheet codes and names."""
     stubs = _stubs(request)
@@ -301,6 +305,7 @@ async def api_teams(request: Request) -> list[dict] | JSONResponse:
 
 
 @app.get("/api/games", response_model=None)
+@cache_get_response(ttl_seconds=45)
 async def api_games(
     request: Request,
     season: Annotated[int | None, Query()] = None,
@@ -381,28 +386,53 @@ async def api_games(
         total = len(df)
         page = df.iloc[offset : offset + limit]
 
-        rows = []
-        for _, r in page.iterrows():
-            rows.append(
-                {
-                    "game_pk": int(r.get("game_pk", 0) or 0),
-                    "date": str(r.get("date", ""))[:10],
-                    "season": int(r.get("season", 0) or 0),
-                    "game_type": str(r.get("game_type", "R")),
-                    "home_retro": str(r.get("home_retro", "")),
-                    "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
-                    "away_retro": str(r.get("away_retro", "")),
-                    "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
-                    "prob_home": round(float(r["prob"]), 4) if pd.notna(r.get("prob")) else None,
-                    "home_win": (int(r["home_win"]) if pd.notna(r.get("home_win")) else None),
-                    "home_elo": round(float(r["home_elo"]), 1)
-                    if pd.notna(r.get("home_elo"))
-                    else None,
-                    "away_elo": round(float(r["away_elo"]), 1)
-                    if pd.notna(r.get("away_elo"))
-                    else None,
-                }
+        # Vectorized row construction (avoids slow iterrows())
+        def _prob_home_series(s):
+            return s.apply(lambda v: round(float(v), 4) if pd.notna(v) else None)
+
+        game_pks = page["game_pk"].fillna(0).astype(int).tolist()
+        dates = page["date"].astype(str).str[:10].tolist()
+        seasons = page["season"].fillna(0).astype(int).tolist()
+        game_types = page["game_type"].fillna("R").astype(str).tolist()
+        home_retros = page["home_retro"].astype(str).tolist()
+        away_retros = page["away_retro"].astype(str).tolist()
+        prob_list = _prob_home_series(page["prob"]).tolist()
+        home_win_list = page["home_win"].apply(lambda v: int(v) if pd.notna(v) else None).tolist()
+        home_elo_list = (
+            page["home_elo"].apply(lambda v: round(float(v), 1) if pd.notna(v) else None).tolist()
+        )
+        away_elo_list = (
+            page["away_elo"].apply(lambda v: round(float(v), 1) if pd.notna(v) else None).tolist()
+        )
+
+        rows = [
+            {
+                "game_pk": pk,
+                "date": d,
+                "season": se,
+                "game_type": gt,
+                "home_retro": hr,
+                "home_name": TEAM_NAMES.get(hr, ""),
+                "away_retro": ar,
+                "away_name": TEAM_NAMES.get(ar, ""),
+                "prob_home": ph,
+                "home_win": hw,
+                "home_elo": he,
+                "away_elo": ae,
+            }
+            for pk, d, se, gt, hr, ar, ph, hw, he, ae in zip(
+                game_pks,
+                dates,
+                seasons,
+                game_types,
+                home_retros,
+                away_retros,
+                prob_list,
+                home_win_list,
+                home_elo_list,
+                away_elo_list,
             )
+        ]
 
     return {"total": total, "offset": offset, "limit": limit, "games": rows}
 
@@ -422,6 +452,18 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
     if not is_ready():
         return _not_ready_json()
     logger.debug("GET /api/games/%d", game_pk)
+
+    from winprob.app.odds_cache import get_cached_odds, is_odds_configured, match_odds_for_game
+
+    # Return cached payload (SHAP + stats) when available; only add fresh live_odds
+    cached = get_game_detail_cached(game_pk)
+    if cached is not None:
+        events = await get_cached_odds()
+        live_odds = match_odds_for_game(
+            events, cached.get("home_retro", ""), cached.get("away_retro", "")
+        )
+        return {**cached, "live_odds": live_odds, "odds_configured": is_odds_configured()}
+
     df = get_features()
     matches = df[df["game_pk"] == game_pk]
     if matches.empty:
@@ -469,14 +511,12 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
         if k in feature_cols
     }
 
-    from winprob.app.odds_cache import get_cached_odds, is_odds_configured, match_odds_for_game
-
     home_retro = str(row.get("home_retro", ""))
     away_retro = str(row.get("away_retro", ""))
     events = await get_cached_odds()
     live_odds = match_odds_for_game(events, home_retro, away_retro)
 
-    return {
+    payload = {
         "game_pk": game_pk,
         "date": str(row.get("date", ""))[:10],
         "season": int(row.get("season", 0) or 0),
@@ -492,6 +532,8 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
         "live_odds": live_odds,
         "odds_configured": is_odds_configured(),
     }
+    set_game_detail_cached(game_pk, payload)
+    return payload
 
 
 @app.get("/api/games/{game_pk}/play-by-play", response_model=None)
@@ -625,6 +667,7 @@ async def api_upsets(
 
 
 @app.get("/api/cv-summary")
+@cache_get_response(ttl_seconds=300)
 async def api_cv_summary(request: Request) -> list[dict]:
     """Return cross-validation results from the latest training run."""
     stubs = _stubs(request)
@@ -704,6 +747,7 @@ def _build_standings_payload(
 
 
 @app.get("/api/standings", response_model=None)
+@cache_get_response(ttl_seconds=60)
 async def api_standings(
     request: Request,
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
