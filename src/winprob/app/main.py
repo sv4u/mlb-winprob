@@ -669,7 +669,9 @@ def _build_standings_payload(
 async def api_standings(
     request: Request,
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
-    include_spring: Annotated[bool, Query(description="Include spring training standings subsection")] = False,
+    include_spring: Annotated[
+        bool, Query(description="Include spring training standings subsection")
+    ] = False,
 ) -> dict | JSONResponse:
     """Return predicted vs actual standings grouped by division.
 
