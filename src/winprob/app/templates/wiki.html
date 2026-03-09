@@ -100,7 +100,6 @@
     <a href="/standings">Standings</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki" class="active">Wiki</a>
-    <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap">Sitemap</a>
     <div class="model-selector">
@@ -1238,9 +1237,9 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
 <h2 id="mcp-server">MCP Server</h2>
 
 <p>
-  The <strong>Model Context Protocol (MCP)</strong> server exposes the same data and tools as the chat assistant
+  The <strong>Model Context Protocol (MCP)</strong> server exposes the same data and tools
   over Streamable HTTP, so you can use Cursor (or other MCP clients) to query predictions, standings, SHAP
-  explanations, odds, and model info without relying on the LLM chat. The MCP server runs in the same process
+  explanations, odds, and model info. The MCP server runs in the same process
   as the web UI and shares the same in-memory data and model.
 </p>
 
@@ -1262,11 +1261,11 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   In Cursor, add an MCP server with the Streamable HTTP URL of your running dashboard, for example
   <code>http://localhost:30087/mcp</code> (local) or <code>http://&lt;your-machine-ip&gt;:30087/mcp</code> (home
   network).
-  Cursor will discover the tools and you can call them directly from the AI without using the chat UI.
+  Cursor will discover the tools and you can call them directly from the AI.
 </p>
 
 <h3>Available tools</h3>
-<p>The MCP server exposes these tools (same as the chat assistant):</p>
+<p>The MCP server exposes these tools:</p>
 <ul>
   <li><strong>query_predictions</strong> — Find game predictions by team (Retrosheet code), season, or date.</li>
   <li><strong>explain_prediction</strong> — SHAP breakdown and key stats for a game by <code>game_pk</code>.</li>

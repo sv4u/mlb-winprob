@@ -184,7 +184,7 @@ in sequence and exits nonzero on any failure.
   upsets, CV summary; SHAP attribution on game detail
 - `data_cache.py` — loads all feature Parquet files and the production model
   once at startup; normalizes date types; pre-computes probabilities for all games
-- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`, `chat.html`, `odds_hub.html`, `ev_calculator.html`)
+- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`, `odds_hub.html`, `ev_calculator.html`)
 
 ---
 

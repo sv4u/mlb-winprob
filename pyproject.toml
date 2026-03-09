@@ -37,8 +37,6 @@ dependencies = [
   "grpcio>=1.60",
   "protobuf>=4.25",
   "grpcio-reflection>=1.60",
-  # LLM
-  "ollama>=0.4",
   # MCP server (streamable HTTP, same host as web UI)
   "fastmcp>=3.0",
 ]

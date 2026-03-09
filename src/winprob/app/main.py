@@ -14,7 +14,7 @@ from typing import Annotated
 import grpc
 import pandas as pd
 from fastapi import FastAPI, Query, Request, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import inspect
@@ -99,7 +99,6 @@ async def _lifespan(app: FastAPI):
                 app.state._grpc_server = server
                 from winprob.grpc.generated.winprob.v1 import (
                     admin_pb2_grpc,
-                    chat_pb2_grpc,
                     games_pb2_grpc,
                     models_pb2_grpc,
                     standings_pb2_grpc,
@@ -113,7 +112,6 @@ async def _lifespan(app: FastAPI):
                     "models": models_pb2_grpc.ModelServiceStub(channel),
                     "standings": standings_pb2_grpc.StandingsServiceStub(channel),
                     "admin": admin_pb2_grpc.AdminServiceStub(channel),
-                    "chat": chat_pb2_grpc.ChatServiceStub(channel),
                 }
                 logger.info("gRPC gateway enabled — stubs ready")
         except Exception as exc:
@@ -900,7 +898,6 @@ async def xml_sitemap(request: Request) -> Response:
         "/standings",
         "/odds",
         "/wiki",
-        "/chat",
         "/dashboard",
         "/sitemap",
     ]
@@ -940,68 +937,6 @@ async def page_ev_calculator(request: Request):
 async def page_dashboard(request: Request):
     """Admin dashboard with retrain/ingest controls and system status."""
     return templates.TemplateResponse("dashboard.html", _ctx(request))
-
-
-@app.get("/chat", response_class=HTMLResponse)
-async def page_chat(request: Request):
-    """Chat with the MLB Win Probability assistant (Ollama + tools)."""
-    return templates.TemplateResponse("chat.html", _ctx(request))
-
-
-class _ChatRequest(BaseModel):
-    """Body for POST /api/chat."""
-
-    message: str
-    session_id: str = "default"
-    model: str | None = None
-
-
-async def _stream_chat_sse(request: Request, body: _ChatRequest):
-    """Generator: stream ChatResponse as SSE lines."""
-    stubs = _stubs(request)
-    if not stubs or "chat" not in stubs:
-        yield f"data: {json.dumps({'content': 'Chat service unavailable (gRPC disabled).', 'done': True})}\n\n"
-        return
-    from winprob.grpc.generated.winprob.v1 import chat_pb2
-
-    req = chat_pb2.ChatRequest(
-        message=body.message,
-        session_id=body.session_id,
-    )
-    if body.model:
-        req.model = body.model
-    try:
-        stream = stubs["chat"].SendMessage(req)
-        async for chunk in stream:
-            payload = {"content": chunk.content or "", "done": chunk.done}
-            yield f"data: {json.dumps(payload)}\n\n"
-    except grpc.RpcError as e:
-        yield f"data: {json.dumps({'content': e.details() or str(e), 'done': True})}\n\n"
-
-
-@app.post("/api/chat", response_class=StreamingResponse)
-async def api_chat(request: Request, body: _ChatRequest) -> StreamingResponse:
-    """Stream chat reply as Server-Sent Events. Body: message, session_id?, model?."""
-    return StreamingResponse(
-        _stream_chat_sse(request, body),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/api/chat/status", response_model=None)
-async def api_chat_status(request: Request) -> dict | JSONResponse:
-    """Return chat status: ollama_available, model, session_count."""
-    stubs = _stubs(request)
-    if stubs and "chat" in stubs:
-        try:
-            from winprob.grpc.generated.winprob.v1 import common_pb2
-
-            r = await stubs["chat"].GetStatus(common_pb2.Empty())
-            return _grpc_dict(r)
-        except grpc.RpcError as e:
-            return _grpc_error_to_response(e)
-    return {"ollama_available": False, "model": "", "session_count": 0}
 
 
 # ---------------------------------------------------------------------------

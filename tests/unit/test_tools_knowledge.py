@@ -1,8 +1,8 @@
-"""Unit tests for winprob.llm.knowledge."""
+"""Unit tests for winprob.tools.knowledge."""
 
 from __future__ import annotations
 
-from winprob.llm.knowledge import (
+from winprob.tools.knowledge import (
     FEATURE_LABELS,
     GLOSSARY,
     MODEL_DOCS,

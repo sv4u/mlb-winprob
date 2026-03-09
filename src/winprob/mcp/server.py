@@ -1,6 +1,6 @@
 """MCP server: FastMCP instance and Streamable HTTP app for mounting in FastAPI.
 
-All tools delegate to winprob.llm.tools.run_tool so they use the same in-memory
+All tools delegate to winprob.tools.run_tool so they use the same in-memory
 data and model as the web app (no separate process). The app must be mounted
 after the FastAPI lifespan has loaded data (combined lifespan in main.py).
 """
@@ -13,7 +13,7 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.server.http import create_streamable_http_app
 
-from winprob.llm.tools import run_tool
+from winprob.tools import run_tool
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ _STREAMABLE_HTTP_PATH = "/"
 
 
 def _call(tool_name: str, **kwargs: Any) -> str:
-    """Run an LLM tool by name and return its JSON string result."""
+    """Run a tool by name and return its JSON string result."""
     # Drop None values so run_tool sees only provided params
     params = {k: v for k, v in kwargs.items() if v is not None}
     return run_tool(tool_name, params)

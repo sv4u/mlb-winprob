@@ -31,7 +31,6 @@ _EXPECTED_PAGE_PATHS = [
     "/standings",
     "/odds",
     "/wiki",
-    "/chat",
     "/dashboard",
     "/sitemap",
 ]
@@ -99,7 +98,6 @@ _TEMPLATES_WITH_SITEMAP_NAV = [
     "ev_calculator.html",
     "odds_hub.html",
     "wiki.html",
-    "chat.html",
     "dashboard.html",
     "sitemap.html",
 ]
@@ -181,7 +179,6 @@ async def test_xml_sitemap_contains_expected_paths() -> None:
         "/standings",
         "/odds",
         "/wiki",
-        "/chat",
         "/dashboard",
         "/sitemap",
     ]:

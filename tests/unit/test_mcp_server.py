@@ -35,8 +35,8 @@ def test_server_creation() -> None:
 
 
 def test_run_tool_via_import() -> None:
-    """run_tool from llm.tools returns JSON string (smoke test)."""
-    from winprob.llm.tools import run_tool
+    """run_tool from winprob.tools returns JSON string (smoke test)."""
+    from winprob.tools import run_tool
 
     out = run_tool("get_model_info", {"model_type": "stacked"})
     data = json.loads(out)

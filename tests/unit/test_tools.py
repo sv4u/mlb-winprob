@@ -1,10 +1,10 @@
-"""Unit tests for winprob.llm.tools."""
+"""Unit tests for winprob.tools (run_tool and TOOL_SCHEMAS)."""
 
 from __future__ import annotations
 
 import json
 
-from winprob.llm.tools import TOOL_SCHEMAS, run_tool
+from winprob.tools import TOOL_SCHEMAS, run_tool
 
 
 def test_tool_schemas_count() -> None:

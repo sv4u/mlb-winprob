@@ -1,7 +1,7 @@
-"""Knowledge base for the LLM: feature descriptions, model docs, sabermetric glossary.
+"""Knowledge base for tools: feature descriptions, model docs, sabermetric glossary.
 
 Sourced from scripts/query_game.py _FEATURE_LABELS and the technical wiki.
-Queried on demand by the describe_feature tool and used in the system prompt.
+Queried on demand by the describe_feature tool and by MCP/documentation.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ GLOSSARY: dict[str, str] = {
     "brier": "Brier score: mean squared error of probabilities. Lower is better. 0.25 = random.",
 }
 
-# One-paragraph model descriptions (for system prompt / get_model_info)
+# One-paragraph model descriptions (for get_model_info and documentation)
 MODEL_DOCS: dict[str, str] = {
     "logistic": "Logistic regression baseline. Linear combination of features passed through sigmoid. Z-score standardised, L2 regularisation. Interpretable coefficients.",
     "lightgbm": "LightGBM gradient boosted trees. Leaf-wise growth, histogram binning. Captures non-linear interactions. Optuna-tuned (num_leaves, learning_rate, n_estimators).",

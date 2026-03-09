@@ -1,8 +1,8 @@
-"""Tool functions and flat JSON schemas for the LLM.
+"""Tool functions and flat JSON schemas for MCP and other consumers.
 
 Twelve tools: 10 that wrap existing project code, plus find_ev_bets and
 get_live_odds as stubs until odds/EV modules exist. Flat schemas (no nested
-objects, no $defs) for 3B model adherence.
+objects, no $defs) for compatibility with tool-calling clients.
 """
 
 from __future__ import annotations
@@ -22,16 +22,16 @@ from winprob.app.data_cache import (
     get_model,
     is_ready,
 )
-from winprob.llm.knowledge import (
-    get_feature_description,
-    get_glossary_term,
-    get_model_docs,
-)
 from winprob.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
     compute_league_leaders,
     compute_predicted_standings,
+)
+from winprob.tools.knowledge import (
+    get_feature_description,
+    get_glossary_term,
+    get_model_docs,
 )
 
 logger = logging.getLogger(__name__)
