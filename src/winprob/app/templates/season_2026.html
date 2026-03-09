@@ -135,21 +135,35 @@
 
   <div class="layout">
     <div>
-      <div class="filters">
-        <label>Home team
-          <select id="f-home"><option value="">Any</option></select>
-        </label>
-        <label>Away team
-          <select id="f-away"><option value="">Any</option></select>
-        </label>
-        <label>From date
-          <input type="date" id="f-from" />
-        </label>
-        <label>To date
-          <input type="date" id="f-to" />
-        </label>
-        <button onclick="loadGames(0)">Search</button>
-        <button class="sec" onclick="resetFilters()">Reset</button>
+      <div class="filter-panel">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label for="f-search">Search</label>
+            <input type="text" id="f-search" placeholder="Team or matchup…" aria-label="Search matchup" />
+          </div>
+          <div class="filter-group">
+            <label for="f-home">Home team</label>
+            <select id="f-home">
+              <option value="">Any</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="f-away">Away team</label>
+            <select id="f-away">
+              <option value="">Any</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="f-from">From date</label>
+            <input type="date" id="f-from" />
+          </div>
+          <div class="filter-group">
+            <label for="f-to">To date</label>
+            <input type="date" id="f-to" />
+          </div>
+          <button onclick="loadGames(0)">Apply</button>
+          <button class="btn sec" onclick="resetFilters()">Reset</button>
+          </div>
       </div>
 
       <div id="table-wrap"></div>
@@ -298,8 +312,9 @@ async function init() {
     });
   });
 
-  ['f-from', 'f-to'].forEach(id => {
-    $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(0); });
+  ['f-from', 'f-to', 'f-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(0); });
   });
 
   await loadOdds();
@@ -315,11 +330,13 @@ async function init() {
     const away = $('f-away').value;
     const from = $('f-from').value;
     const to   = $('f-to').value;
+    const search = (document.getElementById('f-search') && document.getElementById('f-search').value) ? document.getElementById('f-search').value.trim() : '';
     const offset = currentPage * pageSize;
 
     let url = '/api/games?season=2026&limit=' + pageSize + '&offset=' + offset + '&sort=date&order=asc';
-    if (home) url += '&home=' + home;
-    if (away) url += '&away=' + away;
+    if (home) url += '&home=' + encodeURIComponent(home);
+    if (away) url += '&away=' + encodeURIComponent(away);
+    if (search) url += '&q=' + encodeURIComponent(search);
 
     const data = await timedFetch(url, 'timing-games');
     let games = data.games;
@@ -437,7 +454,9 @@ async function loadRankings() {
 function resetFilters() {
   ['f-home', 'f-away'].forEach(id => $(id).value = '');
   $('f-from').value = '';
-  $('f-to').value   = '';
+  $('f-to').value = '';
+  const fs = document.getElementById('f-search');
+  if (fs) fs.value = '';
   loadGames(0);
 }
 

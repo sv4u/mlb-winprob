@@ -229,6 +229,22 @@
 
   <!-- Batting stats tab -->
   <div id="tab-batting" class="tab-content">
+    <div class="filter-panel" id="batting-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="batting-filter-search">Search</label>
+          <input type="text" id="batting-filter-search" placeholder="Team name…" aria-label="Search team" />
+        </div>
+        <div class="filter-group">
+          <label>OPS</label>
+          <input type="number" id="batting-ops-min" min="0" max="2" step="0.01" placeholder="Min" aria-label="OPS min" />
+          <span class="range-hint">–</span>
+          <input type="number" id="batting-ops-max" min="0" max="2" step="0.01" placeholder="Max" aria-label="OPS max" />
+        </div>
+        <button type="button" class="btn" onclick="applyBattingFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetBattingFilters()">Reset</button>
+      </div>
+    </div>
     <div id="batting-area">
       <div class="skeleton skeleton-card" style="height:200px"></div>
     </div>
@@ -237,6 +253,22 @@
 
   <!-- Pitching stats tab -->
   <div id="tab-pitching" class="tab-content">
+    <div class="filter-panel" id="pitching-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="pitching-filter-search">Search</label>
+          <input type="text" id="pitching-filter-search" placeholder="Team name…" aria-label="Search team" />
+        </div>
+        <div class="filter-group">
+          <label>ERA</label>
+          <input type="number" id="pitching-era-min" min="0" max="20" step="0.1" placeholder="Min" aria-label="ERA min" />
+          <span class="range-hint">–</span>
+          <input type="number" id="pitching-era-max" min="0" max="20" step="0.1" placeholder="Max" aria-label="ERA max" />
+        </div>
+        <button type="button" class="btn" onclick="applyPitchingFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetPitchingFilters()">Reset</button>
+      </div>
+    </div>
     <div id="pitching-area">
       <div class="skeleton skeleton-card" style="height:200px"></div>
     </div>
@@ -528,16 +560,82 @@ let statsLoaded = false;
 }
 
 // ── Team Stats ────────────────────────────────────────────────────────────
+  var teamStatsFull = null;
+
 async function loadTeamStats() {
   try {
     var data = await timedFetch('/api/team-stats?season=2026', 'timing-team-stats');
-    renderBatting(data.teams);
-    renderPitching(data.teams);
+    teamStatsFull = data.teams || [];
+    applyBattingFilters();
+    applyPitchingFilters();
   } catch (e) {
+    teamStatsFull = null;
     $('batting-area').innerHTML = '<div class="error-msg">Failed to load team stats: ' + e.message + '</div>';
     $('pitching-area').innerHTML = '<div class="error-msg">Failed to load team stats: ' + e.message + '</div>';
   }
 }
+
+  function getBattingFilters() {
+    var q = (document.getElementById('batting-filter-search') && document.getElementById('batting-filter-search').value) ? document.getElementById('batting-filter-search').value.trim().toLowerCase() : '';
+    var opsMin = document.getElementById('batting-ops-min');
+    var opsMax = document.getElementById('batting-ops-max');
+    return { search: q, opsMin: opsMin && opsMin.value !== '' ? parseFloat(opsMin.value, 10) : null, opsMax: opsMax && opsMax.value !== '' ? parseFloat(opsMax.value, 10) : null };
+  }
+
+  function getPitchingFilters() {
+    var q = (document.getElementById('pitching-filter-search') && document.getElementById('pitching-filter-search').value) ? document.getElementById('pitching-filter-search').value.trim().toLowerCase() : '';
+    var eraMin = document.getElementById('pitching-era-min');
+    var eraMax = document.getElementById('pitching-era-max');
+    return { search: q, eraMin: eraMin && eraMin.value !== '' ? parseFloat(eraMin.value, 10) : null, eraMax: eraMax && eraMax.value !== '' ? parseFloat(eraMax.value, 10) : null };
+  }
+
+  function applyBattingFilters() {
+    if (!teamStatsFull || !teamStatsFull.length) { renderBatting([]); return; }
+    var f = getBattingFilters();
+    var filtered = teamStatsFull.filter(function (t) {
+      if (f.search) {
+        var name = (t.team_name || '').toLowerCase();
+        var code = (t.retro_code || t.team_name || '').toLowerCase();
+        if (name.indexOf(f.search) === -1 && code.indexOf(f.search) === -1) return false;
+      }
+      var ops = t.batting && t.batting.ops != null ? t.batting.ops : 0;
+      if (f.opsMin != null && ops < f.opsMin) return false;
+      if (f.opsMax != null && ops > f.opsMax) return false;
+      return true;
+    });
+    renderBatting(filtered);
+  }
+
+  function applyPitchingFilters() {
+    if (!teamStatsFull || !teamStatsFull.length) { renderPitching([]); return; }
+    var f = getPitchingFilters();
+    var filtered = teamStatsFull.filter(function (t) {
+      if (f.search) {
+        var name = (t.team_name || '').toLowerCase();
+        var code = (t.retro_code || t.team_name || '').toLowerCase();
+        if (name.indexOf(f.search) === -1 && code.indexOf(f.search) === -1) return false;
+      }
+      var era = t.pitching && t.pitching.era != null ? t.pitching.era : 999;
+      if (f.eraMin != null && era < f.eraMin) return false;
+      if (f.eraMax != null && era > f.eraMax) return false;
+      return true;
+    });
+    renderPitching(filtered);
+  }
+
+  function resetBattingFilters() {
+    var el = document.getElementById('batting-filter-search'); if (el) el.value = '';
+    el = document.getElementById('batting-ops-min'); if (el) el.value = '';
+    el = document.getElementById('batting-ops-max'); if (el) el.value = '';
+    applyBattingFilters();
+  }
+
+  function resetPitchingFilters() {
+    var el = document.getElementById('pitching-filter-search'); if (el) el.value = '';
+    el = document.getElementById('pitching-era-min'); if (el) el.value = '';
+    el = document.getElementById('pitching-era-max'); if (el) el.value = '';
+    applyPitchingFilters();
+  }
 
 function renderBatting(teams) {
   if (!teams || !teams.length) {

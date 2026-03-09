@@ -97,6 +97,22 @@
   <!-- Tab 1: EV+ Opportunities -->
   <div class="hub-panel active" id="panel-ev">
     <div id="ev-summary-area"></div>
+    <div class="filter-panel" id="ev-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="ev-filter-search">Search</label>
+          <input type="text" id="ev-filter-search" placeholder="Matchup or team…" aria-label="Search matchup" />
+        </div>
+        <div class="filter-group">
+          <label>Edge (pp)</label>
+          <input type="number" id="ev-edge-min" min="0" max="50" step="0.1" placeholder="Min" aria-label="Edge min" />
+          <span class="range-hint">–</span>
+          <input type="number" id="ev-edge-max" min="0" max="50" step="0.1" placeholder="Max" aria-label="Edge max" />
+        </div>
+        <button type="button" class="btn" onclick="applyEVFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetEVFilters()">Reset</button>
+      </div>
+    </div>
     <div class="card">
       <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
         <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">Positive Expected Value Bets</h2>
@@ -112,6 +128,16 @@
 
   <!-- Tab 2: All Odds Board -->
   <div class="hub-panel" id="panel-board">
+    <div class="filter-panel" id="board-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="board-filter-search">Search</label>
+          <input type="text" id="board-filter-search" placeholder="Matchup or team…" aria-label="Search matchup" />
+        </div>
+        <button type="button" class="btn" onclick="applyBoardFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetBoardFilters()">Reset</button>
+      </div>
+    </div>
     <div class="card">
       <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
         <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">All Game Odds</h2>
@@ -215,37 +241,18 @@ document.querySelectorAll('.hub-tab').forEach(function(tab) {
   });
 });
 
-// ── Load EV+ opportunities ────────────────────────────────────────
-async function loadEVOpportunities() {
-  try {
-    var data = await timedFetch('/api/ev-opportunities');
-    if (!data.configured) {
-      document.getElementById('ev-table-wrap').innerHTML =
-        '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a> to see +EV opportunities.</p></div>';
+    var evOppsFull = null;
+    var oddsEventsFull = null;
+
+    function renderEVTable(opps) {
+      var wrap = document.getElementById('ev-table-wrap');
+      var countEl = document.getElementById('ev-count');
+      if (!opps || !opps.length) {
+        if (countEl) countEl.textContent = '0 opportunities';
+        wrap.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets match the current filters.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
       return;
     }
-    var opps = data.opportunities || [];
-    document.getElementById('ev-count').textContent = opps.length + ' opportunit' + (opps.length !== 1 ? 'ies' : 'y');
-
-    // Summary cards
-    if (opps.length) {
-      var avgEdge = opps.reduce(function (s, o) { return s + o.edge; }, 0) / opps.length;
-      var bestEdge = Math.max.apply(null, opps.map(function (o) { return o.edge; }));
-      var avgKelly = opps.reduce(function (s, o) { return s + o.kelly_pct; }, 0) / opps.length;
-      document.getElementById('ev-summary-area').innerHTML =
-        '<div class="ev-summary-cards">' +
-        '<div class="ev-summary-card"><div class="ev-summary-val text-green">' + opps.length + '</div><div class="ev-summary-lbl">+EV Bets Found</div></div>' +
-        '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (avgEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Edge</div></div>' +
-        '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (bestEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Best Edge</div></div>' +
-        '<div class="ev-summary-card"><div class="ev-summary-val text-accent">' + avgKelly.toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Kelly %</div></div>' +
-        '</div>';
-    }
-
-    if (!opps.length) {
-      document.getElementById('ev-table-wrap').innerHTML =
-        '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets right now. The model does not see an edge over any current market lines.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
-      return;
-    }
+    if (countEl) countEl.textContent = opps.length + ' opportunit' + (opps.length !== 1 ? 'ies' : 'y');
     var html = '<div class="table-wrap"><table><thead><tr>' +
       '<th data-sort="string">Game</th>' +
       '<th data-sort="string">Pick</th>' +
@@ -257,7 +264,7 @@ async function loadEVOpportunities() {
       '<th class="num" data-sort="number">EV/unit</th>' +
       '<th class="num" data-sort="number">Kelly</th>' +
       '</tr></thead><tbody>';
-    opps.forEach(function(o) {
+    opps.forEach(function (o) {
       var edgeCls = o.edge > 0 ? 'ev-edge-pos' : 'ev-edge-neg';
       var edgeSign = o.edge > 0 ? '+' : '';
       html += '<tr class="' + (o.edge > 0 ? 'ev-opp-row-positive' : '') + '">' +
@@ -273,59 +280,164 @@ async function loadEVOpportunities() {
         '</tr>';
     });
     html += '</tbody></table></div>';
-    document.getElementById('ev-table-wrap').innerHTML = html;
+    wrap.innerHTML = html;
     initAllSortables();
+    }
+
+    function getEVFilters() {
+      var el = document.getElementById('ev-filter-search');
+      var q = el && el.value ? el.value.trim().toLowerCase() : '';
+      var edgeMin = document.getElementById('ev-edge-min');
+      var edgeMax = document.getElementById('ev-edge-max');
+      return { search: q, edgeMin: edgeMin && edgeMin.value !== '' ? parseFloat(edgeMin.value, 10) : null, edgeMax: edgeMax && edgeMax.value !== '' ? parseFloat(edgeMax.value, 10) : null };
+    }
+
+    function applyEVFilters() {
+      var wrap = document.getElementById('ev-table-wrap');
+      if (!evOppsFull) return;
+      if (!evOppsFull.length) {
+        wrap.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No +EV bets right now. The model does not see an edge over any current market lines.</p><div class="action"><a href="/wiki" class="btn btn-sm sec">Learn how EV works →</a></div></div>';
+        return;
+      }
+      var f = getEVFilters();
+      var filtered = evOppsFull.filter(function (o) {
+        if (f.search) {
+          var s = (o.away_team + ' ' + o.home_team + ' ' + (o.team || '')).toLowerCase();
+          if (s.indexOf(f.search) === -1) return false;
+        }
+        var edgePp = (o.edge || 0) * 100;
+        if (f.edgeMin != null && edgePp < f.edgeMin) return false;
+        if (f.edgeMax != null && edgePp > f.edgeMax) return false;
+        return true;
+      });
+      renderEVTable(filtered);
+    }
+
+    function resetEVFilters() {
+      var el = document.getElementById('ev-filter-search'); if (el) el.value = '';
+      el = document.getElementById('ev-edge-min'); if (el) el.value = '';
+      el = document.getElementById('ev-edge-max'); if (el) el.value = '';
+      applyEVFilters();
+    }
+
+    // ── Load EV+ opportunities ────────────────────────────────────────
+    async function loadEVOpportunities() {
+      try {
+        var data = await timedFetch('/api/ev-opportunities');
+        if (!data.configured) {
+          evOppsFull = null;
+          document.getElementById('ev-table-wrap').innerHTML =
+            '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a> to see +EV opportunities.</p></div>';
+          return;
+        }
+        evOppsFull = data.opportunities || [];
+        document.getElementById('ev-count').textContent = evOppsFull.length + ' opportunit' + (evOppsFull.length !== 1 ? 'ies' : 'y');
+
+        if (evOppsFull.length) {
+          var avgEdge = evOppsFull.reduce(function (s, o) { return s + o.edge; }, 0) / evOppsFull.length;
+          var bestEdge = Math.max.apply(null, evOppsFull.map(function (o) { return o.edge; }));
+          var avgKelly = evOppsFull.reduce(function (s, o) { return s + o.kelly_pct; }, 0) / evOppsFull.length;
+          document.getElementById('ev-summary-area').innerHTML =
+            '<div class="ev-summary-cards">' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">' + evOppsFull.length + '</div><div class="ev-summary-lbl">+EV Bets Found</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (avgEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Edge</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-green">+' + (bestEdge * 100).toFixed(1) + '%</div><div class="ev-summary-lbl">Best Edge</div></div>' +
+            '<div class="ev-summary-card"><div class="ev-summary-val text-accent">' + avgKelly.toFixed(1) + '%</div><div class="ev-summary-lbl">Avg Kelly %</div></div>' +
+            '</div>';
+        } else {
+          document.getElementById('ev-summary-area').innerHTML = '';
+        }
+
+        applyEVFilters();
   } catch (e) {
+      evOppsFull = null;
     document.getElementById('ev-table-wrap').innerHTML =
       '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
   }
 }
 
-// ── Load All Odds board ───────────────────────────────────────────
-async function loadOddsBoard() {
-  try {
-    var data = await timedFetch('/api/odds');
-    if (!data.configured) {
-      document.getElementById('board-wrap').innerHTML =
-        '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a></p></div>';
+    function getBoardFilters() {
+      var el = document.getElementById('board-filter-search');
+      return { search: el && el.value ? el.value.trim().toLowerCase() : '' };
+    }
+
+  function renderOddsBoard(events) {
+    var wrap = document.getElementById('board-wrap');
+    var countEl = document.getElementById('board-count');
+    if (!events || !events.length) {
+      countEl.textContent = '0 games';
+      wrap.innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No games match the current filters.</p></div>';
       return;
     }
-    var events = data.events || [];
-    document.getElementById('board-count').textContent = events.length + ' game' + (events.length !== 1 ? 's' : '');
-    if (!events.length) {
-      document.getElementById('board-wrap').innerHTML =
-        '<div class="empty-state"><div class="icon">⚾</div><p>No live odds available right now.<br>Odds are typically posted 12–24 hours before game time.</p></div>';
-      return;
-    }
+    countEl.textContent = events.length + ' game' + (events.length !== 1 ? 's' : '');
     var html = '';
-    events.forEach(function(ev) {
+    events.forEach(function (ev) {
       var lt = ev.commence_time ? formatLocalTime(ev.commence_time) : { time: '—', tzAbbr: '' };
       var timeStr = lt.time + (lt.tzAbbr ? ' ' + lt.tzAbbr : '');
       if (lt.relative) timeStr += ' (' + lt.relative + ')';
       html += '<div class="odds-board-game">';
       html += '<div class="odds-board-header">';
-      html += '<span class="matchup">' + (ev.away_team||'') + ' @ ' + (ev.home_team||'') + '</span>';
-      html += '<span class="time">' + timeStr + '</span>';
-      html += '</div>';
-      if (ev.bookmakers && ev.bookmakers.length) {
-        html += '<div class="table-wrap"><table><thead><tr>' +
-          '<th>Sportsbook</th>' +
-          '<th class="num">' + (ev.home_team || 'Home') + '</th>' +
-          '<th class="num">' + (ev.away_team || 'Away') + '</th>' +
-          '</tr></thead><tbody>';
-        ev.bookmakers.forEach(function(bm) {
-          var hCls = bm.home_price === ev.best_home_price ? 'num odds-best' : 'num';
-          var aCls = bm.away_price === ev.best_away_price ? 'num odds-best' : 'num';
-          html += '<tr><td>' + bm.title + '</td>' +
-            '<td class="' + hCls + ' text-mono">' + fmtOdds(bm.home_price) + '</td>' +
-            '<td class="' + aCls + ' text-mono">' + fmtOdds(bm.away_price) + '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-      }
-      html += '</div>';
-    });
-    document.getElementById('board-wrap').innerHTML = html;
+    html += '<span class="matchup">' + (ev.away_team || '') + ' @ ' + (ev.home_team || '') + '</span>';
+    html += '<span class="time">' + timeStr + '</span>';
+    html += '</div>';
+    if (ev.bookmakers && ev.bookmakers.length) {
+      html += '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Sportsbook</th>' +
+        '<th class="num">' + (ev.home_team || 'Home') + '</th>' +
+        '<th class="num">' + (ev.away_team || 'Away') + '</th>' +
+        '</tr></thead><tbody>';
+      ev.bookmakers.forEach(function (bm) {
+        var hCls = bm.home_price === ev.best_home_price ? 'num odds-best' : 'num';
+        var aCls = bm.away_price === ev.best_away_price ? 'num odds-best' : 'num';
+        html += '<tr><td>' + bm.title + '</td>' +
+          '<td class="' + hCls + ' text-mono">' + fmtOdds(bm.home_price) + '</td>' +
+          '<td class="' + aCls + ' text-mono">' + fmtOdds(bm.away_price) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  });
+          wrap.innerHTML = html;
+        }
+
+        function applyBoardFilters() {
+          if (!oddsEventsFull) return;
+          var wrap = document.getElementById('board-wrap');
+          if (!oddsEventsFull.length) {
+            document.getElementById('board-count').textContent = '0 games';
+            wrap.innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No live odds available right now.<br>Odds are typically posted 12–24 hours before game time.</p></div>';
+            return;
+          }
+          var f = getBoardFilters();
+          var filtered = f.search
+            ? oddsEventsFull.filter(function (ev) {
+              var s = ((ev.away_team || '') + ' ' + (ev.home_team || '')).toLowerCase();
+              return s.indexOf(f.search) !== -1;
+            })
+            : oddsEventsFull;
+          renderOddsBoard(filtered);
+        }
+
+        function resetBoardFilters() {
+          var el = document.getElementById('board-filter-search');
+          if (el) el.value = '';
+          applyBoardFilters();
+        }
+
+        // ── Load All Odds board ───────────────────────────────────────────
+        async function loadOddsBoard() {
+          try {
+            var data = await timedFetch('/api/odds');
+            if (!data.configured) {
+              oddsEventsFull = null;
+              document.getElementById('board-wrap').innerHTML =
+                '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a></p></div>';
+              return;
+            }
+            oddsEventsFull = data.events || [];
+            applyBoardFilters();
   } catch (e) {
+        oddsEventsFull = null;
     document.getElementById('board-wrap').innerHTML =
       '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
   }

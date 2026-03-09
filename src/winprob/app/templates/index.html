@@ -58,40 +58,41 @@
     .quick-stat .qs-val { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
     .quick-stat .qs-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
-    .smart-bets-preview {
+    .home-hero-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .hero-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 1.25rem;
       display: flex;
       flex-direction: column;
+      justify-content: flex-start;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color var(--transition), box-shadow var(--transition);
     }
-    .smart-bets-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
+    .hero-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
     }
-    .smart-bets-header h2 {
-      font-size: 0.95rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .smart-bets-list { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
-    .smart-bets-empty {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
+    .hero-card h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .hero-card p { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem; flex: 1; }
+    .hero-card .link { font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+    .hero-card:hover .link { text-decoration: underline; }
+    .smart-bet-card { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle); }
+    .smart-bet-card:last-child { border-bottom: none; }
+    .smart-bet-matchup { font-weight: 600; font-size: 0.88rem; }
+    .smart-bet-details { font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
+    .smart-bet-edge { font-size: 1rem; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
+    .smart-bet-book { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; }
 
     @media (max-width: 768px) {
       .home-hero { grid-template-columns: 1fr; }
+      .home-hero-cards { grid-template-columns: 1fr; }
       .quick-stats { grid-template-columns: 1fr 1fr; }
     }
 
@@ -166,7 +167,7 @@
 
 <div class="container">
 
-  <!-- Hero: Quick Stats + Smart Bets Preview -->
+  <!-- Hero: Quick Stats + Standings & Season cards -->
   <div class="home-hero">
     <div class="home-hero-left">
       <h1>Win Probability Dashboard</h1>
@@ -193,16 +194,23 @@
         </div>
       </div>
     </div>
-    <div class="smart-bets-preview">
-      <div class="smart-bets-header">
-        <h2><span style="color:var(--green)">↗</span> Today's Smart Bets</h2>
-        <a href="/odds" class="btn btn-sm sec">View all →</a>
-      </div>
-      <div class="smart-bets-list" id="smart-bets-list">
-        <div class="skeleton skeleton-card" style="height:60px"></div>
-        <div class="skeleton skeleton-card" style="height:60px"></div>
-        <div class="skeleton skeleton-card" style="height:60px"></div>
-      </div>
+    <div class="home-hero-cards">
+      <a href="/standings" class="hero-card">
+        <h2>📊 Standings</h2>
+        <p>Predicted vs actual division standings, league leaders, and team batting & pitching stats.</p>
+        <span class="link">View standings →</span>
+      </a>
+      <a href="/season/2026" class="hero-card">
+        <h2>📅 Season Statistics</h2>
+        <p>2026 schedule, win probabilities, power rankings, and today's odds.</p>
+        <span class="link">2026 season →</span>
+      </a>
+    </div>
+  </div>
+<!-- Today's Smart Bets ticker -->
+<div class="ticker-wrap" id="smart-bets-ticker-wrap" style="display:none">
+  <div class="ticker" id="smart-bets-ticker">
+    <span class="ticker-label">Today's Smart Bets</span>
     </div>
   </div>
 
@@ -364,25 +372,42 @@
   </div>
 
   <!-- Filters -->
-  <div class="filters">
-    <label>Season
-      <select id="f-season"><option value="">All</option></select>
-    </label>
-    <span class="timing-badge" id="timing-init" style="display:none"></span>
-    <label>Home team
-      <select id="f-home"><option value="">Any</option></select>
-    </label>
-    <label>Away team
-      <select id="f-away"><option value="">Any</option></select>
-    </label>
-    <label id="f-date-wrap">Date
-      <input type="date" id="f-date" />
-    </label>
-    <label id="f-minprob-wrap" style="display:none">Min fav prob
-      <input type="number" id="f-minprob" value="0.65" min="0.5" max="0.99" step="0.01" style="width:90px" />
-    </label>
-    <button onclick="loadData(0)">Search</button>
-    <button class="sec" onclick="resetFilters()">Reset</button>
+  <div class="filter-panel">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label for="f-search">Search</label>
+        <input type="text" id="f-search" placeholder="Team or matchup…" aria-label="Search matchup" />
+      </div>
+      <div class="filter-group">
+        <label for="f-season">Season</label>
+        <select id="f-season">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="f-home">Home team</label>
+        <select id="f-home">
+          <option value="">Any</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="f-away">Away team</label>
+        <select id="f-away">
+          <option value="">Any</option>
+        </select>
+      </div>
+      <div class="filter-group" id="f-date-wrap">
+        <label for="f-date">Date</label>
+        <input type="date" id="f-date" />
+      </div>
+      <div class="filter-group" id="f-minprob-wrap" style="display:none">
+        <label for="f-minprob">Min fav prob</label>
+        <input type="number" id="f-minprob" value="0.65" min="0.5" max="0.99" step="0.01" style="width:90px" />
+      </div>
+      <span class="timing-badge" id="timing-init" style="display:none"></span>
+      <button onclick="loadData(0)">Apply</button>
+      <button class="btn sec" onclick="resetFilters()">Reset</button>
+      </div>
   </div>
 
   <!-- Results table -->
@@ -462,47 +487,43 @@ async function init() {
   $('sc-seasons').textContent = seasons.length;
 
   $('f-date').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(0); });
+  const fSearch = document.getElementById('f-search');
+  if (fSearch) fSearch.addEventListener('keydown', e => { if (e.key === 'Enter') loadData(0); });
 
   loadData(0);
       loadSmartBets();
     }
 
-    // ── Smart Bets Preview ──────────────────────────────────────────────────
+      // ── Smart Bets ticker ───────────────────────────────────────────────────
     async function loadSmartBets() {
+      const wrap = document.getElementById('smart-bets-ticker-wrap');
+      const ticker = document.getElementById('smart-bets-ticker');
+      if (!wrap || !ticker) return;
       try {
         const data = await api('/api/ev-opportunities');
-        const list = $('smart-bets-list');
+        let items = [];
         if (!data.configured) {
-          list.innerHTML = '<div class="smart-bets-empty"><div>🔑 <a href="/dashboard">Configure The Odds API</a> to see smart bets</div></div>';
-          return;
+          items = ['🔑 Configure The Odds API in Dashboard to see +EV bets'];
+        } else {
+          const opps = data.opportunities || [];
+          if (!opps.length) {
+            items = ['No +EV opportunities right now — check back when odds are posted'];
+          } else {
+            opps.forEach(o => {
+              var edgeSign = o.edge > 0 ? '+' : '';
+              items.push('<a href="/game/' + o.game_pk + '" class="ticker-item">' + o.away_team + ' @ ' + o.home_team + ' · Bet ' + o.team + ' ' + fmtOdds(o.odds) + ' · ' + edgeSign + (o.edge * 100).toFixed(1) + '% edge</a>');
+            });
+          }
         }
-        const opps = (data.opportunities || []).slice(0, 4);
-        if (!opps.length) {
-          list.innerHTML = '<div class="smart-bets-empty"><div>No +EV opportunities right now.<br><span style="font-size:0.78rem">Check back when odds are posted.</span></div></div>';
-          return;
-        }
-        list.innerHTML = opps.map(o => {
-          var edgeSign = o.edge > 0 ? '+' : '';
-          return '<a href="/game/' + o.game_pk + '" style="text-decoration:none;color:inherit">' +
-            '<div class="smart-bet-card">' +
-            '<div>' +
-            '<div class="smart-bet-matchup">' + o.away_team + ' @ ' + o.home_team + '</div>' +
-            '<div class="smart-bet-details">' +
-            '<span>Bet: <strong>' + o.team + '</strong></span>' +
-            '<span>' + o.sportsbook + ' ' + fmtOdds(o.odds) + '</span>' +
-            '<span>Model: ' + (o.model_prob * 100).toFixed(0) + '% vs Market: ' + (o.implied_prob * 100).toFixed(0) + '%</span>' +
-            '</div>' +
-            '</div>' +
-            '<div>' +
-            '<div class="smart-bet-edge">' + edgeSign + (o.edge * 100).toFixed(1) + '%</div>' +
-            '<div class="smart-bet-book">edge</div>' +
-            '</div>' +
-            '</div></a>';
-        }).join('');
+        const label = '<span class="ticker-label">Today\'s Smart Bets</span>';
+        const segment = items.map(s => (s.startsWith('<a ') ? s : '<span class="ticker-item">' + s + '</span>')).join('');
+        ticker.innerHTML = label + segment + label + segment;
+        wrap.style.display = 'block';
       } catch (e) {
-        $('smart-bets-list').innerHTML = '<div class="smart-bets-empty">Could not load betting data</div>';
+        ticker.innerHTML = '<span class="ticker-label">Today\'s Smart Bets</span><span class="ticker-item">Could not load betting data</span>';
+        wrap.style.display = 'block';
       }
-}
+    }
 
 function drawCvChart(cv) {
   const seasonList = [...new Set(cv.map(r => r.season))].sort();
@@ -561,13 +582,15 @@ async function loadGames() {
   const home   = $('f-home').value;
   const away   = $('f-away').value;
   const date = $('f-date').value;
+  const search = (document.getElementById('f-search') && document.getElementById('f-search').value) ? document.getElementById('f-search').value.trim() : '';
   const offset = currentPage * pageSize;
 
   let url = '/api/games?limit=' + pageSize + '&offset=' + offset + '&sort=date&order=desc';
-  if (season) url += '&season=' + season;
-  if (home) url += '&home=' + home;
-  if (away) url += '&away=' + away;
-  if (date) url += '&date=' + date;
+  if (season) url += '&season=' + encodeURIComponent(season);
+  if (home) url += '&home=' + encodeURIComponent(home);
+  if (away) url += '&away=' + encodeURIComponent(away);
+  if (date) url += '&date=' + encodeURIComponent(date);
+  if (search) url += '&q=' + encodeURIComponent(search);
 
   const data = await timedFetch(url, 'timing-data');
   totalRows = data.total;
@@ -710,6 +733,8 @@ function switchTab(tab, el) {
 function resetFilters() {
   ['f-season', 'f-home', 'f-away'].forEach(id => $(id).value = '');
   $('f-date').value = '';
+  const fs = document.getElementById('f-search');
+  if (fs) fs.value = '';
   $('f-minprob').value = '0.65';
   loadData(0);
 }

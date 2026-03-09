@@ -300,6 +300,121 @@ button.sec:hover, .btn-sec:hover { border-color: var(--text-secondary); color: v
 }
 .filters select:focus, .filters input:focus { outline: none; border-color: var(--accent); }
 
+/* ── Table filter panel (universal: search + filters + ranges) ───────── */
+.filter-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.filter-group label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.filter-panel input[type="text"],
+.filter-panel input[type="number"],
+.filter-panel select {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.filter-panel input[type="number"] {
+  width: 4rem;
+}
+
+.filter-panel .range-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 0.25rem;
+}
+
+.filter-panel .btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ── Ticker (scrolling strip) ──────────────────────────────────────── */
+.ticker-wrap {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0;
+  margin-bottom: 1.5rem;
+}
+
+.ticker {
+  display: flex;
+  gap: 1rem;
+  animation: ticker-scroll 40s linear infinite;
+  width: max-content;
+}
+
+.ticker:hover {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-item {
+  flex-shrink: 0;
+  padding: 0.35rem 0.75rem;
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.ticker-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ticker-item a:hover {
+  color: var(--accent);
+}
+
+.ticker-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-right: 0.5rem;
+}
 /* ── Tabs ─────────────────────────────────────────────────────────── */
 .tabs, .tab-bar { display: flex; gap: 0.25rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
 .tab, .tab-btn {

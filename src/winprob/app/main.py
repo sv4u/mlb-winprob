@@ -307,6 +307,7 @@ async def api_games(
     home: Annotated[str | None, Query()] = None,
     away: Annotated[str | None, Query()] = None,
     date: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query(description="Search matchup (team name or abbrev)")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str, Query()] = "date",
@@ -339,11 +340,12 @@ async def api_games(
     if not is_ready():
         return _not_ready_json()
     logger.debug(
-        "GET /api/games season=%s home=%s away=%s date=%s limit=%d offset=%d",
+        "GET /api/games season=%s home=%s away=%s date=%s q=%s limit=%d offset=%d",
         season,
         home,
         away,
         date,
+        q,
         limit,
         offset,
     )
@@ -357,6 +359,19 @@ async def api_games(
             df = df[df["away_retro"] == away.upper()]
         if date:
             df = df[df["date"].astype(str) == date]
+        if q and q.strip():
+            q_ = q.strip().lower()
+            hretro = df["home_retro"].astype(str).str.lower()
+            aretro = df["away_retro"].astype(str).str.lower()
+            home_name = df["home_retro"].map(lambda r: (TEAM_NAMES.get(str(r), "") or "").lower())
+            away_name = df["away_retro"].map(lambda r: (TEAM_NAMES.get(str(r), "") or "").lower())
+            mask = (
+                hretro.str.contains(q_, na=False, regex=False)
+                | aretro.str.contains(q_, na=False, regex=False)
+                | home_name.astype(str).str.contains(q_, na=False, regex=False)
+                | away_name.astype(str).str.contains(q_, na=False, regex=False)
+            )
+            df = df[mask]
 
         valid_sorts = {"date", "prob", "season", "game_pk"}
         sort_col = sort if sort in valid_sorts else "date"
