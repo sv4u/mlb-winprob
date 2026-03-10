@@ -553,6 +553,7 @@ docker run -p 30087:30087 \
 # Or use the image-only Compose file (same env/volumes as docker-compose.yml, no build)
 docker compose -f docker-compose.image.yml pull
 docker compose -f docker-compose.image.yml up -d
+```
 
 | Git event | Image tag(s) published |
 |---|---|
