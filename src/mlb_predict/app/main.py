@@ -318,7 +318,9 @@ async def api_games(
     away: Annotated[str | None, Query()] = None,
     date: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query(description="Search matchup (team name or abbrev)")] = None,
-    game_type: Annotated[str | None, Query(description="Filter by game type: R=regular, S=spring")] = None,
+    game_type: Annotated[
+        str | None, Query(description="Filter by game type: R=regular, S=spring")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str, Query()] = "date",

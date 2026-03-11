@@ -88,12 +88,8 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
             q_ = request.q.strip().lower()
             hretro = df["home_retro"].astype(str).str.lower()
             aretro = df["away_retro"].astype(str).str.lower()
-            home_name = df["home_retro"].map(
-                lambda r: (TEAM_NAMES.get(str(r), "") or "").lower()
-            )
-            away_name = df["away_retro"].map(
-                lambda r: (TEAM_NAMES.get(str(r), "") or "").lower()
-            )
+            home_name = df["home_retro"].map(lambda r: (TEAM_NAMES.get(str(r), "") or "").lower())
+            away_name = df["away_retro"].map(lambda r: (TEAM_NAMES.get(str(r), "") or "").lower())
             mask = (
                 hretro.str.contains(q_, na=False, regex=False)
                 | aretro.str.contains(q_, na=False, regex=False)
