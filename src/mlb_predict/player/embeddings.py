@@ -330,7 +330,7 @@ class PlayerGameModel(nn.Module):
         if emb.dim() == 3:
             predicted = predicted.unsqueeze(1).expand_as(emb) if predicted.dim() == 2 else predicted
 
-        return F.mse_loss(emb, predicted.detach())
+        return F.mse_loss(emb.detach(), predicted)
 
 
 # ---------------------------------------------------------------------------

@@ -547,6 +547,37 @@ class TestEmbeddings:
         assert loss.ndim == 0
         assert loss.item() >= 0
 
+    def test_stat_proj_receives_gradients(self) -> None:
+        """Stat projection networks must receive gradients so cold-start embeddings are trained."""
+        from mlb_predict.player.embeddings import PlayerGameModel
+
+        model = PlayerGameModel(vocab_size=50)
+        ids = torch.randint(1, 50, (4, 9))
+        stats = torch.randn(4, 9, 9)
+        loss = model.embedding_regularization_loss(ids, stats, is_batter=True)
+        loss.backward()
+        assert model.batter_stat_proj.fc.weight.grad is not None
+        assert model.batter_stat_proj.fc.weight.grad.abs().sum().item() > 0
+
+        model.zero_grad()
+        sp_ids = torch.randint(1, 50, (4,))
+        sp_stats = torch.randn(4, 7)
+        loss_p = model.embedding_regularization_loss(sp_ids, sp_stats, is_batter=False)
+        loss_p.backward()
+        assert model.pitcher_stat_proj.fc.weight.grad is not None
+        assert model.pitcher_stat_proj.fc.weight.grad.abs().sum().item() > 0
+
+    def test_embedding_table_no_grad_from_regularization(self) -> None:
+        """Learned embeddings should not receive gradients from the regularization loss."""
+        from mlb_predict.player.embeddings import PlayerGameModel
+
+        model = PlayerGameModel(vocab_size=50)
+        ids = torch.randint(1, 50, (4, 9))
+        stats = torch.randn(4, 9, 9)
+        loss = model.embedding_regularization_loss(ids, stats, is_batter=True)
+        loss.backward()
+        assert model.batter_encoder.embedding.weight.grad is None
+
 
 # ---------------------------------------------------------------------------
 # lineup_model.py

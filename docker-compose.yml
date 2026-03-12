@@ -11,7 +11,7 @@
 # Environment overrides (prefix with `MODEL=xgboost docker compose up`)
 #   MODEL               — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
 #   PORT                — host port to expose the dashboard on (default: 30087)
-#   MEM_LIMIT           — container memory limit (default: 1536m). Use 2g for training/bootstrap; 1g may OOM under load.
+#   MEM_LIMIT           — container memory limit (default: 2560m). Reduce to 1536m after bootstrap if memory is tight.
 #   CPUS                — container CPU limit (default: 2)
 #   MLB_PREDICT_LIVE_API — set to 0 to disable live MLB/Odds API calls at runtime (minimize network; see README)
 #
@@ -50,12 +50,12 @@ services:
       # Set to "0" to disable live MLB Stats API and Odds API calls (minimize network footprint)
       MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
     restart: unless-stopped
-    mem_limit: ${MEM_LIMIT:-1536m}
+    mem_limit: ${MEM_LIMIT:-2560m}
     cpus: ${CPUS:-2}
     deploy:
       resources:
         limits:
-          memory: ${MEM_LIMIT:-1536m}
+          memory: ${MEM_LIMIT:-2560m}
           cpus: "${CPUS:-2}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:30087/api/health"]
