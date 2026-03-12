@@ -53,8 +53,9 @@ def sample_gamelogs() -> pd.DataFrame:
             "visiting_team": "NYA",
             "home_score": 5,
             "visiting_score": 3,
-            "home_at_bats": 36,
-            "visiting_at_bats": 33,
+            "num_outs": 54,
+            "home_abs": 36,
+            "visiting_abs": 33,
             "home_hits": 10,
             "visiting_hits": 8,
             "home_doubles": 2,
@@ -63,16 +64,14 @@ def sample_gamelogs() -> pd.DataFrame:
             "visiting_triples": 0,
             "home_homeruns": 2,
             "visiting_homeruns": 1,
-            "home_walks": 4,
-            "visiting_walks": 3,
-            "home_strikeouts": 8,
-            "visiting_strikeouts": 9,
+            "home_bb": 4,
+            "visiting_bb": 3,
+            "home_k": 8,
+            "visiting_k": 9,
             "home_starting_pitcher_id": "kershc001",
             "visiting_starting_pitcher_id": "pitcher02",
             "home_er": 3,
-            "home_pitcher_ip": 6.0,
             "visiting_er": 5,
-            "visiting_pitcher_ip": 5.0,
         }
         for i, pid in enumerate(home_ids, 1):
             row[f"home_{i}_id"] = pid
@@ -223,6 +222,149 @@ class TestRolling:
         empty = pd.DataFrame()
         assert build_batter_rolling(empty).empty
         assert build_pitcher_rolling(empty).empty
+
+    def test_build_pitcher_rolling_with_api_gamelogs(self) -> None:
+        """build_pitcher_rolling uses MLB API game logs when provided."""
+        from mlb_predict.player.rolling import build_pitcher_rolling
+
+        pitcher_gl = pd.DataFrame(
+            {
+                "date": pd.to_datetime([f"2024-04-{d:02d}" for d in range(1, 11)]),
+                "mlbam_id": [502110] * 10,
+                "season": [2024] * 10,
+                "is_start": [True] * 10,
+                "ip": [6.0, 7.0, 5.0, 6.0, 7.0, 6.0, 5.0, 7.0, 6.0, 5.0],
+                "hits": [4, 3, 5, 4, 2, 6, 5, 3, 4, 5],
+                "earned_runs": [2, 1, 3, 2, 0, 3, 2, 1, 2, 3],
+                "bb": [1, 2, 1, 0, 1, 2, 1, 1, 0, 2],
+                "k": [8, 10, 6, 9, 11, 7, 8, 10, 9, 6],
+                "hr": [1, 0, 1, 1, 0, 1, 0, 1, 1, 0],
+                "runs": [2, 1, 3, 2, 0, 4, 2, 1, 2, 3],
+                "batters_faced": [25, 27, 22, 24, 26, 28, 23, 26, 24, 23],
+            }
+        )
+        retro_to_mlbam = {"kershc001": 502110}
+
+        result = build_pitcher_rolling(
+            pd.DataFrame(),
+            retro_to_mlbam=retro_to_mlbam,
+            pitcher_game_logs=pitcher_gl,
+        )
+        assert not result.empty
+        expected_cols = {"era_ewm", "k9_ewm", "bb9_ewm", "whip_ewm", "player_id", "date"}
+        assert expected_cols.issubset(set(result.columns))
+        assert (result["player_id"] == "kershc001").all()
+        assert result["era_ewm"].between(0, 10).all()
+        assert result["k9_ewm"].between(0, 20).all()
+
+    def test_pitcher_rolling_api_takes_precedence(self, sample_gamelogs: pd.DataFrame) -> None:
+        """When API game logs are provided, gamelog approximation is not used."""
+        from mlb_predict.player.rolling import build_pitcher_rolling
+
+        pitcher_gl = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2024-04-01"]),
+                "mlbam_id": [99999],
+                "season": [2024],
+                "is_start": [True],
+                "ip": [7.0],
+                "hits": [3],
+                "earned_runs": [1],
+                "bb": [1],
+                "k": [10],
+                "hr": [0],
+                "runs": [1],
+                "batters_faced": [25],
+            }
+        )
+        retro_to_mlbam = {"apipit001": 99999}
+
+        result = build_pitcher_rolling(
+            sample_gamelogs,
+            retro_to_mlbam=retro_to_mlbam,
+            pitcher_game_logs=pitcher_gl,
+        )
+        assert not result.empty
+        assert "apipit001" in result["player_id"].values
+
+
+# ---------------------------------------------------------------------------
+# pitcher_gamelogs.py
+# ---------------------------------------------------------------------------
+
+
+class TestPitcherGamelogs:
+    """Tests for mlb_predict.player.pitcher_gamelogs."""
+
+    def test_parse_pitcher_gamelog(self) -> None:
+        """_parse_pitcher_gamelog extracts stats from API response."""
+        from mlb_predict.player.pitcher_gamelogs import _parse_pitcher_gamelog
+
+        raw = {
+            "stats": [
+                {
+                    "splits": [
+                        {
+                            "date": "2024-04-15",
+                            "stat": {
+                                "inningsPitched": "6.0",
+                                "hits": 4,
+                                "earnedRuns": 2,
+                                "baseOnBalls": 1,
+                                "strikeOuts": 8,
+                                "homeRuns": 1,
+                                "runs": 2,
+                                "battersFaced": 24,
+                                "gamesStarted": 1,
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+        rows = _parse_pitcher_gamelog(raw, 502110, 2024)
+        assert len(rows) == 1
+        assert rows[0]["mlbam_id"] == 502110
+        assert rows[0]["ip"] == 6.0
+        assert rows[0]["k"] == 8
+        assert rows[0]["is_start"] is True
+
+    def test_parse_pitcher_gamelog_skips_zero_ip(self) -> None:
+        """Games with zero IP are excluded."""
+        from mlb_predict.player.pitcher_gamelogs import _parse_pitcher_gamelog
+
+        raw = {
+            "stats": [{"splits": [{"date": "2024-04-15", "stat": {"inningsPitched": "0"}}]}],
+        }
+        assert _parse_pitcher_gamelog(raw, 502110, 2024) == []
+
+    def test_save_load_roundtrip(self, tmp_path: Path) -> None:
+        """Pitcher game logs round-trip through save/load."""
+        from mlb_predict.player.pitcher_gamelogs import (
+            load_pitcher_gamelogs,
+            save_pitcher_gamelogs,
+        )
+
+        df = pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2024-04-01", "2024-04-06"]),
+                "mlbam_id": [502110, 502110],
+                "season": [2024, 2024],
+                "is_start": [True, True],
+                "ip": [6.0, 7.0],
+                "hits": [4, 3],
+                "earned_runs": [2, 1],
+                "bb": [1, 0],
+                "k": [8, 10],
+                "hr": [1, 0],
+                "runs": [2, 1],
+                "batters_faced": [24, 25],
+            }
+        )
+        save_pitcher_gamelogs(df, tmp_path, 2024)
+        loaded = load_pitcher_gamelogs(tmp_path, [2024])
+        assert len(loaded) == 2
+        assert "mlbam_id" in loaded.columns
 
 
 # ---------------------------------------------------------------------------

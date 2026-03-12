@@ -240,8 +240,17 @@ def _inject_stage1_features_at_startup(
 
         gl_frames = [pd.read_parquet(gamelogs_dir / f"gamelogs_{s}.parquet") for s in all_seasons]
         all_gl = pd.concat(gl_frames, ignore_index=True)
+
+        from mlb_predict.player.pitcher_gamelogs import load_pitcher_gamelogs
+
+        pitcher_game_logs = load_pitcher_gamelogs(player_dir, all_seasons)
+
         batter_rolling = build_batter_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
-        pitcher_rolling = build_pitcher_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
+        pitcher_rolling = build_pitcher_rolling(
+            all_gl,
+            retro_to_mlbam=retro_to_mlbam,
+            pitcher_game_logs=pitcher_game_logs if not pitcher_game_logs.empty else None,
+        )
 
         injected = 0
         for season in all_seasons:

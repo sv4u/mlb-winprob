@@ -90,14 +90,22 @@ def _compute_batter_game_stats(gamelogs: pd.DataFrame) -> pd.DataFrame:
             ("home", _HOME_LINEUP_COLS, "home_team", "home_"),
             ("away", _AWAY_LINEUP_COLS, "visiting_team", "visiting_"),
         ]:
-            team_ab = _safe_float(row.get(f"{score_prefix}at_bats", row.get(f"{score_prefix}ab")))
+            team_ab = _safe_float(
+                row.get(
+                    f"{score_prefix}abs",
+                    row.get(f"{score_prefix}at_bats", row.get(f"{score_prefix}ab")),
+                )
+            )
             team_h = _safe_float(row.get(f"{score_prefix}hits", row.get(f"{score_prefix}h")))
             team_2b = _safe_float(row.get(f"{score_prefix}doubles", row.get(f"{score_prefix}2b")))
             team_3b = _safe_float(row.get(f"{score_prefix}triples", row.get(f"{score_prefix}3b")))
             team_hr = _safe_float(row.get(f"{score_prefix}homeruns", row.get(f"{score_prefix}hr")))
-            team_bb = _safe_float(row.get(f"{score_prefix}walks", row.get(f"{score_prefix}bb")))
+            team_bb = _safe_float(row.get(f"{score_prefix}bb", row.get(f"{score_prefix}walks")))
             team_so = _safe_float(
-                row.get(f"{score_prefix}strikeouts", row.get(f"{score_prefix}so"))
+                row.get(
+                    f"{score_prefix}k",
+                    row.get(f"{score_prefix}strikeouts", row.get(f"{score_prefix}so")),
+                )
             )
 
             if np.isnan(team_ab) or team_ab == 0:
@@ -256,70 +264,24 @@ def build_pitcher_rolling(
     gamelogs: pd.DataFrame,
     prior_pitcher_stats: pd.DataFrame | None = None,
     retro_to_mlbam: dict[str, int] | None = None,
+    pitcher_game_logs: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Compute per-pitcher EWMA rolling stats from gamelogs (ERA, K/9, BB/9, WHIP).
+    """Compute per-pitcher EWMA rolling stats.
+
+    When *pitcher_game_logs* (from the MLB Stats API) is provided, individual
+    pitcher box scores (exact IP, H, ER, BB, K per appearance) are used.
+    Otherwise falls back to a team-level approximation from Retrosheet gamelogs.
 
     Returns DataFrame with columns: player_id, date, era_ewm, k9_ewm, bb9_ewm,
     whip_ewm, plus static priors (fip, xwoba_allowed, swstr_pct) from prior season.
     """
-    gl = gamelogs.copy()
-    if gl.empty or "date" not in gl.columns:
+    if pitcher_game_logs is not None and not pitcher_game_logs.empty:
+        df = _pitcher_game_stats_from_api(pitcher_game_logs, retro_to_mlbam)
+    else:
+        df = _pitcher_game_stats_from_gamelogs(gamelogs)
+
+    if df.empty:
         return pd.DataFrame()
-    gl["date"] = pd.to_datetime(gl["date"])
-
-    rows: list[dict] = []
-    for _, row in gl.iterrows():
-        for side, pid_col, er_col, ip_col in [
-            ("home", "home_starting_pitcher_id", "home_er", "home_pitcher_ip"),
-            ("away", "visiting_starting_pitcher_id", "visiting_er", "visiting_pitcher_ip"),
-        ]:
-            pid = row.get(pid_col)
-            if pd.isna(pid) or str(pid).strip() == "":
-                continue
-
-            er = _safe_float(row.get(er_col))
-            ip_raw = _safe_float(row.get(ip_col))
-            if np.isnan(ip_raw) or ip_raw == 0:
-                ip_val = _safe_float(row.get(f"{side.replace('away', 'visiting')}_ip"))
-                if np.isnan(ip_val) or ip_val == 0:
-                    continue
-                ip_raw = ip_val
-
-            ip_full = int(ip_raw) + (ip_raw - int(ip_raw)) * 10 / 3.0
-
-            h_col = (
-                f"{side}_hits"
-                if f"{side}_hits" in row.index
-                else f"{'home' if side == 'home' else 'visiting'}_h"
-            )
-            bb_col = f"{'home' if side == 'home' else 'visiting'}_walks"
-            so_col = f"{'home' if side == 'home' else 'visiting'}_strikeouts"
-
-            h_val = _safe_float(row.get(h_col, 0))
-            bb_val = _safe_float(row.get(bb_col, 0))
-            so_val = _safe_float(row.get(so_col, 0))
-
-            era_game = (er / ip_full * 9.0) if ip_full > 0 and not np.isnan(er) else _AVG_ERA
-            k9 = (so_val / ip_full * 9.0) if ip_full > 0 else _AVG_K9
-            bb9 = (bb_val / ip_full * 9.0) if ip_full > 0 else _AVG_BB9
-            whip = ((h_val + bb_val) / ip_full) if ip_full > 0 else _AVG_WHIP
-
-            rows.append(
-                {
-                    "date": row["date"],
-                    "player_id": str(pid).strip(),
-                    "era_game": era_game,
-                    "k9_game": k9,
-                    "bb9_game": bb9,
-                    "whip_game": whip,
-                    "ip": ip_full,
-                }
-            )
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
 
     ewma_cols = {
         "era_game": "era_ewm",
@@ -353,6 +315,108 @@ def build_pitcher_rolling(
         rolling_df["swstr_pct_ewm"] = _AVG_SWSTR_PCT
 
     return rolling_df
+
+
+def _pitcher_game_stats_from_api(
+    pitcher_game_logs: pd.DataFrame,
+    retro_to_mlbam: dict[str, int] | None,
+) -> pd.DataFrame:
+    """Build per-game pitcher stats from MLB Stats API game logs (high fidelity)."""
+    pgl = pitcher_game_logs.copy()
+    pgl["date"] = pd.to_datetime(pgl["date"], errors="coerce")
+    pgl = pgl.dropna(subset=["date"])
+    if pgl.empty:
+        return pd.DataFrame()
+
+    mlbam_to_retro: dict[int, str] = {}
+    if retro_to_mlbam:
+        mlbam_to_retro = {v: k for k, v in retro_to_mlbam.items()}
+
+    rows: list[dict] = []
+    for _, row in pgl.iterrows():
+        ip = float(row.get("ip", 0))
+        if ip <= 0:
+            continue
+
+        er = float(row.get("earned_runs", 0))
+        h_val = float(row.get("hits", 0))
+        bb_val = float(row.get("bb", 0))
+        so_val = float(row.get("k", 0))
+
+        mlbam = int(row.get("mlbam_id", 0))
+        retro_id = mlbam_to_retro.get(mlbam, f"mlbam_{mlbam}")
+
+        rows.append(
+            {
+                "date": row["date"],
+                "player_id": retro_id,
+                "era_game": (er / ip * 9.0) if ip > 0 else _AVG_ERA,
+                "k9_game": (so_val / ip * 9.0) if ip > 0 else _AVG_K9,
+                "bb9_game": (bb_val / ip * 9.0) if ip > 0 else _AVG_BB9,
+                "whip_game": ((h_val + bb_val) / ip) if ip > 0 else _AVG_WHIP,
+                "ip": ip,
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+
+
+def _pitcher_game_stats_from_gamelogs(gamelogs: pd.DataFrame) -> pd.DataFrame:
+    """Approximate per-game pitcher stats from team-level Retrosheet gamelogs."""
+    gl = gamelogs.copy()
+    if gl.empty or "date" not in gl.columns:
+        return pd.DataFrame()
+    gl["date"] = pd.to_datetime(gl["date"])
+
+    rows: list[dict] = []
+    for _, row in gl.iterrows():
+        total_outs = _safe_float(row.get("num_outs"))
+
+        for side, pid_col, er_col, prefix in [
+            ("home", "home_starting_pitcher_id", "home_er", "visiting_"),
+            ("away", "visiting_starting_pitcher_id", "visiting_er", "home_"),
+        ]:
+            pid = row.get(pid_col)
+            if pd.isna(pid) or str(pid).strip() == "":
+                continue
+
+            er = _safe_float(row.get(er_col))
+
+            ip_full = total_outs / 6.0 if not np.isnan(total_outs) and total_outs > 0 else 0.0
+            if ip_full == 0:
+                continue
+
+            h_val = _safe_float(row.get(f"{prefix}hits", row.get(f"{prefix}h", 0)))
+            bb_val = _safe_float(row.get(f"{prefix}bb", row.get(f"{prefix}walks", 0)))
+            so_val = _safe_float(
+                row.get(
+                    f"{prefix}k",
+                    row.get(f"{prefix}strikeouts", row.get(f"{prefix}so", 0)),
+                )
+            )
+
+            era_game = (er / ip_full * 9.0) if ip_full > 0 and not np.isnan(er) else _AVG_ERA
+            k9 = (so_val / ip_full * 9.0) if ip_full > 0 else _AVG_K9
+            bb9 = (bb_val / ip_full * 9.0) if ip_full > 0 else _AVG_BB9
+            whip = ((h_val + bb_val) / ip_full) if ip_full > 0 else _AVG_WHIP
+
+            rows.append(
+                {
+                    "date": row["date"],
+                    "player_id": str(pid).strip(),
+                    "era_game": era_game,
+                    "k9_game": k9,
+                    "bb9_game": bb9,
+                    "whip_game": whip,
+                    "ip": ip_full,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
 
 
 def _attach_prior_pitcher_stats(
