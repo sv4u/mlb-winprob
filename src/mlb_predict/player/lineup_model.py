@@ -450,8 +450,11 @@ def train_stage1(
             targets = batch[12]
             loss = criterion(logits.squeeze(-1), targets)
 
-            emb_loss = model.embedding_regularization_loss(batch[0], batch[1], is_batter=True)
-            loss = loss + emb_reg_lambda * emb_loss
+            bat_emb_loss = model.embedding_regularization_loss(batch[0], batch[1], is_batter=True)
+            pit_emb_loss = model.embedding_regularization_loss(
+                batch[6], batch[7], is_batter=False
+            ) + model.embedding_regularization_loss(batch[9], batch[10], is_batter=False)
+            loss = loss + emb_reg_lambda * (bat_emb_loss + pit_emb_loss)
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)

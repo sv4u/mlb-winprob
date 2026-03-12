@@ -72,6 +72,8 @@ def sample_gamelogs() -> pd.DataFrame:
             "visiting_starting_pitcher_id": "pitcher02",
             "home_er": 3,
             "visiting_er": 5,
+            "home_po": 27,
+            "visiting_po": 27,
         }
         for i, pid in enumerate(home_ids, 1):
             row[f"home_{i}_id"] = pid
@@ -256,6 +258,45 @@ class TestRolling:
         assert (result["player_id"] == "kershc001").all()
         assert result["era_ewm"].between(0, 10).all()
         assert result["k9_ewm"].between(0, 20).all()
+
+    def test_pitcher_rolling_uses_per_team_putouts(self) -> None:
+        """Gamelog fallback uses home_po/visiting_po for per-side IP estimation."""
+        from mlb_predict.player.rolling import build_pitcher_rolling
+
+        gl = pd.DataFrame(
+            [
+                {
+                    "date": "2024-04-01",
+                    "home_team": "BOS",
+                    "visiting_team": "NYA",
+                    "home_score": 5,
+                    "visiting_score": 3,
+                    "num_outs": 51,
+                    "home_po": 27,
+                    "visiting_po": 24,
+                    "home_starting_pitcher_id": "homesp01",
+                    "visiting_starting_pitcher_id": "awaysp01",
+                    "home_er": 3,
+                    "visiting_er": 5,
+                    "visiting_hits": 6,
+                    "visiting_bb": 2,
+                    "visiting_k": 7,
+                    "home_hits": 9,
+                    "home_bb": 3,
+                    "home_k": 8,
+                },
+            ]
+        )
+        result = build_pitcher_rolling(gl)
+        assert not result.empty
+        home_sp = result[result["player_id"] == "homesp01"]
+        away_sp = result[result["player_id"] == "awaysp01"]
+        assert not home_sp.empty
+        assert not away_sp.empty
+        home_era = home_sp.iloc[0]["era_ewm"]
+        away_era = away_sp.iloc[0]["era_ewm"]
+        assert home_era == pytest.approx(3 / 9.0 * 9.0, rel=0.01)
+        assert away_era == pytest.approx(5 / 8.0 * 9.0, rel=0.01)
 
     def test_pitcher_rolling_api_takes_precedence(self, sample_gamelogs: pd.DataFrame) -> None:
         """When API game logs are provided, gamelog approximation is not used."""
@@ -492,6 +533,17 @@ class TestEmbeddings:
         ids = torch.randint(1, 50, (4, 9))
         stats = torch.randn(4, 9, 9)
         loss = model.embedding_regularization_loss(ids, stats, is_batter=True)
+        assert loss.ndim == 0
+        assert loss.item() >= 0
+
+    def test_pitcher_embedding_regularization_loss(self) -> None:
+        """embedding_regularization_loss works for pitcher inputs (is_batter=False)."""
+        from mlb_predict.player.embeddings import PlayerGameModel
+
+        model = PlayerGameModel(vocab_size=50)
+        sp_ids = torch.randint(1, 50, (4,))
+        sp_stats = torch.randn(4, 7)
+        loss = model.embedding_regularization_loss(sp_ids, sp_stats, is_batter=False)
         assert loss.ndim == 0
         assert loss.item() >= 0
 

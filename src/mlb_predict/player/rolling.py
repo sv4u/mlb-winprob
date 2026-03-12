@@ -374,9 +374,9 @@ def _pitcher_game_stats_from_gamelogs(gamelogs: pd.DataFrame) -> pd.DataFrame:
     for _, row in gl.iterrows():
         total_outs = _safe_float(row.get("num_outs"))
 
-        for side, pid_col, er_col, prefix in [
-            ("home", "home_starting_pitcher_id", "home_er", "visiting_"),
-            ("away", "visiting_starting_pitcher_id", "visiting_er", "home_"),
+        for side, pid_col, er_col, prefix, po_col in [
+            ("home", "home_starting_pitcher_id", "home_er", "visiting_", "home_po"),
+            ("away", "visiting_starting_pitcher_id", "visiting_er", "home_", "visiting_po"),
         ]:
             pid = row.get(pid_col)
             if pd.isna(pid) or str(pid).strip() == "":
@@ -384,7 +384,11 @@ def _pitcher_game_stats_from_gamelogs(gamelogs: pd.DataFrame) -> pd.DataFrame:
 
             er = _safe_float(row.get(er_col))
 
-            ip_full = total_outs / 6.0 if not np.isnan(total_outs) and total_outs > 0 else 0.0
+            team_po = _safe_float(row.get(po_col))
+            if not np.isnan(team_po) and team_po > 0:
+                ip_full = team_po / 3.0
+            else:
+                ip_full = total_outs / 6.0 if not np.isnan(total_outs) and total_outs > 0 else 0.0
             if ip_full == 0:
                 continue
 

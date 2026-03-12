@@ -37,6 +37,7 @@ def _inject_stage1_at_inference(
     from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES, load_stage1_model
     from mlb_predict.player.biographical import build_biographical_df, build_bio_lookup
     from mlb_predict.player.rolling import build_batter_rolling, build_pitcher_rolling
+    from mlb_predict.player.pitcher_gamelogs import load_pitcher_gamelogs
     from mlb_predict.player.lineup_model import (
         prepare_game_tensors,
         generate_stage1_features,
@@ -79,8 +80,14 @@ def _inject_stage1_at_inference(
     gl_frames = [pd.read_parquet(gamelogs_dir / f"gamelogs_{s}.parquet") for s in all_seasons]
     all_gl = pd.concat(gl_frames, ignore_index=True)
 
+    pitcher_game_logs = load_pitcher_gamelogs(player_data_dir, all_seasons)
+
     batter_rolling = build_batter_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
-    pitcher_rolling = build_pitcher_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
+    pitcher_rolling = build_pitcher_rolling(
+        all_gl,
+        retro_to_mlbam=retro_to_mlbam,
+        pitcher_game_logs=pitcher_game_logs if not pitcher_game_logs.empty else None,
+    )
 
     tensors = prepare_game_tensors(
         gamelogs,
