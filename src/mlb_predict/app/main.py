@@ -700,14 +700,28 @@ async def api_ev_opportunities(
     )
 
     if not is_odds_configured():
-        return {"configured": False, "count": 0, "opportunities": []}
+        return {"configured": False, "count": 0, "opportunities": [], "betting_config": {}}
     if not is_ready():
-        return {"configured": True, "count": 0, "opportunities": []}
+        return {"configured": True, "count": 0, "opportunities": [], "betting_config": {}}
 
+    from mlb_predict.external.betting_config import get_betting_config
+
+    cfg = get_betting_config()
     events = await get_cached_odds()
     df = get_features()
-    opps = compute_ev_opportunities(events, df, min_edge=min_edge)
-    return {"configured": True, "count": len(opps), "opportunities": opps}
+    opps = compute_ev_opportunities(
+        events, df, min_edge=min_edge, kelly_fraction=cfg.kelly_pct / 100.0, budget=cfg.budget
+    )
+    return {
+        "configured": True,
+        "count": len(opps),
+        "opportunities": opps,
+        "betting_config": {
+            "kelly_pct": cfg.kelly_pct,
+            "budget": cfg.budget,
+            "bet_amount": cfg.bet_amount,
+        },
+    }
 
 
 @app.get("/api/upsets", response_model=None)
@@ -1296,6 +1310,14 @@ class _OddsConfigRequest(BaseModel):
     api_key: str
 
 
+class _BettingConfigRequest(BaseModel):
+    """Body for POST /api/admin/betting-config."""
+
+    kelly_pct: float = 25.0
+    budget: float = 300.0
+    bet_amount: float = 2.0
+
+
 class _PipelineOptionsRequest(BaseModel):
     """Body for POST /api/admin/ingest and /api/admin/update with options."""
 
@@ -1400,6 +1422,34 @@ async def api_admin_save_odds_config(body: _OddsConfigRequest) -> dict:
 
     set_odds_api_key(body.api_key)
     return {"ok": True}
+
+
+@app.get("/api/admin/betting-config", response_model=None)
+async def api_admin_get_betting_config() -> dict:
+    """Return current betting configuration (Kelly %, budget, bet amount)."""
+    from mlb_predict.external.betting_config import get_betting_config
+
+    cfg = get_betting_config()
+    return {"kelly_pct": cfg.kelly_pct, "budget": cfg.budget, "bet_amount": cfg.bet_amount}
+
+
+@app.post("/api/admin/betting-config", response_model=None)
+async def api_admin_save_betting_config(body: _BettingConfigRequest) -> dict:
+    """Save betting configuration to data/processed/odds/betting_config.json."""
+    from mlb_predict.external.betting_config import BettingConfig, save_betting_config
+
+    cfg = BettingConfig(
+        kelly_pct=max(1.0, min(100.0, body.kelly_pct)),
+        budget=max(0.0, body.budget),
+        bet_amount=max(0.01, body.bet_amount),
+    )
+    save_betting_config(cfg)
+    return {
+        "ok": True,
+        "kelly_pct": cfg.kelly_pct,
+        "budget": cfg.budget,
+        "bet_amount": cfg.bet_amount,
+    }
 
 
 @app.post("/api/admin/ingest")

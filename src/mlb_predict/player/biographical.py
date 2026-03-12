@@ -98,8 +98,14 @@ def build_biographical_df(cache_dir: Path | None = None) -> pd.DataFrame:
         return raw
 
     df = raw.copy()
-    df["bat_side"] = df["bats"].map(BAT_SIDE_MAP).fillna(0.0)
-    df["throw_side"] = df["throws"].map(THROW_SIDE_MAP).fillna(1.0)
+    if "bats" in df.columns:
+        df["bat_side"] = df["bats"].map(BAT_SIDE_MAP).fillna(0.0)
+    else:
+        df["bat_side"] = 0.0
+    if "throws" in df.columns:
+        df["throw_side"] = df["throws"].map(THROW_SIDE_MAP).fillna(1.0)
+    else:
+        df["throw_side"] = 1.0
 
     birth_cols = ["birth_year", "birth_month", "birth_day"]
     if all(c in df.columns for c in birth_cols):

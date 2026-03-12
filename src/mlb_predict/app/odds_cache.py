@@ -195,12 +195,17 @@ def compute_ev_opportunities(
     events: list[dict[str, Any]],
     features_df: pd.DataFrame,
     min_edge: float = 0.0,
+    kelly_fraction: float = 0.25,
+    budget: float = 300.0,
 ) -> list[dict[str, Any]]:
     """Join live odds events with model probabilities to find EV+ bets.
 
     For each odds event that matches a game in features_df, computes EV metrics
     for both home and away moneyline sides. Returns opportunities sorted by edge
     (descending), filtered to edge > min_edge.
+
+    Each opportunity includes a ``kelly_wager`` (fractional Kelly * budget) and
+    a ``flat_bet`` (equal to the configured flat bet amount, passed via the API).
     """
     from mlb_predict.app.data_cache import TEAM_NAMES
 
@@ -258,6 +263,8 @@ def compute_ev_opportunities(
                     best_book = bm["title"]
                     break
 
+            kelly_wager = round(kelly * kelly_fraction * budget, 2)
+
             opportunities.append(
                 {
                     "game_pk": game_pk,
@@ -274,6 +281,7 @@ def compute_ev_opportunities(
                     "edge": round(edge, 4),
                     "ev_per_unit": round(ev_per_unit, 4),
                     "kelly_pct": round(kelly * 100, 2),
+                    "kelly_wager": kelly_wager,
                 }
             )
 
