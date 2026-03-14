@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -81,6 +80,17 @@ def _load_hpo(model_dir: Path, model_type: str) -> dict | None:
 
 
 def main() -> None:
+    import logging
+    import sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-5s %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stdout,
+    )
+    sys.stdout.reconfigure(line_buffering=True)
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--features-dir", type=Path, default=Path("data/processed/features"))
     ap.add_argument("--model-dir", type=Path, default=Path("data/models"))
@@ -120,7 +130,16 @@ def main() -> None:
         type=Path,
         default=Path("data/processed/player"),
     )
+    ap.add_argument(
+        "--fast",
+        action="store_true",
+        help="Fast mode: skip CV, skip Stage 1, skip HPO (equivalent to --skip-cv --no-stage1)",
+    )
     args = ap.parse_args()
+    if args.fast:
+        args.skip_cv = True
+        args.no_stage1 = True
+        args.hpo = False
     args.model_dir.mkdir(parents=True, exist_ok=True)
 
     season_dfs = _load_all_feature_files(args.features_dir)

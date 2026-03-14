@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,8 @@ from mlb_predict.model.evaluate import evaluate, EvalResult
 from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
+
+_N_JOBS: int = max(1, int(os.environ.get("MLB_PREDICT_N_JOBS", min(os.cpu_count() or 1, 4))))
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +245,7 @@ _LGB_PARAMS: dict[str, Any] = {
     "reg_lambda": 0.1,
     "random_state": 42,
     "verbose": -1,
+    "n_jobs": _N_JOBS,
 }
 
 _XGB_PARAMS: dict[str, Any] = {
@@ -257,6 +261,7 @@ _XGB_PARAMS: dict[str, Any] = {
     "random_state": 42,
     "verbosity": 0,
     "use_label_encoder": False,
+    "nthread": _N_JOBS,
 }
 
 _CATB_PARAMS: dict[str, Any] = {
@@ -268,6 +273,7 @@ _CATB_PARAMS: dict[str, Any] = {
     "random_seed": 42,
     "verbose": False,
     "train_dir": "/tmp/catboost_info",
+    "thread_count": _N_JOBS,
 }
 
 _MLP_PARAMS: dict[str, Any] = {
@@ -837,12 +843,31 @@ def run_expanding_cv(
             logger.warning("Stage 1 data loading failed: %s; proceeding without", exc)
 
         if stage1_data is not None:
+            cache_dir = features_dir / ".stage1_cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
             train_gl = stage1_data["gamelogs"]
             train_gl["date"] = pd.to_datetime(train_gl["date"])
             n_pre = 0
+            n_cached = 0
             for i, season in enumerate(seasons):
                 if i < min_train_seasons:
                     continue
+                cache_path = cache_dir / f"stage1_{season}.parquet"
+                if cache_path.exists():
+                    try:
+                        cached_df = pd.read_parquet(cache_path)
+                        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES as _s1names
+
+                        target = season_dfs[season].copy()
+                        if len(cached_df) == len(target):
+                            for col in _s1names:
+                                if col in cached_df.columns:
+                                    target[col] = cached_df[col].values
+                            season_dfs[season] = target
+                            n_cached += 1
+                            continue
+                    except Exception:
+                        pass
                 earlier = seasons[:i]
                 earlier_mask = train_gl["date"].dt.year.isin(earlier)
                 season_mask = train_gl["date"].dt.year == season
@@ -853,8 +878,16 @@ def run_expanding_cv(
                         target_gamelogs=train_gl[season_mask],
                         target_season_df=season_dfs[season],
                     )
+                    try:
+                        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES as _s1names
+
+                        s1_cols = [c for c in _s1names if c in season_dfs[season].columns]
+                        if s1_cols:
+                            season_dfs[season][s1_cols].to_parquet(cache_path, index=False)
+                    except Exception:
+                        pass
                     n_pre += 1
-            logger.info("Pre-computed Stage 1 features for %d seasons", n_pre)
+            logger.info("Stage 1 features: %d computed, %d from cache", n_pre, n_cached)
             del stage1_data, train_gl
             gc.collect()
 
@@ -963,7 +996,7 @@ def run_expanding_cv(
             for mt in model_types
             if results[mt]
         )
-        print(f"  {eval_season}: n_train={len(X_train):,} | {status}")
+        print(f"  {eval_season}: n_train={len(X_train):,} | {status}", flush=True)
 
     return results
 
@@ -1142,7 +1175,7 @@ def train_production_model(
         )
         save_model(cal, meta, model_dir=model_dir)
         trained[mt] = cal
-        print(f"  {mt} production model saved")
+        print(f"  {mt} production model saved", flush=True)
 
     if "stacked" in model_types:
         from mlb_predict.model.artifacts import latest_artifact as _latest
@@ -1181,6 +1214,6 @@ def train_production_model(
         )
         save_model(ensemble, meta, model_dir=model_dir)
         trained["stacked"] = ensemble
-        print("  stacked production model saved")
+        print("  stacked production model saved", flush=True)
 
     return trained
