@@ -92,7 +92,7 @@ def main() -> None:
         default=["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"],
     )
     ap.add_argument("--hpo", action="store_true", help="Run Optuna HPO before CV")
-    ap.add_argument("--hpo-trials", type=int, default=200)
+    ap.add_argument("--hpo-trials", type=int, default=60)
     ap.add_argument("--skip-cv", action="store_true", help="Skip CV, only run HPO + production")
     ap.add_argument(
         "--spring-weight",

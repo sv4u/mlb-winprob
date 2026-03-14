@@ -249,6 +249,10 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
             f"{python} scripts/ingest_fangraphs.py --seasons {seasons}",
         ),
         (
+            f"Ingest player data ({season_label})",
+            f"{python} scripts/ingest_player_data.py --seasons {seasons}",
+        ),
+        (
             f"Ingest weather data ({season_label})",
             f"{python} scripts/ingest_weather.py --seasons {seasons}",
         ),
@@ -304,6 +308,10 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
         (
             f"Refresh FanGraphs metrics ({season_label})",
             f"{python} scripts/ingest_fangraphs.py --seasons {year}",
+        ),
+        (
+            f"Refresh player data ({season_label})",
+            f"{python} scripts/ingest_player_data.py --seasons {year}",
         ),
         (
             f"Refresh weather data ({season_label})",

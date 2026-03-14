@@ -12,8 +12,14 @@ This document defines on-disk schemas and invariants for all persisted datasets.
 
 Unless otherwise stated, each dataset is written in **both**:
 
-- **Parquet** (authoritative, typed)
+- **Parquet** (canonical export, typed, interoperable)
 - **CSV** (human inspection)
+
+Additionally, feature data is ingested into a **DuckDB** analytical database
+(`data/processed/mlb_predict.duckdb`) for fast multi-season queries during
+training and serving.  DuckDB provides 10-50x faster reads compared to
+scanning individual Parquet files.  The Parquet files remain the canonical
+source of truth; DuckDB is populated from them and can be rebuilt at any time.
 
 Parquet files MUST be produced with stable column ordering and deterministic row ordering when feasible.
 
@@ -261,7 +267,35 @@ Invariants:
 
 - One row per team-season; available from 2002 onward.
 
-## 3.7 Features (119-feature matrix)
+## 3.7 DuckDB Analytical Store
+
+Path:
+
+- `data/processed/mlb_predict.duckdb`
+
+Tables:
+
+| Table | Source | Notes |
+|---|---|---|
+| `features` | `features_*.parquet`, `features_spring_*.parquet` | All seasons + spring training |
+| `ingest_log` | Auto-generated | Tracks Parquet → DuckDB ingestion history |
+
+The `features` table includes a `_source_file` column tracking which Parquet
+file each row was ingested from.  This enables auditing and selective refresh.
+
+Population:
+
+- Bulk ingestion via `DuckDBStore.ingest_all_features()` after feature build
+- Incremental ingestion via `DuckDBStore.ingest_parquet()` for single-season updates
+- Rebuild: delete the `.duckdb` file; it will be automatically repopulated on next startup
+
+Invariants:
+
+- DuckDB is a derived store; Parquet files are the canonical source of truth
+- If the DuckDB file is missing or empty, all readers fall back to direct Parquet reads
+- Never modify the DuckDB store directly; always go through `DuckDBStore` methods
+
+## 3.8 Features (136-feature matrix)
 
 Paths:
 
@@ -319,13 +353,14 @@ Schema:
 
 Invariants:
 
-- Total columns: ~126 (119 model features + identifiers + `home_win` + `feature_hash`)
+- Total columns: ~143 (136 model features + identifiers + `home_win` + `feature_hash`)
 - `date` column dtype is always `datetime.date` (never plain string)
 - `game_type` is `R` for regular season, `S` for spring training. The `is_spring` binary feature is derived from `game_type`.
-- 2026 rows have `home_win = NaN`; all 119 feature columns are populated from 2025 end-of-season team state
+- 2026 rows have `home_win = NaN`; all 136 feature columns are populated from 2025 end-of-season team state
 - Spring training games (`game_type=S`) use the same prior-season features; model predictions carry a caveat
+- Stage 1 player embedding features (17 columns) are 0.0 when player data is unavailable
 
-## 3.8 Prediction snapshots
+## 3.9 Prediction snapshots
 
 Path template:
 
@@ -352,7 +387,7 @@ Immutability:
 
 - Snapshot files MUST never be overwritten.
 
-## 3.9 Drift artifacts
+## 3.10 Drift artifacts
 
 Per-season metrics:
 
@@ -377,7 +412,7 @@ Schema (both files share the same columns):
 | `pct_gt_0p02` | float64 | % of games with \|delta\| > 0.02 |
 | `pct_gt_0p05` | float64 | % of games with \|delta\| > 0.05 |
 
-## 3.10 Spring Training Features
+## 3.11 Spring Training Features
 
 Path:
 

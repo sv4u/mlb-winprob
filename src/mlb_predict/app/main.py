@@ -186,16 +186,45 @@ _DEFAULT_MODEL_TYPE = "stacked"
 
 
 def _reload_app() -> None:
-    """Re-run startup() to pick up new data/models after a pipeline completes."""
+    """Re-populate DuckDB from fresh Parquet files, then re-run startup().
+
+    Without the DuckDB refresh, startup() would load the stale (but non-empty)
+    DuckDB store and silently ignore newly built Parquet files.
+    """
+    try:
+        from mlb_predict.storage.duckdb_store import get_store
+
+        store = get_store()
+        store.ingest_all_features()
+        logger.info("DuckDB store refreshed before reload")
+    except Exception as exc:
+        logger.warning("DuckDB refresh failed (non-fatal): %s", exc)
+
     model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     startup(model_type)
 
 
 async def _auto_bootstrap() -> None:
-    """Auto-trigger ingest + retrain when no data/model exists on first startup."""
+    """Auto-trigger ingest + retrain when no data/model exists on first startup.
+
+    After features are built, populates the DuckDB store so subsequent
+    startups are 10-50x faster.
+    """
     logger.info("No data/model found — auto-bootstrapping with ingest + retrain")
 
+    def _populate_duckdb() -> None:
+        """Ingest all feature Parquet files into DuckDB after the pipeline completes."""
+        try:
+            from mlb_predict.storage.duckdb_store import get_store
+
+            store = get_store()
+            store.ingest_all_features()
+            logger.info("DuckDB store populated after ingest")
+        except Exception as exc:
+            logger.warning("DuckDB population failed (non-fatal): %s", exc)
+
     def _reload_after_retrain() -> None:
+        _populate_duckdb()
         model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
         try:
             startup(model_type)

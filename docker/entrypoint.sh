@@ -52,6 +52,7 @@ mkdir -p \
     data/processed/fangraphs \
     data/processed/pitcher_stats \
     data/processed/statcast_player \
+    data/processed/player \
     data/processed/vegas \
     data/processed/weather \
     data/models \
@@ -64,7 +65,7 @@ mkdir -p \
 # either pre-populated or a previous run succeeded, so we skip the expensive
 # initial pipeline.
 # ---------------------------------------------------------------------------
-if ls data/models/stacked_v3_train*/model.joblib 2>/dev/null | grep -q .; then
+if ls data/models/stacked_v*_train*/model.joblib 2>/dev/null | grep -q .; then
     log "Existing model artifacts found — skipping bootstrap."
     log "  To force a full re-bootstrap: delete ./data/models/ and restart."
 else
@@ -88,6 +89,9 @@ else
         run_step "Build FanGraphs team metrics" \
             python scripts/ingest_fangraphs.py
 
+        run_step "Ingest player data (biographical, gamelogs, Statcast)" \
+            python scripts/ingest_player_data.py --seasons $(seq -s ' ' 2000 "$YEAR")
+
         run_step "Build historical feature matrices (incl. Statcast, Vegas, weather)" \
             python scripts/build_features.py
 
@@ -98,6 +102,9 @@ else
             run_step "Build 2026 pre-season features" \
                 python scripts/build_features_2026.py
         fi
+
+        run_step "Populate DuckDB store from feature Parquet files" \
+            python -c "from mlb_predict.storage.duckdb_store import get_store; s = get_store(); s.ingest_all_features(); print(f'DuckDB: {s.table_stats()}')"
 
         run_step "Train all models (logistic, lightgbm, xgboost, catboost, mlp, stacked)" \
             python scripts/train_model.py --models logistic lightgbm xgboost catboost mlp stacked

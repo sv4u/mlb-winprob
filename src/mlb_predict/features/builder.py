@@ -495,39 +495,45 @@ def build_feature_matrix(
     else:
         season_progress = pd.Series([0.5] * len(gl), index=gl.index)
 
-    # --- Combine everything -------------------------------------------------
-    combined = pd.DataFrame(index=gl.index)
-    combined["date"] = pd.to_datetime(gl["date"]).dt.date
-    combined["home_team"] = gl["home_team"].values
-    combined["visiting_team"] = gl["visiting_team"].values
-    combined["game_num"] = pd.to_numeric(gl["game_num"], errors="coerce").fillna(0).astype(int)
-    combined["home_win"] = home_win
-    combined["park_run_factor"] = park_run_factor.values
-    combined["season_progress"] = season_progress.values
+    # --- Combine everything via pd.concat (avoids DataFrame fragmentation) ----
+    parts: list[pd.DataFrame] = []
 
-    # --- Contextual: day/night, interleague, day of week ---------------------
+    base = pd.DataFrame(
+        {
+            "date": pd.to_datetime(gl["date"]).dt.date,
+            "home_team": gl["home_team"].values,
+            "visiting_team": gl["visiting_team"].values,
+            "game_num": pd.to_numeric(gl["game_num"], errors="coerce").fillna(0).astype(int),
+            "home_win": home_win,
+            "park_run_factor": park_run_factor.values,
+            "season_progress": season_progress.values,
+        },
+        index=gl.index,
+    )
+
     day_night_raw = gl.get("day_night", pd.Series("D", index=gl.index))
-    combined["day_night"] = (day_night_raw.astype(str).str.upper() == "N").astype(float)
-    if "home_team_league" in gl.columns and "visiting_team_league" in gl.columns:
-        combined["interleague"] = (
-            gl["home_team_league"].astype(str) != gl["visiting_team_league"].astype(str)
-        ).astype(float)
-    else:
-        combined["interleague"] = 0.0
-    combined["day_of_week"] = pd.to_datetime(gl["date"]).dt.dayofweek.values.astype(float) / 6.0
-
-    for col in elo_season.columns:
-        combined[col] = elo_season[col].values
-
-    for col in team_feats_season.columns:
-        combined[col] = team_feats_season[col].values
+    interleague = (
+        (gl["home_team_league"].astype(str) != gl["visiting_team_league"].astype(str)).astype(float)
+        if "home_team_league" in gl.columns and "visiting_team_league" in gl.columns
+        else pd.Series(0.0, index=gl.index)
+    )
+    ctx = pd.DataFrame(
+        {
+            "day_night": (day_night_raw.astype(str).str.upper() == "N").astype(float),
+            "interleague": interleague,
+            "day_of_week": pd.to_datetime(gl["date"]).dt.dayofweek.values.astype(float) / 6.0,
+        },
+        index=gl.index,
+    )
+    parts.extend([base, ctx, elo_season.reset_index(drop=True), team_feats_season.reset_index(drop=True)])
 
     if lineup_season is not None:
-        for col in lineup_season.columns:
-            combined[col] = lineup_season[col].values
+        parts.append(lineup_season.reset_index(drop=True))
     else:
-        combined["home_lineup_continuity"] = 4.5
-        combined["away_lineup_continuity"] = 4.5
+        parts.append(pd.DataFrame(
+            {"home_lineup_continuity": 4.5, "away_lineup_continuity": 4.5},
+            index=gl.index,
+        ))
 
     # --- Bullpen usage / ERA proxy (optional) ---------------------------------
     if (
@@ -537,42 +543,28 @@ def build_feature_matrix(
         try:
             bullpen_all = build_bullpen_features(gamelogs_all).sort_index()
             bullpen_season = bullpen_all.iloc[season_mask].reset_index(drop=True)
-            for col in bullpen_season.columns:
-                combined[col] = bullpen_season[col].values
+            parts.append(bullpen_season)
         except Exception as exc:
             logger.warning("Bullpen feature computation failed for season %d: %s", season, exc)
-            for c in [
-                "home_bullpen_usage_15",
-                "home_bullpen_usage_30",
-                "away_bullpen_usage_15",
-                "away_bullpen_usage_30",
-                "home_bullpen_era_proxy_15",
-                "home_bullpen_era_proxy_30",
-                "away_bullpen_era_proxy_15",
-                "away_bullpen_era_proxy_30",
-            ]:
-                combined[c] = 2.0 if "usage" in c else 4.5
+            bp_defaults = {}
+            for c in ["home_bullpen_usage_15", "home_bullpen_usage_30",
+                       "away_bullpen_usage_15", "away_bullpen_usage_30"]:
+                bp_defaults[c] = 2.0
+            for c in ["home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
+                       "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30"]:
+                bp_defaults[c] = 4.5
+            parts.append(pd.DataFrame(bp_defaults, index=gl.index))
     else:
-        for c in [
-            "home_bullpen_usage_15",
-            "home_bullpen_usage_30",
-            "away_bullpen_usage_15",
-            "away_bullpen_usage_30",
-        ]:
-            combined[c] = 2.0
-        for c in [
-            "home_bullpen_era_proxy_15",
-            "home_bullpen_era_proxy_30",
-            "away_bullpen_era_proxy_15",
-            "away_bullpen_era_proxy_30",
-        ]:
-            combined[c] = 4.5
+        bp_defaults = {}
+        for c in ["home_bullpen_usage_15", "home_bullpen_usage_30",
+                   "away_bullpen_usage_15", "away_bullpen_usage_30"]:
+            bp_defaults[c] = 2.0
+        for c in ["home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
+                   "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30"]:
+            bp_defaults[c] = 4.5
+        parts.append(pd.DataFrame(bp_defaults, index=gl.index))
 
-    for col in sp_feats.columns:
-        combined[col] = sp_feats[col].values
-
-    for col in fg_feats.columns:
-        combined[col] = fg_feats[col].values
+    parts.extend([sp_feats.reset_index(drop=True), fg_feats.reset_index(drop=True)])
 
     # --- Statcast lineup-weighted and pitcher (prior-season player-level) ----
     lineup_cols = [f"home_{i}_id" for i in range(1, 10)] + [
@@ -580,6 +572,7 @@ def build_feature_matrix(
     ]
     prior_season = season - 1
     cache_dir = statcast_cache_dir or Path("data/processed/statcast_player")
+    _statcast_fallback = False
     if all(c in gl.columns for c in lineup_cols) and all(
         c in gl.columns for c in ["home_starting_pitcher_id", "visiting_starting_pitcher_id"]
     ):
@@ -594,23 +587,45 @@ def build_feature_matrix(
             pit_sc = build_pitcher_statcast_features(
                 gl, prior_season, pitcher_stats, retro_to_mlbam
             )
-            for col in lineup_sc.columns:
-                combined[col] = lineup_sc[col].values
-            for col in pit_sc.columns:
-                combined[col] = pit_sc[col].values
+            parts.extend([lineup_sc.reset_index(drop=True), pit_sc.reset_index(drop=True)])
         except Exception as exc:
             logger.warning("Statcast feature computation failed for season %d: %s", season, exc)
-            combined["home_lineup_xwoba"] = combined.get("home_bat_xwoba", _LEAGUE_AVG_XWOBA)
-            combined["away_lineup_xwoba"] = combined.get("away_bat_xwoba", _LEAGUE_AVG_XWOBA)
-            combined["home_lineup_barrel_pct"] = combined.get(
-                "home_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
-            )
-            combined["away_lineup_barrel_pct"] = combined.get(
-                "away_bat_barrel_pct", _LEAGUE_AVG_BARREL_PCT
-            )
-            combined["home_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
-            combined["away_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
+            _statcast_fallback = True
     else:
+        _statcast_fallback = True
+
+    # --- Vegas opening line (and line movement) ----------------------------
+    v_dir = vegas_dir or Path("data/processed/vegas")
+    vegas_df = load_vegas_season(v_dir, season)
+    vegas_feats = build_vegas_features(gl, vegas_df)
+    parts.append(vegas_feats.reset_index(drop=True))
+
+    # --- Weather (temp, wind, humidity at game location) ----------------------
+    w_dir = weather_dir or Path("data/processed/weather")
+    weather_df = load_weather_season(w_dir, season)
+    weather_feats = build_weather_features(gl, weather_df)
+    parts.append(weather_feats.reset_index(drop=True))
+
+    # --- Stage 1 player model features (v4) ----------------------------------
+    from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
+
+    if stage1_features is not None and not stage1_features.empty:
+        s1_data = {
+            col: (stage1_features[col].values if col in stage1_features.columns else 0.0)
+            for col in STAGE1_FEATURE_NAMES
+        }
+    else:
+        s1_data = {col: 0.0 for col in STAGE1_FEATURE_NAMES}
+    parts.append(pd.DataFrame(s1_data, index=gl.index))
+
+    # --- Assemble via single pd.concat (eliminates fragmentation warnings) ---
+    for i, p in enumerate(parts):
+        if len(p) != len(gl):
+            parts[i] = p.reset_index(drop=True)
+    combined = pd.concat(parts, axis=1).copy()
+
+    # --- Post-concat: statcast fallback columns that depend on combined -------
+    if _statcast_fallback:
         combined["home_lineup_xwoba"] = combined.get("home_bat_xwoba", _LEAGUE_AVG_XWOBA)
         combined["away_lineup_xwoba"] = combined.get("away_bat_xwoba", _LEAGUE_AVG_XWOBA)
         combined["home_lineup_barrel_pct"] = combined.get(
@@ -622,24 +637,10 @@ def build_feature_matrix(
         combined["home_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
         combined["away_sp_est_woba"] = _LEAGUE_AVG_PIT_EST_WOBA
 
-    # --- Vegas opening line (and line movement) ----------------------------
-    v_dir = vegas_dir or Path("data/processed/vegas")
-    vegas_df = load_vegas_season(v_dir, season)
-    vegas_feats = build_vegas_features(gl, vegas_df)
-    for col in vegas_feats.columns:
-        combined[col] = vegas_feats[col].values
-
-    # --- Weather (temp, wind, humidity at game location) ----------------------
-    w_dir = weather_dir or Path("data/processed/weather")
-    weather_df = load_weather_season(w_dir, season)
-    weather_feats = build_weather_features(gl, weather_df)
-    for col in weather_feats.columns:
-        combined[col] = weather_feats[col].values
-
     # --- Game type (regular season) -------------------------------------------
     combined["is_spring"] = 0.0
 
-    # --- Differential features ----------------------------------------------
+    # --- Differential features (must run after concat) ------------------------
     combined["pythag_diff_30"] = combined["home_pythag_30"] - combined["away_pythag_30"]
     combined["pythag_diff_ewm"] = combined.get("home_pythag_ewm", 0.5) - combined.get(
         "away_pythag_ewm", 0.5
@@ -659,23 +660,6 @@ def build_feature_matrix(
         "home_pit_whip", 1.30
     )
     combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get("away_bat_iso", 0.170)
-
-    # --- Stage 1 player model features (v4) ----------------------------------
-    if stage1_features is not None and not stage1_features.empty:
-        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
-
-        for col in STAGE1_FEATURE_NAMES:
-            if col in stage1_features.columns:
-                combined[col] = stage1_features[col].values
-            else:
-                combined[col] = 0.0
-    else:
-        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
-
-        for col in STAGE1_FEATURE_NAMES:
-            combined[col] = 0.0
-
-    combined = combined.copy()
 
     # --- Join crosswalk to get game_pk and MLB team IDs ---------------------
     cw_matched = crosswalk[crosswalk["status"] == "matched"][

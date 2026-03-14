@@ -13,9 +13,9 @@ Training improvements
   so the model adapts to changes in the game (shift to analytics, rule changes, etc.).
 - **Platt calibration**: a sigmoid meta-layer fitted on a held-out calibration
   set corrects systematic over/under-confidence.
-- **Optuna HPO**: 60-trial study for LightGBM and XGBoost using a fast 3-season
-  expanding-window evaluation to find the best hyperparameters before the
-  full expanding-CV run.
+- **Optuna HPO**: 60-trial study for LightGBM, XGBoost, and CatBoost using a
+  fast 3-5 season expanding-window evaluation to find optimal hyperparameters
+  before the full expanding-CV run.
 
 Expanding-window evaluation
 ----------------------------
@@ -607,7 +607,7 @@ def run_optuna_hpo(
     season_dfs: dict[int, pd.DataFrame],
     *,
     model_type: str = "lightgbm",
-    n_trials: int = 200,
+    n_trials: int = 60,
     eval_seasons: list[int] | None = None,
     model_dir: Path = Path("data/models"),
     spring_weight: float = _DEFAULT_SPRING_WEIGHT,
@@ -745,9 +745,26 @@ def run_optuna_hpo(
 def _load_all_feature_files(features_dir: Path) -> dict[int, pd.DataFrame]:
     """Load regular-season and spring training feature files, merging by season.
 
-    Adds ``is_spring = 0.0`` to DataFrames that lack the column for backward
-    compatibility with feature files built before this column was introduced.
+    Tries DuckDB first for ~10x faster multi-season loading, then falls back to
+    scanning individual Parquet files.  Adds ``is_spring = 0.0`` to DataFrames
+    that lack the column for backward compatibility.
     """
+    try:
+        from mlb_predict.storage.duckdb_store import get_store
+
+        store = get_store()
+        row_count = store.feature_count()
+        if row_count == 0:
+            store.ingest_all_features(features_dir)
+            row_count = store.feature_count()
+        if row_count > 0:
+            result = store.query_training_data()
+            if result:
+                logger.info("Loaded %d seasons from DuckDB store", len(result))
+                return result
+    except Exception as exc:
+        logger.info("DuckDB load unavailable (%s), falling back to Parquet", exc)
+
     season_dfs: dict[int, list[pd.DataFrame]] = {}
 
     for f in sorted(features_dir.glob("features_*.parquet")):

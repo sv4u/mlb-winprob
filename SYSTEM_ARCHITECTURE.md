@@ -11,6 +11,7 @@
    - Retrosheet downloader (Chadwick primary / retrosheet.org ZIP fallback)
    - FanGraphs team metrics (via `pybaseball`)
    - Individual pitcher stats (MLB Stats API)
+   - Player data (biographical, gamelogs, Statcast batter/pitcher stats)
    - Spring training schedule scores (MLB Stats API)
 
 2. **Processing Layer** — normalize and link raw data
@@ -18,38 +19,49 @@
    - Retrosheet GL parsing
    - Crosswalk builder (Retrosheet → MLB `game_pk`)
 
-3. **Feature Layer** — deterministic 119-feature matrix per game
+3. **Storage Layer** — hybrid DuckDB + Parquet
+   - **DuckDB** (`data/processed/mlb_predict.duckdb`) — primary analytical store for fast reads
+     (10-50x faster than scanning individual Parquet files for multi-season queries)
+   - **Parquet files** — canonical export format for interoperability, snapshots, and checksums
+   - Feature data is ingested into DuckDB after build; training and serving read from DuckDB first
+   - Automatic fallback to direct Parquet reads when DuckDB store is unavailable
+
+4. **Feature Layer** — deterministic 136-feature matrix per game (119 team + 17 Stage 1 player)
    - Elo ratings (sequential, cross-season)
    - Multi-window rolling stats (15 / 30 / 60 games)
    - EWMA rolling stats (span=20)
    - Home/away performance splits
    - Pitcher stats (prior-season ERA, K/9, BB/9)
    - FanGraphs team advanced metrics (prior-season wOBA, FIP, xFIP, …)
+   - Statcast lineup-weighted and pitcher stats (prior-season player-level)
    - Park run factors
    - Differential features
    - Spring training features (from schedule scores + prior-season state)
    - Game type indicator (is_spring)
-   - Spring training feature builder (schedule scores + prior-season team state)
+   - Stage 1 player embedding features (17 game-level features from PyTorch model)
+   - Feature assembly uses `pd.concat(axis=1)` to avoid DataFrame fragmentation
 
-4. **Model Layer** — six trained classifiers with probability calibration (isotonic for tree models, Platt for linear/neural)
+5. **Model Layer** — six trained classifiers with probability calibration (isotonic for tree models, Platt for linear/neural)
    - Logistic regression (interpretable baseline)
-   - LightGBM (Optuna-tuned gradient boosting)
-   - XGBoost (Optuna-tuned gradient boosting)
-   - CatBoost (Optuna-tuned gradient boosting)
+   - LightGBM (Optuna-tuned gradient boosting, 60 trials)
+   - XGBoost (Optuna-tuned gradient boosting, 60 trials)
+   - CatBoost (Optuna-tuned gradient boosting, 60 trials)
    - MLP (multi-layer perceptron neural network)
    - Stacked ensemble (meta-logistic on base-model probabilities)
 
-5. **Scoring Layer** — immutable prediction snapshots
+6. **Scoring Layer** — immutable prediction snapshots
    - Daily snapshot Parquet files (by season + run timestamp)
    - Reproducible from raw inputs given the same model artifact
 
-6. **Monitoring Layer** — drift detection across runs
+7. **Monitoring Layer** — drift detection across runs
    - Incremental diff (vs previous snapshot)
    - Baseline diff (vs first snapshot of season)
    - Per-season `run_metrics.parquet` and global metrics log
 
-7. **Serving Layer** — web dashboard + CLI
+8. **Serving Layer** — web dashboard + CLI
    - FastAPI / Jinja2 web dashboard (port 30087)
+   - gRPC server (port 50051) with gateway
+   - MCP server (Streamable HTTP at /mcp)
    - Human-centric CLI query tool (`scripts/query_game.py`)
 
 ---
@@ -74,17 +86,23 @@ FanGraphs (via pybaseball):
 MLB Stats API (pitcher stats):
              └─► data/processed/pitcher_stats/pitchers_YYYY.parquet
 
+Player data (biographical, gamelogs, Statcast):
+             └─► data/processed/player/biographical.parquet
+             └─► data/processed/player/{batter,pitcher}_stats_YYYY.parquet
+             └─► data/processed/player/pitcher_gamelogs_YYYY.parquet
+
 schedule + gamelogs
    └─► data/processed/crosswalk/game_id_map_YYYY.parquet
 
-crosswalk + gamelogs + pitcher_stats + fangraphs
-   └─► data/processed/features/features_YYYY.parquet   (119 features, historical)
+crosswalk + gamelogs + pitcher_stats + fangraphs + statcast + vegas + weather
+   └─► data/processed/features/features_YYYY.parquet   (136 features, historical)
    └─► data/processed/features/features_2026.parquet   (pre-season, from team state)
 
 schedule (spring training scores) + prior-season features
    └─► data/processed/features/features_spring_YYYY.parquet  (spring training)
 
-features ──► model training ──► data/models/{type}_v3_train{season}/
+features ──► DuckDB store (data/processed/mlb_predict.duckdb)
+         └─► model training ──► data/models/{type}_v4_train{season}/
 
 features + model
    └─► data/processed/predictions/season=YYYY/snapshots/run_ts=<iso>.parquet
@@ -154,38 +172,51 @@ in sequence and exits nonzero on any failure.
 - FanGraphs team advanced metrics via `pybaseball`
 - Persists `fangraphs_YYYY.parquet` (wOBA, FIP, xFIP, K%, BB%, …)
 
-## 4.5 `src/mlb_predict/features`
+## 4.5 `src/mlb_predict/storage`
+
+- `duckdb_store.py` — hybrid DuckDB + Parquet storage layer
+- Singleton `get_store()` provides thread-safe access to the DuckDB database
+- `ingest_parquet()` / `ingest_all_features()` for Parquet → DuckDB ingestion
+- `query_features()` / `query_training_data()` for fast analytical reads
+- `export_parquet()` for DuckDB → Parquet export (snapshots, interoperability)
+- Automatic fallback: if DuckDB is unavailable, callers fall back to direct Parquet reads
+
+## 4.6 `src/mlb_predict/features`
 
 - `elo.py` — sequential cross-season Elo with home-field HFA offset
 - `team_stats.py` — rolling windows (15/30/60 games), EWMA, home/away splits, streaks, rest
 - `pitcher_stats.py` — gamelog-based pitcher ERA assembly
 - `park_factors.py` — median runs-per-game park factor from historical gamelogs
-- `builder.py` — assembles the 119-feature matrix with is_spring indicator and saves per-season Parquet
+- `builder.py` — assembles the 136-feature matrix (119 team + 17 Stage 1 player)
+  using `pd.concat(axis=1)` to avoid DataFrame fragmentation; saves per-season Parquet
 
-## 4.6 `src/mlb_predict/model`
+## 4.7 `src/mlb_predict/model`
 
 - `train.py` — logistic, LightGBM, XGBoost, CatBoost, MLP, stacked ensemble; calibration (isotonic for tree models, Platt for linear/neural);
-  time-weighted sample weights; Optuna HPO; expanding-window cross-validation;
-  spring training weighting; pre-training data validation; combined regular + spring feature loading
+  time-weighted sample weights; Optuna HPO (60 trials); expanding-window cross-validation;
+  spring training weighting; DuckDB-accelerated feature loading with Parquet fallback;
+  Stage 1 player embedding integration; pre-training data validation
 - `evaluate.py` — Brier score, accuracy, calibration error
 - `artifacts.py` — save / load model artifacts (joblib + JSON metadata)
 
-## 4.7 `src/mlb_predict/predict`
+## 4.8 `src/mlb_predict/predict`
 
 - `snapshot.py` — produces immutable prediction Parquet files with
   provenance hashes (`model_version`, `feature_hash`, `schedule_hash`, `git_commit`)
 
-## 4.8 `src/mlb_predict/drift`
+## 4.9 `src/mlb_predict/drift`
 
 - `compute.py` — incremental and baseline diffs; per-season and global run metrics
 
-## 4.9 `src/mlb_predict/app`
+## 4.10 `src/mlb_predict/app`
 
 - `main.py` — FastAPI application: game browser, 2026 season page, game detail,
-  upsets, CV summary; SHAP attribution on game detail
-- `data_cache.py` — loads all feature Parquet files and the production model
-  once at startup; normalizes date types; pre-computes probabilities for all games
-- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`, `odds_hub.html`, `ev_calculator.html`)
+  upsets, CV summary; SHAP attribution on game detail; auto-bootstrap with
+  DuckDB population after ingest
+- `data_cache.py` — loads features via DuckDB store (fast path) or Parquet files
+  (fallback); normalizes date types; pre-computes probabilities for all games
+- `admin.py` — pipeline runner with player data ingest step
+- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`, `odds_hub.html`)
 
 ---
 
