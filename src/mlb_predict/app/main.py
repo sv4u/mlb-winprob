@@ -238,7 +238,7 @@ async def _auto_bootstrap() -> None:
     if ingest_state.status.value != "success":
         logger.error("Auto-bootstrap ingest failed — retrain skipped")
         return
-    await run_pipeline(PipelineKind.RETRAIN, on_success=_reload_after_retrain)
+    await run_pipeline(PipelineKind.RETRAIN, on_success=_reload_after_retrain, bootstrap=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1360,6 +1360,13 @@ class _PipelineOptionsRequest(BaseModel):
     refresh_retro: bool = True
 
 
+class _RetrainOptionsRequest(BaseModel):
+    """Body for POST /api/admin/retrain with training intensity controls."""
+
+    skip_cv: bool = False
+    skip_stage1: bool = False
+
+
 @app.get("/api/active-model", response_model=None)
 async def api_active_model(request: Request) -> dict | JSONResponse:
     """Return the currently active model type and available alternatives."""
@@ -1528,7 +1535,7 @@ async def api_admin_update(body: _PipelineOptionsRequest | None = None) -> dict:
 
 
 @app.post("/api/admin/retrain")
-async def api_admin_retrain() -> dict:
+async def api_admin_retrain(body: _RetrainOptionsRequest | None = None) -> dict:
     """Clear all model artifacts and retrain from scratch."""
     blocker = conflicting_pipeline()
     if blocker is not None:
@@ -1536,7 +1543,10 @@ async def api_admin_retrain() -> dict:
             "ok": False,
             "message": f"Cannot start retrain — {blocker.value} pipeline is running.",
         }
-    asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app))
+    opts: PipelineOptions | None = None
+    if body and (body.skip_cv or body.skip_stage1):
+        opts = PipelineOptions(skip_cv=body.skip_cv, skip_stage1=body.skip_stage1)
+    asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app, opts=opts))
     return {"ok": True, "message": "Retrain pipeline started."}
 
 

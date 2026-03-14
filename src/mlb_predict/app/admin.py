@@ -42,6 +42,8 @@ class PipelineOptions:
     seasons: list[int] | None = None
     refresh_mlbapi: bool = True
     refresh_retro: bool = True
+    skip_cv: bool = False
+    skip_stage1: bool = False
 
 
 class PipelineStatus(str, Enum):
@@ -329,12 +331,32 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
     ]
 
 
-def _retrain_commands() -> list[tuple[str, str]]:
-    """Retrain all production models from scratch."""
+def _retrain_commands(
+    opts: PipelineOptions | None = None,
+    *,
+    bootstrap: bool = False,
+) -> list[tuple[str, str]]:
+    """Retrain all production models from scratch.
+
+    When *bootstrap* is True, skips expanding-window CV and Stage 1 player
+    embeddings to produce usable models in minutes instead of hours.
+    Options from *opts* (skip_cv, skip_stage1) override bootstrap defaults
+    for manual dashboard-triggered retrains.
+    """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
+    flags = ""
+    skip_cv = bootstrap or (opts.skip_cv if opts else False)
+    skip_stage1 = bootstrap or (opts.skip_stage1 if opts else False)
+    if skip_cv:
+        flags += " --skip-cv"
+    if skip_stage1:
+        flags += " --no-stage1"
     return [
-        ("Train all production models", f"{python} scripts/train_model.py --models {models}"),
+        (
+            "Train all production models",
+            f"{python} scripts/train_model.py --models {models}{flags}",
+        ),
     ]
 
 
@@ -364,11 +386,14 @@ async def run_pipeline(
     kind: PipelineKind,
     on_success: Callable[[], Any] | None = None,
     opts: PipelineOptions | None = None,
+    *,
+    bootstrap: bool = False,
 ) -> None:
     """Execute a pipeline (ingest or retrain) as a background task.
 
     After successful completion, calls ``on_success`` (typically a model reload)
-    and writes a timestamp marker.
+    and writes a timestamp marker.  When *bootstrap* is True, retrain uses
+    ``--skip-cv --no-stage1`` for a fast first-time setup.
     """
     state = get_state(kind)
 
@@ -392,7 +417,7 @@ async def run_pipeline(
         elif kind == PipelineKind.UPDATE:
             commands = _update_commands(opts)
         else:
-            commands = _retrain_commands()
+            commands = _retrain_commands(opts, bootstrap=bootstrap)
 
         state.init_steps([desc for desc, _ in commands])
 

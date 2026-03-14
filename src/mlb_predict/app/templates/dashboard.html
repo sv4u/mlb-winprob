@@ -200,9 +200,13 @@
         <strong style="color:var(--accent2)">Destructive:</strong> removes all existing model
         artifacts, then trains all 6 production models from scratch. Auto-reloads on completion.
       </p>
+      <div class="pipeline-opts">
+        <label><input type="checkbox" id="retrain-skip-cv"> Skip cross-validation</label>
+        <label><input type="checkbox" id="retrain-skip-stage1"> Skip Stage 1 embeddings</label>
+      </div>
       <div class="pipeline-meta" id="retrain-meta"></div>
       <button class="btn btn-retrain" id="btn-retrain"
-        onclick="startDestructive('retrain', 'This will DELETE all trained models and retrain from scratch. Continue?')">Retrain
+        onclick="startDestructiveWithOpts('retrain', 'This will DELETE all trained models and retrain from scratch. Continue?')">Retrain
         Models</button>
       <div class="log-box" id="retrain-log"></div>
     </div>
@@ -492,6 +496,14 @@ function renderCV(rows) {
 }
 
   function gatherPipelineOpts(kind) {
+    if (kind === 'retrain') {
+      const skipCv = document.getElementById('retrain-skip-cv');
+      const skipS1 = document.getElementById('retrain-skip-stage1');
+      return {
+        skip_cv: skipCv ? skipCv.checked : false,
+        skip_stage1: skipS1 ? skipS1.checked : false,
+      };
+    }
     const preEl = document.getElementById(kind + '-preseason');
     const mlbEl = document.getElementById(kind + '-refresh-mlbapi');
     const retroEl = document.getElementById(kind + '-refresh-retro');
