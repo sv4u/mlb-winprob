@@ -23,6 +23,17 @@
 
 
 # =============================================================================
+# Stage 0: gitlog — extract commit history into a plain-text file
+# Uses alpine/git (~8 MB) so the production image needs neither git nor .git/.
+# The output format matches what get_changelog() already parses.
+# =============================================================================
+FROM alpine/git:latest AS gitlog
+WORKDIR /repo
+COPY .git/ .git/
+RUN git log --format="%H|%ad|%s" --date=short --reverse > /changelog.txt 2>/dev/null || true
+
+
+# =============================================================================
 # Stage 1: base
 # =============================================================================
 FROM python:3.11-slim AS base
@@ -138,6 +149,8 @@ RUN set -e; commit="$GIT_COMMIT"; \
     fi; \
     echo "$commit" > /app/GIT_COMMIT; \
     rm -rf /tmp/gitinfo
+
+COPY --from=gitlog /changelog.txt /app/CHANGELOG.txt
 
 RUN chmod +x docker/entrypoint.sh \
     docker/ingest_daily.sh \

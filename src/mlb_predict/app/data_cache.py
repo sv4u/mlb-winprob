@@ -105,8 +105,32 @@ def _parse_commit_message(message: str) -> dict[str, str]:
 _changelog_cache: list[dict[str, str]] | None = None
 
 
+_CHANGELOG_FILE = _REPO_ROOT / "CHANGELOG.txt"
+
+
+def _parse_changelog_lines(raw: str) -> list[dict[str, str]]:
+    """Parse pipe-delimited changelog lines into structured entries."""
+    entries: list[dict[str, str]] = []
+    for line in raw.strip().splitlines():
+        parts = line.split("|", 2)
+        if len(parts) != 3:
+            continue
+        sha, date, message = parts
+        parsed = _parse_commit_message(message)
+        entries.append({
+            "hash": sha[:8],
+            "date": date,
+            "message": message,
+            **parsed,
+        })
+    return entries
+
+
 def get_changelog() -> list[dict[str, str]]:
     """Return the parsed git commit log, cached after first call.
+
+    Tries ``git log`` first (development), then falls back to the baked-in
+    ``CHANGELOG.txt`` produced during the Docker build.
 
     Each entry: {hash, date, type, scope, description, breaking, message}.
     """
@@ -123,23 +147,17 @@ def get_changelog() -> list[dict[str, str]]:
             cwd=str(_REPO_ROOT),
             timeout=10,
         )
-        if result.returncode != 0:
-            _changelog_cache = entries
-            return entries
-        for line in result.stdout.strip().splitlines():
-            parts = line.split("|", 2)
-            if len(parts) != 3:
-                continue
-            sha, date, message = parts
-            parsed = _parse_commit_message(message)
-            entries.append({
-                "hash": sha[:8],
-                "date": date,
-                "message": message,
-                **parsed,
-            })
+        if result.returncode == 0 and result.stdout.strip():
+            entries = _parse_changelog_lines(result.stdout)
     except Exception:
-        logger.warning("Failed to read git log for changelog", exc_info=True)
+        logger.debug("git log unavailable, trying CHANGELOG.txt", exc_info=True)
+
+    if not entries and _CHANGELOG_FILE.exists():
+        try:
+            entries = _parse_changelog_lines(_CHANGELOG_FILE.read_text())
+        except Exception:
+            logger.warning("Failed to read CHANGELOG.txt", exc_info=True)
+
     entries.reverse()
     _changelog_cache = entries
     return entries
