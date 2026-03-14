@@ -465,7 +465,9 @@ def _tool_find_ev_bets() -> str:
         )
     events = client.get_game_odds_sync()
     if not events:
-        return json.dumps({"message": "No upcoming games with odds right now.", "opportunities": []})
+        return json.dumps(
+            {"message": "No upcoming games with odds right now.", "opportunities": []}
+        )
     client.events_to_retro(events)
     cfg = get_betting_config()
     opps = compute_ev_opportunities(

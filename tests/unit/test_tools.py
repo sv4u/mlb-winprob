@@ -8,7 +8,7 @@ from mlb_predict.tools import TOOL_SCHEMAS, run_tool
 
 
 def test_tool_schemas_count() -> None:
-    """There are 12 tools including stubs."""
+    """There are 12 tools registered."""
     assert len(TOOL_SCHEMAS) == 12
     names = {s["function"]["name"] for s in TOOL_SCHEMAS}
     assert "query_predictions" in names
@@ -63,21 +63,20 @@ def test_run_tool_get_season_summary_returns_valid_structure() -> None:
         assert "active_model" in data or "available_models" in data
 
 
-def test_run_tool_find_ev_bets_stub() -> None:
-    """find_ev_bets returns stub message."""
+def test_run_tool_find_ev_bets_not_ready() -> None:
+    """find_ev_bets returns error when data is not loaded."""
     out = run_tool("find_ev_bets", {})
     data = json.loads(out)
-    assert "message" in data
-    assert "not available" in data["message"].lower() or "future" in data["message"].lower()
+    assert "error" in data or "message" in data
 
 
-def test_run_tool_get_live_odds_stub() -> None:
-    """get_live_odds returns stub or not-configured message when no API key is set."""
+def test_run_tool_get_live_odds_not_configured() -> None:
+    """get_live_odds returns not-configured message when no API key is set."""
     out = run_tool("get_live_odds", {})
     data = json.loads(out)
     assert "message" in data
     msg = data["message"].lower()
-    assert "not available" in msg or "future" in msg or "not configured" in msg
+    assert "not configured" in msg or "not available" in msg
 
 
 def test_run_tool_compare_models_returns_list() -> None:
