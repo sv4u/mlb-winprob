@@ -1301,7 +1301,8 @@ async def page_wiki(request: Request):
     if not is_ready():
         return _init_page(request)
     return templates.TemplateResponse(
-        "wiki.html", _ctx(request, changelog=get_changelog()),
+        "wiki.html",
+        _ctx(request, changelog=get_changelog()),
     )
 
 

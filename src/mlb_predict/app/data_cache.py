@@ -117,12 +117,14 @@ def _parse_changelog_lines(raw: str) -> list[dict[str, str]]:
             continue
         sha, date, message = parts
         parsed = _parse_commit_message(message)
-        entries.append({
-            "hash": sha[:8],
-            "date": date,
-            "message": message,
-            **parsed,
-        })
+        entries.append(
+            {
+                "hash": sha[:8],
+                "date": date,
+                "message": message,
+                **parsed,
+            }
+        )
     return entries
 
 

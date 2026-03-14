@@ -86,4 +86,6 @@ disable_error_code = ["attr-defined", "name-defined"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-filterwarnings = []
+filterwarnings = [
+    "ignore:.*Event loop is closed.*:pytest.PytestUnraisableExceptionWarning",
+]
