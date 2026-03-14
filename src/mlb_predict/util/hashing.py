@@ -1,4 +1,4 @@
-"""SHA-256 hashing utilities for provenance tracking (AGENTS.md §2)."""
+"""SHA-256 hashing utilities for provenance tracking (mlb-predict-pipeline.Rmd §2)."""
 
 from __future__ import annotations
 

@@ -72,7 +72,7 @@ RUN curl -fsSL \
 
 # ---------------------------------------------------------------------------
 # uv — fast Python package installer (10-100x faster than pip)
-# Pinned to a specific version for reproducible builds (AGENTS.md §2 rule 1).
+# Pinned to a specific version for reproducible builds (mlb-predict-pipeline.Rmd §2 rule 1).
 # ---------------------------------------------------------------------------
 COPY --from=ghcr.io/astral-sh/uv:0.10.8 /uv /usr/local/bin/uv
 

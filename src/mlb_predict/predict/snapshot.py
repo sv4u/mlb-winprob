@@ -1,6 +1,6 @@
 """Immutable prediction snapshot writer.
 
-Snapshot schema (per AGENTS.md §5):
+Snapshot schema (per mlb-predict-pipeline.Rmd §7.3):
   game_pk, home_team, away_team, predicted_home_win_prob,
   run_ts_utc, model_version, schedule_hash, feature_hash,
   lineup_param_hash, starter_param_hash, git_commit, tag

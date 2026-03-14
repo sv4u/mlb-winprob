@@ -1,4 +1,4 @@
-"""Prediction drift computation (AGENTS.md §6).
+"""Prediction drift computation (mlb-predict-pipeline.Rmd §7.3).
 
 For each model run, computes:
   1. Incremental diff  — current snapshot vs. the previous snapshot.

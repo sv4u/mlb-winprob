@@ -1,8 +1,8 @@
-"""Centralized error taxonomy per AGENTS.md section 9.
+"""Centralized error taxonomy per mlb-predict-pipeline.Rmd §19.
 
 All domain errors inherit from ``WinProbError`` so callers can catch the
 entire family with a single ``except WinProbError`` clause.  Each subclass
-maps directly to an entry in the AGENTS.md error taxonomy:
+maps directly to an entry in the mlb-predict-pipeline.Rmd error taxonomy:
 
 - IngestionError — raw data download or parsing failures
 - APIError — MLB Stats API communication failures (alias for MLBAPIError)
@@ -24,7 +24,7 @@ class IngestionError(WinProbError):
 
 
 class APIError(WinProbError):
-    """MLB Stats API communication failure (canonical name per AGENTS.md §9)."""
+    """MLB Stats API communication failure (canonical name per mlb-predict-pipeline.Rmd §19)."""
 
 
 class CoverageError(WinProbError):

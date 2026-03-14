@@ -27,7 +27,7 @@ _REQUESTS_REMAINING_HEADER = "x-requests-remaining"
 _QUOTA_WARN = 100
 _QUOTA_CIRCUIT_BREAK = 20
 
-# The Odds API full team name -> Retrosheet 3-letter code (AGENTS.md / plan)
+# The Odds API full team name -> Retrosheet 3-letter code (mlb-predict-pipeline.Rmd)
 _ODDS_API_TO_RETRO: dict[str, str] = {
     "Arizona Diamondbacks": "ARI",
     "Atlanta Braves": "ATL",
