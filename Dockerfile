@@ -10,7 +10,8 @@
 #
 # Build examples
 # --------------
-#   docker build .                               # production image (default)
+#   docker build .                               # production image (default, CPU-only torch)
+#   docker build --build-arg TORCH_CPU=0 .       # with CUDA-enabled torch (adds ~1.5 GB)
 #   docker build --target test .                 # test image for CI
 #   docker compose up --build                    # production via Compose
 #
@@ -85,10 +86,28 @@ WORKDIR /app
 # `uv pip install -e .` succeeds and caches the heavy dependency layer.
 # The real source code is copied afterwards; only that COPY rebuilds when
 # code changes (deps stay cached).
+#
+# CPU-only PyTorch (default): TORCH_CPU=1 uses the PyTorch CPU index
+# (download.pytorch.org/whl/cpu) as primary, avoiding ~1.5 GB of CUDA
+# libraries, and strips any transitive nvidia-* packages afterwards.
+# Pass --build-arg TORCH_CPU=0 for a CUDA-enabled build.
 # ---------------------------------------------------------------------------
+ARG TORCH_CPU=1
 COPY pyproject.toml .
 RUN mkdir -p src/mlb_predict && touch src/mlb_predict/__init__.py
-RUN uv pip install --system --no-cache --compile-bytecode -e .
+RUN set -e; \
+    if [ "$TORCH_CPU" = "1" ]; then \
+    UV_INDEX_ARGS="--extra-index-url https://download.pytorch.org/whl/cpu"; \
+    else \
+    UV_INDEX_ARGS=""; \
+    fi; \
+    uv pip install --system --no-cache --compile-bytecode $UV_INDEX_ARGS -e .; \
+    if [ "$TORCH_CPU" = "1" ]; then \
+    uv pip uninstall --system nvidia-nccl-cu12 nvidia-cuda-runtime-cu12 \
+    nvidia-cublas-cu12 nvidia-cufft-cu12 nvidia-curand-cu12 \
+    nvidia-cusolver-cu12 nvidia-cusparse-cu12 nvidia-cudnn-cu12 \
+    nvidia-nvtx-cu12 nvidia-nvjitlink-cu12 2>/dev/null || true; \
+    fi
 
 # ---------------------------------------------------------------------------
 # Source code — this layer rebuilds on every code change, but all deps
@@ -122,9 +141,17 @@ COPY docker/  docker/
 COPY proto/   proto/
 
 # Proto codegen — generate gRPC stubs (grpcio-tools required at build time).
+# After codegen, remove build-only tools (uv, pip, setuptools) that are not
+# needed at runtime.  Saves ~75 MB.
 RUN uv pip install --system --no-cache grpcio-tools \
     && PYTHON=python ./scripts/gen_proto.sh \
-    && uv pip uninstall --system grpcio-tools
+    && uv pip uninstall --system grpcio-tools \
+    && rm -f /usr/local/bin/uv \
+    && rm -rf /usr/local/lib/python3.11/site-packages/pip \
+    /usr/local/lib/python3.11/site-packages/pip-*.dist-info \
+    /usr/local/lib/python3.11/site-packages/setuptools \
+    /usr/local/lib/python3.11/site-packages/setuptools-*.dist-info \
+    /usr/local/bin/pip*
 
 # Bake the git commit hash into the image.
 # Priority: explicit --build-arg > loose ref > packed-refs > detached HEAD.
