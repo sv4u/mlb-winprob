@@ -177,11 +177,13 @@ def has_trained_models(
     if tier is not None:
         search_dirs.append(tier_subdir(model_dir, tier))
     else:
-        search_dirs.extend([
-            tier_subdir(model_dir, TrainingTier.FULL),
-            tier_subdir(model_dir, TrainingTier.QUICK),
-            model_dir,
-        ])
+        search_dirs.extend(
+            [
+                tier_subdir(model_dir, TrainingTier.FULL),
+                tier_subdir(model_dir, TrainingTier.QUICK),
+                model_dir,
+            ]
+        )
 
     for d in search_dirs:
         if not d.exists():

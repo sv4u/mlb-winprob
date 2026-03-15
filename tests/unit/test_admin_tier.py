@@ -10,13 +10,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
-import pytest
-
 from mlb_predict.app.admin import (
     PipelineKind,
     PipelineOptions,
     PipelineState,
-    PipelineStatus,
     _retrain_commands,
     has_processed_data,
     has_trained_models,

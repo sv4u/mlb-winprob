@@ -1191,12 +1191,18 @@ def train_production_model(
         print(f"  {mt} {training_tier.value} model saved", flush=True)
 
     if "stacked" in model_types:
-        from mlb_predict.model.artifacts import latest_artifact as _latest, latest_artifact_best_tier
+        from mlb_predict.model.artifacts import (
+            latest_artifact as _latest,
+            latest_artifact_best_tier,
+        )
 
         for _bk in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"]:
             if _bk not in base_models:
                 _art = _latest(
-                    _bk, model_dir=model_dir, version=version_tag, tier=training_tier,
+                    _bk,
+                    model_dir=model_dir,
+                    version=version_tag,
+                    tier=training_tier,
                 )
                 if _art is None:
                     _art, _ = latest_artifact_best_tier(_bk, model_dir=model_dir)

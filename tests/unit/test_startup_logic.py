@@ -59,7 +59,7 @@ class TestStartupDecisionMatrix:
         with (
             patch("mlb_predict.app.main.has_processed_data", return_value=True),
             patch("mlb_predict.app.main.has_trained_models", return_value=False),
-            patch("mlb_predict.app.main._quick_train_bootstrap", return_value=mock_task) as mock_quick,
+            patch("mlb_predict.app.main._quick_train_bootstrap", return_value=mock_task),
             patch("mlb_predict.app.main._auto_bootstrap") as mock_bootstrap,
             patch("mlb_predict.app.main._data_ingest_only") as mock_ingest,
             patch("asyncio.create_task") as mock_create_task,
@@ -81,7 +81,7 @@ class TestStartupDecisionMatrix:
         with (
             patch("mlb_predict.app.main.has_processed_data", return_value=False),
             patch("mlb_predict.app.main.has_trained_models", return_value=True),
-            patch("mlb_predict.app.main._data_ingest_only", return_value=mock_task) as mock_ingest,
+            patch("mlb_predict.app.main._data_ingest_only", return_value=mock_task),
             patch("mlb_predict.app.main._auto_bootstrap") as mock_bootstrap,
             patch("mlb_predict.app.main._quick_train_bootstrap") as mock_quick,
             patch("asyncio.create_task") as mock_create_task,
@@ -103,7 +103,7 @@ class TestStartupDecisionMatrix:
         with (
             patch("mlb_predict.app.main.has_processed_data", return_value=False),
             patch("mlb_predict.app.main.has_trained_models", return_value=False),
-            patch("mlb_predict.app.main._auto_bootstrap", return_value=mock_task) as mock_bootstrap,
+            patch("mlb_predict.app.main._auto_bootstrap", return_value=mock_task),
             patch("mlb_predict.app.main._quick_train_bootstrap") as mock_quick,
             patch("mlb_predict.app.main._data_ingest_only") as mock_ingest,
             patch("asyncio.create_task") as mock_create_task,
@@ -175,7 +175,7 @@ class TestQuickTrainBootstrap:
             patch("mlb_predict.app.main._populate_duckdb") as mock_duckdb,
             patch("mlb_predict.app.main.run_pipeline", new_callable=AsyncMock) as mock_pipeline,
         ):
-            from mlb_predict.app.main import _quick_train_bootstrap, PipelineKind
+            from mlb_predict.app.main import _quick_train_bootstrap
 
             await _quick_train_bootstrap()
 
@@ -192,7 +192,7 @@ class TestQuickTrainBootstrap:
             patch("mlb_predict.app.main._populate_duckdb"),
             patch("mlb_predict.app.main.run_pipeline", new_callable=AsyncMock) as mock_pipeline,
         ):
-            from mlb_predict.app.main import _quick_train_bootstrap, PipelineKind
+            from mlb_predict.app.main import PipelineKind, _quick_train_bootstrap
 
             await _quick_train_bootstrap()
 

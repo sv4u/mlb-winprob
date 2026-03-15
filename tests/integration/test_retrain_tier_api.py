@@ -25,6 +25,7 @@ def client() -> TestClient:
         patch("mlb_predict.app.main.try_startup", return_value=True),
     ):
         from mlb_predict.app.main import app
+
         yield TestClient(app, raise_server_exceptions=False)
 
 

@@ -441,7 +441,9 @@ async def run_pipeline(
             commands = _update_commands(opts)
         else:
             commands = _retrain_commands(
-                opts, bootstrap=bootstrap, training_tier=training_tier,
+                opts,
+                bootstrap=bootstrap,
+                training_tier=training_tier,
             )
 
         state.init_steps([desc for desc, _ in commands])
@@ -580,8 +582,7 @@ def gather_model_status() -> dict[str, Any]:
     archive_dir = _MODEL_DIR / "archive"
     if archive_dir.exists():
         archive_count = sum(
-            1 for d in archive_dir.iterdir()
-            if d.is_dir() and (d / "model.joblib").exists()
+            1 for d in archive_dir.iterdir() if d.is_dir() and (d / "model.joblib").exists()
         )
 
     cv_summary: list[dict[str, Any]] = []

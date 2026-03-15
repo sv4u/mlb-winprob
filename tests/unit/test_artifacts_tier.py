@@ -60,6 +60,7 @@ class _DummyModel:
 
     def predict_proba(self, X):  # noqa: N803
         import numpy as np
+
         return np.column_stack([1 - X[:, 0], X[:, 0]])
 
 
@@ -148,7 +149,9 @@ class TestSaveModelTier:
         meta = _make_metadata()
         save_model(_DummyModel(), meta, model_dir=tmp_path, training_tier=TrainingTier.QUICK)
 
-        saved = json.loads((tmp_path / "quick" / "logistic_v4q_train2022" / "metadata.json").read_text())
+        saved = json.loads(
+            (tmp_path / "quick" / "logistic_v4q_train2022" / "metadata.json").read_text()
+        )
         assert saved["training_tier"] == "quick"
         assert saved["trained_at"] != ""
         assert saved["model_version"] == "v4q"
@@ -197,7 +200,9 @@ class TestLatestArtifactTier:
 
     def test_find_quick_artifact(self, model_dir: Path) -> None:
         """latest_artifact with tier=QUICK finds models in quick/."""
-        art = latest_artifact("logistic", model_dir=model_dir, version="v4q", tier=TrainingTier.QUICK)
+        art = latest_artifact(
+            "logistic", model_dir=model_dir, version="v4q", tier=TrainingTier.QUICK
+        )
         assert art is not None
         assert "quick" in str(art)
         assert "v4q" in art.name
@@ -450,6 +455,7 @@ class TestBackwardCompatibility:
         d.mkdir(parents=True)
 
         import joblib
+
         joblib.dump(_DummyModel("legacy"), d / "model.joblib")
         legacy_meta = {
             "model_version": "v4",
@@ -474,6 +480,7 @@ class TestBackwardCompatibility:
         d.mkdir(parents=True)
 
         import joblib
+
         joblib.dump(_DummyModel("old"), d / "model.joblib")
         legacy_meta = {
             "model_version": "v3",
