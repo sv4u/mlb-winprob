@@ -161,13 +161,14 @@ jobs:
       # Build and push the production image.
       #
       # Platform strategy:
-      #   PR builds    → linux/amd64 only (fast; validates build without pushing)
-      #   push to main → linux/amd64 only (fast iteration; pushed to GHCR)
-      #   version tag  → linux/amd64 + linux/arm64 (full release; pushed)
+      #   PR builds    → linux/amd64 only, TORCH_SOURCE=0 (fast validation)
+      #   push to main → linux/amd64 only, TORCH_SOURCE=1 (pushed to GHCR)
+      #   version tag  → linux/amd64 + linux/arm64, TORCH_SOURCE=1 (full release)
       #
-      # arm64 is required for ARM-based NAS devices (Synology, QNAP, etc.)
-      # and ARM cloud VMs (AWS Graviton, Oracle Ampere, etc.) but only
-      # built on tagged releases to keep CI fast for everyday pushes.
+      # TORCH_SOURCE=1 builds PyTorch from source targeting SSE4.2 so the
+      # image runs on all x86-64 CPUs (including NAS devices without AVX2).
+      # The pytorch-builder layer is cached by GHA cache — only the first
+      # build (or PYTORCH_VERSION bumps) pays the ~30-90 min compile cost.
       # -----------------------------------------------------------------------
       - name: Build and push production image
         uses: docker/build-push-action@v6
@@ -180,5 +181,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             GIT_COMMIT=${{ github.sha }}
+            TORCH_SOURCE=${{ github.event_name != 'pull_request' && '1' || '0' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

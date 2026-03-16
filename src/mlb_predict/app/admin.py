@@ -355,21 +355,24 @@ def _retrain_commands(
 ) -> list[tuple[str, str]]:
     """Retrain all production models.
 
-    CV and Stage 1 are always skipped for dashboard-triggered retrains:
+    CV is always skipped for dashboard-triggered retrains because it is
+    evaluation-only (trains 5 models x 24 seasons) and exceeds the
+    container memory budget.
 
-    - **CV** is evaluation-only (trains 5 models × 24 seasons) and
-      exceeds the container memory budget.
-    - **Stage 1** player embeddings require PyTorch, which may use CPU
-      instructions (AVX2/AVX-512) unavailable on NAS or embedded
-      hardware, causing SIGILL crashes.
+    Stage 1 (player embeddings) is included for **full**-tier retrains
+    so that the neural-network features improve the stacked ensemble.
+    The Docker image must be built with ``TORCH_SOURCE=1`` to compile
+    PyTorch for SSE4.2 CPUs; the CI workflow does this automatically for
+    non-PR builds.
 
-    Use ``scripts/train_model.py`` directly with explicit flags to
-    enable CV or Stage 1 from the CLI on compatible hardware.
+    Quick-tier and bootstrap retrains skip Stage 1 entirely.
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
     effective_tier = "quick" if bootstrap else training_tier
-    flags = f" --tier {effective_tier} --skip-cv --no-stage1"
+    flags = f" --tier {effective_tier} --skip-cv"
+    if effective_tier == "quick":
+        flags += " --no-stage1"
     tier_label = "quick" if effective_tier == "quick" else "full"
     return [
         (

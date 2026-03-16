@@ -137,12 +137,12 @@ class TestRetrainCommandsTier:
         assert "--tier quick" in cmd
         assert "--skip-cv" in cmd
 
-    def test_full_tier_always_skips_cv_and_stage1(self) -> None:
-        """Full tier always skips CV and Stage 1 for dashboard safety."""
+    def test_full_tier_skips_cv_but_enables_stage1(self) -> None:
+        """Full tier skips CV but includes Stage 1 for neural-network features."""
         cmds = _retrain_commands(training_tier="full")
         _, cmd = cmds[0]
         assert "--skip-cv" in cmd
-        assert "--no-stage1" in cmd
+        assert "--no-stage1" not in cmd
 
     def test_command_includes_all_model_types(self) -> None:
         """Retrain command includes all 6 model types."""
