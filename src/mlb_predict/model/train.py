@@ -56,7 +56,22 @@ from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
-_N_JOBS: int = max(1, int(os.environ.get("MLB_PREDICT_N_JOBS", min(os.cpu_count() or 1, 4))))
+
+def _resolve_n_jobs() -> int:
+    """Thread/worker count for tree libraries (LightGBM, XGBoost, CatBoost).
+
+    ``MLB_PREDICT_LOW_MEMORY=1`` forces single-threaded fitting to cut peak RAM.
+    ``MLB_PREDICT_N_JOBS`` overrides the default cap (up to 4 workers).
+    """
+
+    raw_low = os.environ.get("MLB_PREDICT_LOW_MEMORY", "").strip().lower()
+    if raw_low in ("1", "true", "yes", "on"):
+        return 1
+    default_cap = min(os.cpu_count() or 1, 4)
+    return max(1, int(os.environ.get("MLB_PREDICT_N_JOBS", str(default_cap))))
+
+
+_N_JOBS: int = _resolve_n_jobs()
 
 
 # ---------------------------------------------------------------------------

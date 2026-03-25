@@ -10,6 +10,7 @@ import asyncio
 import code
 import io
 import json
+import os
 import logging
 import time
 from contextlib import redirect_stderr, redirect_stdout
@@ -390,6 +391,10 @@ def _retrain_commands(
     non-PR builds.
 
     Quick-tier and bootstrap retrains skip Stage 1 entirely.
+
+    Set ``MLB_RETRAIN_LOW_MEMORY=1`` on the server process to append
+    ``--low-memory`` to the training command (single-threaded tree fitting,
+    lower peak RAM).
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
@@ -398,10 +403,17 @@ def _retrain_commands(
     if effective_tier == "quick":
         flags += " --no-stage1"
     tier_label = "quick" if effective_tier == "quick" else "full"
+    low_mem = os.environ.get("MLB_RETRAIN_LOW_MEMORY", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    mem_flag = " --low-memory" if low_mem else ""
     return [
         (
             f"Train all production models ({tier_label})",
-            f"{python} scripts/train_model.py --models {models}{flags}",
+            f"{python} scripts/train_model.py --models {models}{flags}{mem_flag}",
         ),
     ]
 
@@ -485,7 +497,14 @@ async def run_pipeline(
             logger.info("[%s] %s completed in %.1fs", kind.value, desc, step_elapsed)
             if rc != 0:
                 state.fail_step(step_idx)
-                state.finish(ok=False, error=f"Step '{desc}' exited with code {rc}")
+                err = f"Step '{desc}' exited with code {rc}"
+                if rc == 137:
+                    err += (
+                        " (SIGKILL — usually out-of-memory). Try: set MLB_RETRAIN_LOW_MEMORY=1 "
+                        "or MLB_PREDICT_LOW_MEMORY=1, use Admin quick retrain, stop other heavy "
+                        "processes, or add RAM / swap."
+                    )
+                state.finish(ok=False, error=err)
                 return
             state.complete_step(step_idx, step_elapsed)
 

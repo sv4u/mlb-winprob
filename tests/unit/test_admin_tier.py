@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
+
 from mlb_predict.app.admin import (
     PipelineKind,
     PipelineState,
@@ -150,3 +152,10 @@ class TestRetrainCommandsTier:
         _, cmd = cmds[0]
         for mt in ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]:
             assert mt in cmd
+
+    def test_low_memory_env_appends_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MLB_RETRAIN_LOW_MEMORY=1 adds --low-memory to the train script."""
+        monkeypatch.setenv("MLB_RETRAIN_LOW_MEMORY", "1")
+        cmds = _retrain_commands()
+        _, cmd = cmds[0]
+        assert "--low-memory" in cmd

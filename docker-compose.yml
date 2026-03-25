@@ -14,7 +14,7 @@
 #   LAN access          — publishes on 0.0.0.0 so other devices (e.g. http://192.168.x.x:30087/)
 #                         can reach the host. If unreachable, check macOS Firewall (allow Docker/incoming)
 #                         and Docker Desktop → Settings that allow the VM to accept LAN connections.
-#   MEM_LIMIT           — container memory limit (default: 2560m). Reduce to 1536m after bootstrap if memory is tight.
+#   MEM_LIMIT           — container memory limit (default: 4g). Override e.g. MEM_LIMIT=3g if the host is tight on RAM.
 #   CPUS                — container CPU limit (default: 2)
 #   MLB_PREDICT_LIVE_API — set to 0 to disable live MLB/Odds API calls at runtime (minimize network; see README)
 #
@@ -58,12 +58,12 @@ services:
       MLB_PREDICT_LOG_FORMAT: "human"
       # Set to "0" to disable live MLB Stats API and Odds API calls (minimize network footprint)
       MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
-    mem_limit: ${MEM_LIMIT:-2560m}
+    mem_limit: ${MEM_LIMIT:-4g}
     cpus: ${CPUS:-2}
     deploy:
       resources:
         limits:
-          memory: ${MEM_LIMIT:-2560m}
+          memory: ${MEM_LIMIT:-4g}
           cpus: "${CPUS:-2}"
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:30087/api/health | grep -q version"]

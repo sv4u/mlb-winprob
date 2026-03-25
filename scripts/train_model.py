@@ -14,8 +14,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Must run before mlb_predict.model.train import (that module snapshots _N_JOBS).
+if "--low-memory" in sys.argv:
+    os.environ.setdefault("MLB_PREDICT_LOW_MEMORY", "1")
 
 import pandas as pd
 
@@ -141,6 +147,12 @@ def main() -> None:
         choices=["quick", "full"],
         default="full",
         help="Training tier: 'quick' (bootstrap, v4q) or 'full' (complete pipeline, v4)",
+    )
+    ap.add_argument(
+        "--low-memory",
+        action="store_true",
+        help="Single-thread tree training (LightGBM/XGBoost/CatBoost) to reduce peak RAM; "
+        "same as MLB_PREDICT_LOW_MEMORY=1",
     )
     args = ap.parse_args()
     if args.fast:
