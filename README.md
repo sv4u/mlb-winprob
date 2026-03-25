@@ -89,6 +89,8 @@ On startup, the application checks for existing processed data and trained model
 | No | Yes | **Data ingest only** — ingest data, preserve existing models |
 | No | No | **Full bootstrap** — ingest all data, then quick-train models |
 
+When data and models are both present, the server still **starts listening immediately**: model and feature loading run in the background while `/` shows the **initializing** page until loading finishes. That avoids connection errors in the browser during long stacked-model + Stage 1 startup.
+
 ### Training techniques
 
 | Technique | What it does |
@@ -911,6 +913,11 @@ mlb-predict/
 ---
 
 ## Changelog
+
+### Documentation — March 2026
+
+- **mlb-predict-pipeline.Rmd**: Synced `team_stats` rolling-window description with implementation (7/14/15/30/60); documented deferred model load + `initializing.html`, nested MCP lifespan, `game_detail_cache` / `response_cache` / `timing.py`, admin odds/betting endpoints and JSON bodies for ingest/update/retrain, bootstrap-progress, and git/`CHANGELOG.txt` behavior in `data_cache`.
+- **README**: Clarified that the server accepts HTTP connections immediately while models load in the background.
 
 ### v4.2 — PyTorch Source Build for NAS Hardware
 

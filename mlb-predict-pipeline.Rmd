@@ -279,7 +279,7 @@ All ingestion and feature scripts accept multiple seasons per invocation via `--
 ### `src/mlb_predict/features`
 
 - `elo.py` — sequential cross-season Elo with home-field HFA offset
-- `team_stats.py` — rolling windows (15/30/60 games), EWMA, home/away splits, streaks, rest
+- `team_stats.py` — multi-window rolling (7/14/15/30/60 games), EWMA (span=20), home/away splits (20-game venue sub-windows), streaks, rest, run distribution (30-game std / one-run win%)
 - `pitcher_stats.py` — gamelog-based pitcher ERA assembly
 - `park_factors.py` — median runs-per-game park factor from historical gamelogs
 - `builder.py` — assembles the 136-feature matrix (119 team + 17 Stage 1 player) using `pd.concat(axis=1)` to avoid DataFrame fragmentation; saves per-season Parquet
@@ -309,9 +309,12 @@ All ingestion and feature scripts accept multiple seasons per invocation via `--
 
 ### `src/mlb_predict/app`
 
-- `main.py` — FastAPI application: game browser, 2026 season page, game detail, upsets, CV summary; SHAP attribution; auto-bootstrap with DuckDB population after ingest
-- `data_cache.py` — loads features via DuckDB store (fast path) or Parquet files (fallback); normalizes date types; pre-computes probabilities for all games
-- `admin.py` — pipeline runner with player data ingest step
+- `main.py` — FastAPI application: game browser, 2026 season page, game detail, upsets, CV summary; SHAP attribution; 4-way auto-bootstrap; **deferred model load** (`asyncio.to_thread(try_startup)`) so HTTP accepts connections while the stacked model and Stage 1 injection finish; **combined lifespan** runs the MCP app’s lifespan after the core app lifespan so `/mcp` tools see loaded data
+- `data_cache.py` — loads features via DuckDB store (fast path) or Parquet files (fallback); normalizes date types; pre-computes probabilities for all games; resolves **git commit** from `GIT_COMMIT`, `GIT_COMMIT` file, or `git rev-parse`; optional **`CHANGELOG.txt`** (pipe-delimited lines) for the wiki / version UI
+- `admin.py` — async pipeline runner (ingest / update / retrain), step-level `PipelineState` + `StepInfo` progress, WebSocket shell + Python REPL, model tier archiving on retrain
+- `game_detail_cache.py` — per-game detail + SHAP result cache
+- `response_cache.py` — short-TTL HTTP response memoization for hot read paths
+- `timing.py` — `TimingMiddleware` + `timed_operation` context manager for structured latency logging
 - `templates/` — Jinja2 HTML templates
 
 ### `src/mlb_predict/external`
@@ -1393,25 +1396,29 @@ tests/
 Location: `src/mlb_predict/app/main.py`
 
 - Served by `uvicorn[standard]` on port **30087**.
-- Acts as a gRPC gateway: HTTP endpoints proxy to gRPC when stubs are available.
+- Acts as a gRPC gateway: HTTP endpoints proxy to gRPC when stubs are available (unless `MLB_PREDICT_GRPC_ENABLED=0`).
 - All HTML pages rendered via Jinja2 templates.
 - Static assets served from `src/mlb_predict/app/static/`.
-- **MCP resilience**: if `create_mcp_app()` fails, the `/mcp` mount is skipped.
-- **Auto-bootstrap**: when `try_startup()` detects no data/models, an `_auto_bootstrap()` task runs the full ingest + retrain pipeline.
+- **Deferred readiness**: when data and models already exist, `try_startup()` runs in a **background thread** so the server binds immediately; until `is_ready()` is true, `/` serves **`initializing.html`** (avoids browser connection errors during long loads).
+- **MCP resilience**: if `create_mcp_app()` fails, the `/mcp` mount is skipped; MCP lifespan is nested inside the app lifespan when present.
+- **Auto-bootstrap**: when data or models are missing, background tasks run `_auto_bootstrap()`, `_quick_train_bootstrap()`, or `_data_ingest_only()` per the **4-way startup matrix** (see README — data × models decision table; implemented in `main.py` lifespan).
 
 ## 13.2 In-Memory Cache
 
 Location: `src/mlb_predict/app/data_cache.py`
 
-Thread-safe, loaded once at startup. Holds all feature Parquet files and active production model. For v4 models, runs Stage 1 inference at startup. SHAP results cached per-game. Live odds cached with TTL. HTTP responses cached with TTL.
+Thread-safe. Holds all feature rows and the active production model. For v4 models, runs Stage 1 inference at startup. Per-game SHAP and live odds TTL caching are implemented in dedicated modules (`game_detail_cache`, odds path in main); HTTP responses use `response_cache.py`.
 
 ## 13.3 Admin Pipelines
 
 Location: `src/mlb_predict/app/admin.py`
 
-- `POST /api/admin/ingest` — full re-ingest (async, streaming progress).
-- `POST /api/admin/update` — update current season only.
-- `POST /api/admin/retrain` — clear and retrain all models.
+- `POST /api/admin/ingest` — full re-ingest (async, streaming progress). Optional JSON body: `include_preseason`, `seasons`, `refresh_mlbapi`, `refresh_retro`.
+- `POST /api/admin/update` — update current season only. Same optional body shape as ingest.
+- `POST /api/admin/retrain` — archive models for the target tier, then retrain. Optional JSON body: `training_tier` (`"quick"` \| `"full"`), `skip_cv`, `skip_stage1`.
+- `GET` / `POST /api/admin/odds-config` — read / persist The Odds API key (`POST` body: `api_key`; key is not logged or re-exposed).
+- `GET` / `POST /api/admin/betting-config` — Kelly %, bankroll budget, flat bet amount.
+- `GET /api/admin/status` — data coverage, model inventory (per tier), pipeline states with **step lists** and elapsed times.
 - `WS /ws/admin/shell` — WebSocket shell runner.
 - `WS /ws/admin/repl` — WebSocket Python REPL session.
 
@@ -1493,11 +1500,15 @@ Base URL: `http://host:30087`
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/admin/status` | Full system status |
-| `POST` | `/api/admin/ingest` | Full re-ingest (async) |
-| `POST` | `/api/admin/update` | Update current season (async) |
-| `POST` | `/api/admin/retrain` | Clear + retrain all models (async) |
-| `GET` | `/api/bootstrap-progress` | Bootstrap progress across phases |
+| `GET` | `/api/admin/status` | Full system status (pipelines include per-step progress) |
+| `GET` | `/api/admin/odds-config` | Whether an Odds API key is configured (not the secret) |
+| `POST` | `/api/admin/odds-config` | Persist Odds API key (`{"api_key": "..."}`) |
+| `GET` | `/api/admin/betting-config` | Kelly / budget / flat bet settings |
+| `POST` | `/api/admin/betting-config` | Update betting params (`kelly_pct`, `budget`, `bet_amount`) |
+| `POST` | `/api/admin/ingest` | Full re-ingest (async); optional pipeline JSON body |
+| `POST` | `/api/admin/update` | Update current season (async); optional pipeline JSON body |
+| `POST` | `/api/admin/retrain` | Archive + retrain (async); optional `training_tier`, `skip_cv`, `skip_stage1` |
+| `GET` | `/api/bootstrap-progress` | Aggregated bootstrap progress (ingest + retrain phases for initializing UI) |
 
 ### WebSocket
 
