@@ -248,3 +248,36 @@ class TestPipelineStateCore:
         d = state.to_dict()
         assert len(d["log_tail"]) == 80
         assert d["log_line_count"] == 200
+
+
+# ---------------------------------------------------------------------------
+# UPDATE pipeline default season (matches UI)
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultUpdateSeasonYear:
+    """``_default_update_season_year`` must use the same resolver as the dashboard."""
+
+    def test_uses_resolve_api_season_with_on_disk_seasons(self) -> None:
+        """Resolver receives None and seasons from feature Parquet stems."""
+        from unittest.mock import patch
+
+        from mlb_predict.app.admin import _default_update_season_year
+
+        with patch("mlb_predict.app.admin._seasons_from_feature_parquets", return_value=[2025, 2024]):
+            with patch("mlb_predict.season.resolve_api_season", return_value=2025) as mock_resolve:
+                y = _default_update_season_year()
+
+        assert y == 2025
+        mock_resolve.assert_called_once_with(None, available_seasons=[2025, 2024])
+
+    def test_update_commands_default_year_in_ingest_schedule_cmd(self) -> None:
+        """_update_commands without opts.seasons embeds the resolved year in shell steps."""
+        from unittest.mock import patch
+
+        from mlb_predict.app.admin import _update_commands
+
+        with patch("mlb_predict.app.admin._default_update_season_year", return_value=2027):
+            cmds = _update_commands(None)
+        first_cmd = cmds[0][1]
+        assert "--seasons 2027" in first_cmd or "2027" in first_cmd

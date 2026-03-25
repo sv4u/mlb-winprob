@@ -76,7 +76,7 @@ DIVISION_DISPLAY_ORDER: list[int] = [201, 202, 200, 204, 205, 203]
 
 def compute_predicted_standings(
     features_df: pd.DataFrame,
-    season: int = 2026,
+    season: int | None = None,
     *,
     game_type: str = "R",
 ) -> pd.DataFrame:
@@ -89,7 +89,14 @@ def compute_predicted_standings(
 
     game_type: "R" = regular season only, "S" = spring training only.
     Uses the "game_type" column in features_df when present; default "R".
+
+    When ``season`` is omitted, :func:`mlb_predict.season.infer_target_mlb_season`
+    supplies the default year (API callers should normally pass an explicit year).
     """
+    if season is None:
+        from mlb_predict.season import infer_target_mlb_season
+
+        season = infer_target_mlb_season()
     df = features_df[features_df["season"] == season].copy()
     if df.empty:
         return pd.DataFrame()

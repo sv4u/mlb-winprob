@@ -149,8 +149,9 @@
   <span class="meta">2000–2026 · v4 · <code class="git-hash">{{ git_commit }}</code></span>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/" class="active">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -209,10 +210,10 @@
         <p>Predicted vs actual division standings, league leaders, and team batting & pitching stats.</p>
         <span class="link">View standings →</span>
       </a>
-      <a href="/season/2026" class="hero-card">
+      <a href="/season/current" class="hero-card">
         <h2>📅 Season Statistics</h2>
-        <p>2026 schedule, win probabilities, power rankings, and today's odds.</p>
-        <span class="link">2026 season →</span>
+        <p>Current-season schedule, win probabilities, power rankings, and today's odds.</p>
+        <span class="link">Current season →</span>
       </a>
     </div>
   </div>
@@ -434,7 +435,7 @@
 <footer class="site-footer">
   <div class="footer-links">
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>

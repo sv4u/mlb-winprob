@@ -17,6 +17,7 @@ BETTING_CONFIG_PATH = _REPO_ROOT / "data" / "processed" / "odds" / "betting_conf
 _DEFAULT_KELLY_PCT: float = 25.0
 _DEFAULT_BUDGET: float = 300.0
 _DEFAULT_BET_AMOUNT: float = 2.0
+_DEFAULT_MIN_EDGE: float = 0.0
 
 
 @dataclass
@@ -26,6 +27,8 @@ class BettingConfig:
     kelly_pct: float = _DEFAULT_KELLY_PCT
     budget: float = _DEFAULT_BUDGET
     bet_amount: float = _DEFAULT_BET_AMOUNT
+    min_edge: float = _DEFAULT_MIN_EDGE
+    ev_target_season: int | None = None
 
 
 def get_betting_config() -> BettingConfig:
@@ -41,6 +44,12 @@ def get_betting_config() -> BettingConfig:
             cfg.kelly_pct = float(data.get("kelly_pct", cfg.kelly_pct))
             cfg.budget = float(data.get("budget", cfg.budget))
             cfg.bet_amount = float(data.get("bet_amount", cfg.bet_amount))
+            cfg.min_edge = float(data.get("min_edge", cfg.min_edge))
+            raw_season = data.get("ev_target_season")
+            if raw_season is None or raw_season == "":
+                cfg.ev_target_season = None
+            else:
+                cfg.ev_target_season = int(raw_season)
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
 
@@ -60,6 +69,18 @@ def get_betting_config() -> BettingConfig:
     if env_bet:
         try:
             cfg.bet_amount = float(env_bet)
+        except ValueError:
+            pass
+    env_edge = os.environ.get("MLB_MIN_EDGE", "").strip()
+    if env_edge:
+        try:
+            cfg.min_edge = float(env_edge)
+        except ValueError:
+            pass
+    env_ev_season = os.environ.get("MLB_EV_TARGET_SEASON", "").strip()
+    if env_ev_season:
+        try:
+            cfg.ev_target_season = int(env_ev_season)
         except ValueError:
             pass
 

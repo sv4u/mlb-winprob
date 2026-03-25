@@ -27,7 +27,7 @@ def sitemap_html() -> str:
 
 _EXPECTED_PAGE_PATHS = [
     "/",
-    "/season/2026",
+    "/season/current",
     "/standings",
     "/leaders",
     "/players",
@@ -185,7 +185,7 @@ async def test_xml_sitemap_contains_expected_paths() -> None:
     assert "http://www.sitemaps.org/schemas/sitemap/0.9" in body
     for path in [
         "/",
-        "/season/2026",
+        "/season/current",
         "/standings",
         "/leaders",
         "/players",

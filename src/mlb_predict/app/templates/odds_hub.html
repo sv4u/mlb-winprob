@@ -51,8 +51,9 @@
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -140,9 +141,12 @@
       </div>
     </div>
     <div class="card">
-      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem">
+      <div class="flex-between mb-md" style="flex-wrap:wrap;gap:0.5rem;align-items:baseline">
         <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:1rem">Positive Expected Value Bets</h2>
-        <span id="ev-count" style="font-size:.78rem;color:var(--muted)"></span>
+        <span style="font-size:.78rem;color:var(--muted);text-align:right">
+          <span id="ev-count"></span>
+          <span id="ev-season-note" style="display:none"></span>
+        </span>
       </div>
       <div id="ev-table-wrap">
         <div class="skeleton skeleton-card"></div>
@@ -245,7 +249,7 @@
 <footer class="site-footer">
   <div class="footer-links">
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -272,6 +276,17 @@ document.querySelectorAll('.hub-tab').forEach(function(tab) {
     var evOppsFull = null;
     var oddsEventsFull = null;
       var bettingConfig = { kelly_pct: 25, budget: 300, bet_amount: 2 };
+
+    var PAGE_SEASON_PARAM = new URLSearchParams(window.location.search).get('season');
+    var PAGE_SEASON_EV =
+      PAGE_SEASON_PARAM && /^\d{4}$/.test(PAGE_SEASON_PARAM)
+        ? parseInt(PAGE_SEASON_PARAM, 10)
+        : null;
+
+    function evOpportunitiesApiUrl() {
+      if (PAGE_SEASON_EV == null) return '/api/ev-opportunities';
+      return '/api/ev-opportunities?season=' + encodeURIComponent(String(PAGE_SEASON_EV));
+    }
 
     function renderEVTable(opps) {
       var wrap = document.getElementById('ev-table-wrap');
@@ -376,9 +391,11 @@ document.querySelectorAll('.hub-tab').forEach(function(tab) {
     // ── Load EV+ opportunities ────────────────────────────────────────
     async function loadEVOpportunities() {
       try {
-        var data = await timedFetch('/api/ev-opportunities');
+        var data = await timedFetch(evOpportunitiesApiUrl());
         if (!data.configured) {
           evOppsFull = null;
+          var sn0 = document.getElementById('ev-season-note');
+          if (sn0) { sn0.textContent = ''; sn0.style.display = 'none'; }
           document.getElementById('ev-table-wrap').innerHTML =
             '<div class="empty-state"><div class="icon">🔑</div><p>The Odds API key is not configured.<br><a href="/dashboard">Configure it in the Admin Dashboard</a> to see +EV opportunities.</p></div>';
           return;
@@ -391,6 +408,20 @@ document.querySelectorAll('.hub-tab').forEach(function(tab) {
         }
         evOppsFull = data.opportunities || [];
         document.getElementById('ev-count').textContent = evOppsFull.length + ' opportunit' + (evOppsFull.length !== 1 ? 'ies' : 'y');
+        var seasonNote = document.getElementById('ev-season-note');
+        if (seasonNote) {
+          if (data.season_used != null) {
+            var sn = ' · Model probabilities: ' + data.season_used;
+            if (data.min_edge != null && Number(data.min_edge) > 0) {
+              sn += ' · min edge ' + (Number(data.min_edge) * 100).toFixed(1) + 'pp';
+            }
+            seasonNote.textContent = sn;
+            seasonNote.style.display = '';
+          } else {
+            seasonNote.textContent = '';
+            seasonNote.style.display = 'none';
+          }
+        }
 
         if (evOppsFull.length) {
           var avgEdge = evOppsFull.reduce(function (s, o) { return s + o.edge; }, 0) / evOppsFull.length;
@@ -414,6 +445,8 @@ document.querySelectorAll('.hub-tab').forEach(function(tab) {
         applyEVFilters();
   } catch (e) {
       evOppsFull = null;
+    var snE = document.getElementById('ev-season-note');
+    if (snE) { snE.textContent = ''; snE.style.display = 'none'; }
     document.getElementById('ev-table-wrap').innerHTML =
       '<div class="empty-state"><p style="color:var(--red)">Failed to load: ' + e.message + '</p></div>';
   }

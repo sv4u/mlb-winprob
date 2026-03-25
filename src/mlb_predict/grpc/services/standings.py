@@ -10,6 +10,7 @@ import grpc
 import pandas as pd
 
 from mlb_predict.app.data_cache import TEAM_NAMES, get_features, is_ready
+from mlb_predict.season import resolve_api_season
 from mlb_predict.app.timing import timed_operation
 from mlb_predict.grpc.generated.mlb_predict.v1 import common_pb2, standings_pb2, standings_pb2_grpc
 from mlb_predict.standings import (
@@ -64,11 +65,13 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("System initializing — data not loaded yet.")
             raise Exception("Not ready")
-        season = request.season or 2026
+        df = get_features()
+        avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
+        req_season = int(request.season) if request.season > 0 else None
+        season = resolve_api_season(req_season, available_seasons=avail)
         logger.debug("GetStandings season=%d", season)
 
         with timed_operation("predicted_standings"):
-            df = get_features()
             pred_df = compute_predicted_standings(df, season=season)
 
         actual_df = pd.DataFrame()
@@ -164,7 +167,13 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> standings_pb2.TeamStatsResponse:
         """Return batting and pitching stats for all teams in a season."""
-        season = request.season or 2026
+        req_season = int(request.season) if request.season > 0 else None
+        if is_ready():
+            df = get_features()
+            avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
+            season = resolve_api_season(req_season, available_seasons=avail)
+        else:
+            season = resolve_api_season(req_season, available_seasons=[])
         if os.environ.get("MLB_PREDICT_LIVE_API", "1").strip() == "0":
             return standings_pb2.TeamStatsResponse(
                 season=season,

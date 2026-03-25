@@ -14,6 +14,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+try:
+    import lightgbm  # noqa: F401
+except OSError:
+    pytest.skip(
+        "lightgbm native library not loadable (e.g. missing libomp on macOS)",
+        allow_module_level=True,
+    )
+
 if TYPE_CHECKING:
     pass
 

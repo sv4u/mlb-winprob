@@ -494,6 +494,118 @@ function timedFetch(url, timingId) {
   });
 }
 
+/* ── Global header season picker ──────────────────────────────────── */
+
+var NAV_SEASON_STORAGE_KEY = "mlb-predict-focus-season";
+
+function parsePathSeasonYear() {
+  var m = /^\/season\/(\d{4})(?:\/|$)/.exec(window.location.pathname || "");
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+
+function pickInitialNavSeason(available) {
+  if (!available || available.length === 0) return null;
+  var pathY = parsePathSeasonYear();
+  if (pathY != null && available.indexOf(pathY) !== -1) return pathY;
+  var q = new URLSearchParams(window.location.search).get("season");
+  if (q && /^\d{4}$/.test(q)) {
+    var n = parseInt(q, 10);
+    if (available.indexOf(n) !== -1) return n;
+  }
+  try {
+    var ls = localStorage.getItem(NAV_SEASON_STORAGE_KEY);
+    if (ls && /^\d{4}$/.test(ls)) {
+      var ln = parseInt(ls, 10);
+      if (available.indexOf(ln) !== -1) return ln;
+    }
+  } catch (_) {}
+  return available[available.length - 1];
+}
+
+function navigateForSeasonChange(season) {
+  try {
+    localStorage.setItem(NAV_SEASON_STORAGE_KEY, String(season));
+  } catch (_) {}
+  var path = window.location.pathname || "/";
+  var q = new URLSearchParams(window.location.search);
+
+  if (path === "/") {
+    q.set("season", String(season));
+    window.location.href = "/?" + q.toString();
+    return;
+  }
+  if (path.indexOf("/season/") === 0) {
+    window.location.href = "/season/" + season;
+    return;
+  }
+
+  var withQuerySeason = [
+    "/standings",
+    "/leaders",
+    "/players",
+    "/odds",
+    "/dashboard",
+    "/wiki",
+    "/sitemap",
+    "/tools/ev-calculator",
+  ];
+  if (withQuerySeason.indexOf(path) !== -1) {
+    q.set("season", String(season));
+    var qs = q.toString();
+    window.location.href = path + (qs ? "?" + qs : "");
+    return;
+  }
+
+  if (path.indexOf("/game/") === 0) {
+    q.set("season", String(season));
+    var gqs = q.toString();
+    window.location.href = path + (gqs ? "?" + gqs : "");
+    return;
+  }
+
+  window.location.href = "/season/" + season;
+}
+
+async function initNavSeasonPicker() {
+  var sel = document.getElementById("nav-season-select");
+  if (!sel) return;
+  var seasons;
+  try {
+    seasons = await api("/api/seasons");
+  } catch (e) {
+    console.warn("nav season picker: /api/seasons failed", e);
+    return;
+  }
+  if (!seasons || seasons.length === 0) return;
+  sel.innerHTML = "";
+  for (var i = seasons.length - 1; i >= 0; i--) {
+    var y = seasons[i];
+    var opt = document.createElement("option");
+    opt.value = String(y);
+    opt.textContent = String(y);
+    sel.appendChild(opt);
+  }
+  var bodySeason = null;
+  try {
+    var raw = document.body && document.body.getAttribute("data-nav-season");
+    if (raw && /^\d{4}$/.test(String(raw).trim())) {
+      bodySeason = parseInt(String(raw).trim(), 10);
+    }
+  } catch (_) {}
+  var initial =
+    bodySeason != null && seasons.indexOf(bodySeason) !== -1
+      ? bodySeason
+      : pickInitialNavSeason(seasons);
+  if (initial != null) sel.value = String(initial);
+
+  sel.addEventListener("change", function () {
+    var v = parseInt(sel.value, 10);
+    if (isNaN(v)) return;
+    navigateForSeasonChange(v);
+  });
+}
+
 function showTiming(elOrId, serverMs, clientMs) {
   var el =
     typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
@@ -893,4 +1005,5 @@ document.addEventListener("DOMContentLoaded", function () {
   initModelSelector();
   initFooterTimezone();
   injectExportButton();
+  initNavSeasonPicker();
 });

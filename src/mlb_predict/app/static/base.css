@@ -215,6 +215,40 @@ img { max-width: 100%; display: block; }
   animation: pulse 1s infinite;
 }
 
+/* Global season picker (header nav) */
+.nav-season-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 0.35rem;
+}
+.nav-season-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.nav-season-picker select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 4.25rem;
+  transition: border-color var(--transition);
+}
+.nav-season-picker select:hover,
+.nav-season-picker select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Theme mode selector (Light, Dark, System, Time, Sunrise/sunset) */
 .theme-toggle-wrap {
   display: flex;
@@ -997,6 +1031,20 @@ h2.section-heading {
     border-radius: var(--radius-sm);
   }
   .site-nav .nav-divider { display: none; }
+  .site-nav .nav-season-picker {
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.5rem 0.85rem;
+    margin: 0;
+    border-bottom: 1px solid var(--border);
+    box-sizing: border-box;
+  }
+  .site-nav .nav-season-picker select {
+    flex: 1;
+    min-height: 44px;
+    max-width: 8rem;
+    margin-left: auto;
+  }
   .model-selector {
     border-left: none;
     padding-left: 0;

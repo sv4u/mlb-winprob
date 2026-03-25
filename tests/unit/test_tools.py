@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from mlb_predict.external.odds import OddsClient
 from mlb_predict.tools import TOOL_SCHEMAS, run_tool
 
 
@@ -70,13 +73,44 @@ def test_run_tool_find_ev_bets_not_ready() -> None:
     assert "error" in data or "message" in data
 
 
-def test_run_tool_get_live_odds_not_configured() -> None:
-    """get_live_odds returns not-configured message when no API key is set."""
+def test_run_tool_get_live_odds_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """get_live_odds returns not-configured message when no API key is set.
+
+    Patches the odds module binding so the test passes even if ODDS_API_KEY or
+    data/processed/odds/config.json is present in the developer environment.
+    """
+    monkeypatch.setattr("mlb_predict.external.odds.get_odds_api_key", lambda: None)
     out = run_tool("get_live_odds", {})
     data = json.loads(out)
     assert "message" in data
     msg = data["message"].lower()
     assert "not configured" in msg or "not available" in msg
+
+
+def test_run_tool_get_live_odds_empty_events_returns_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When a key is set but the API returns no games, expect message + empty events."""
+    monkeypatch.setattr("mlb_predict.external.odds.get_odds_api_key", lambda: "test-key")
+
+    def _no_games(self: OddsClient) -> list:
+        return []
+
+    monkeypatch.setattr(OddsClient, "get_game_odds_sync", _no_games)
+    out = run_tool("get_live_odds", {})
+    data = json.loads(out)
+    assert "message" in data
+    assert data.get("events") == []
+
+
+def test_run_tool_find_ev_bets_invalid_params_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-numeric season/min_edge are ignored (treated as None), not TypeError."""
+    monkeypatch.setattr("mlb_predict.tools.run.is_ready", lambda: False)
+    out = run_tool("find_ev_bets", {"season": "bogus", "min_edge": "nope"})
+    data = json.loads(out)
+    assert "error" in data
 
 
 def test_run_tool_compare_models_returns_list() -> None:

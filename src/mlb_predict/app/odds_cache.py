@@ -197,6 +197,9 @@ def compute_ev_opportunities(
     min_edge: float = 0.0,
     kelly_fraction: float = 0.25,
     budget: float = 300.0,
+    *,
+    season: int | None = None,
+    flat_bet_amount: float = 2.0,
 ) -> list[dict[str, Any]]:
     """Join live odds events with model probabilities to find EV+ bets.
 
@@ -204,12 +207,21 @@ def compute_ev_opportunities(
     for both home and away moneyline sides. Returns opportunities sorted by edge
     (descending), filtered to edge > min_edge.
 
+    When ``season`` is set, only feature rows for that season are used for
+    model probabilities (recommended for matching the current campaign).
+
     Each opportunity includes a ``kelly_wager`` (fractional Kelly * budget) and
-    a ``flat_bet`` (equal to the configured flat bet amount, passed via the API).
+    ``flat_bet`` (configured stake for equal-wager sizing).
     """
     from mlb_predict.app.data_cache import TEAM_NAMES
 
     if not events or features_df.empty:
+        return []
+
+    fdf = features_df
+    if season is not None and "season" in fdf.columns:
+        fdf = fdf[fdf["season"] == int(season)]
+    if fdf.empty:
         return []
 
     opportunities: list[dict[str, Any]] = []
@@ -227,7 +239,7 @@ def compute_ev_opportunities(
         mask = (features_df["home_retro"] == ev_home_retro) & (
             features_df["away_retro"] == ev_away_retro
         )
-        rows = features_df[mask]
+        rows = fdf[mask]
         if rows.empty:
             continue
 
@@ -235,6 +247,9 @@ def compute_ev_opportunities(
         prob_home = float(row["prob"]) if pd.notna(row.get("prob")) else None
         if prob_home is None:
             continue
+
+        season_val = row.get("season")
+        season_out: int | None = int(season_val) if pd.notna(season_val) else None
 
         game_pk = int(row.get("game_pk", 0) or 0)
         date_str = str(row.get("date", ""))[:10]
@@ -269,6 +284,7 @@ def compute_ev_opportunities(
                 {
                     "game_pk": game_pk,
                     "date": date_str,
+                    "season": season_out,
                     "home_team": home_name,
                     "away_team": away_name,
                     "commence_time": matched["commence_time"],
@@ -282,6 +298,7 @@ def compute_ev_opportunities(
                     "ev_per_unit": round(ev_per_unit, 4),
                     "kelly_pct": round(kelly * 100, 2),
                     "kelly_wager": kelly_wager,
+                    "flat_bet": round(float(flat_bet_amount), 2),
                 }
             )
 

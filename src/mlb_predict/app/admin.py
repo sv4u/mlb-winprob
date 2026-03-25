@@ -28,6 +28,27 @@ _LOG_DIR = _REPO_ROOT / "logs"
 _MAX_LOG_LINES = 500
 
 
+def _seasons_from_feature_parquets() -> list[int]:
+    """List season years from ``data/processed/features/features_*.parquet`` file names."""
+    features_dir = _PROCESSED_DIR / "features"
+    if not features_dir.exists():
+        return []
+    out: list[int] = []
+    for f in features_dir.glob("features_*.parquet"):
+        try:
+            out.append(int(f.stem.split("_")[1]))
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+def _default_update_season_year() -> int:
+    """Default season for UPDATE pipeline — same rule as the web UI (``resolve_api_season``)."""
+    from mlb_predict.season import resolve_api_season
+
+    return resolve_api_season(None, available_seasons=_seasons_from_feature_parquets())
+
+
 class PipelineKind(str, Enum):
     INGEST = "ingest"
     UPDATE = "update"
@@ -287,9 +308,12 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
 
 
 def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str]]:
-    """Update current season only (non-destructive)."""
-    from datetime import datetime as dt
+    """Update current season only (non-destructive).
 
+    When ``opts.seasons`` is omitted, the target year matches the UI default:
+    :func:`mlb_predict.season.resolve_api_season` over seasons found in
+    ``features_*.parquet`` on disk (not raw UTC calendar year alone).
+    """
     opts = opts or PipelineOptions()
     python = _python_bin()
 
@@ -297,9 +321,9 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
         year = " ".join(str(s) for s in opts.seasons)
         season_label = ", ".join(str(s) for s in opts.seasons)
     else:
-        yr = str(dt.now(timezone.utc).year)
-        year = yr
-        season_label = yr
+        yr = _default_update_season_year()
+        year = str(yr)
+        season_label = year
 
     preseason_flag = "" if opts.include_preseason else " --no-preseason"
     refresh_schedule = " --refresh-mlbapi" if opts.refresh_mlbapi else ""

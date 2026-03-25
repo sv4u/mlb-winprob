@@ -41,8 +41,9 @@
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/">All Seasons</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -82,9 +83,9 @@
         <div class="desc">Home page with season browser, model cards, cross-validation results, and game search across all seasons (2000&ndash;2026).</div>
       </div>
       <div class="link-card">
-        <a href="/season/2026">2026 Season</a>
-        <div class="path">/season/2026</div>
-        <div class="desc">Dedicated 2026 schedule with per-game win probabilities, standings summary, power rankings, and date filters.</div>
+        <a href="/season/current">Current season</a>
+        <div class="path">/season/current</div>
+        <div class="desc">Redirects to the active prediction season: schedule, win probabilities, standings summary, power rankings, and date filters.</div>
       </div>
       <div class="link-card">
         <a href="/standings">Standings</a>

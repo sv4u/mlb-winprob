@@ -148,8 +148,9 @@
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/">All Seasons</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -1027,7 +1028,7 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   <strong>Where to view:</strong> The <a href="/standings">Standings page</a> shows the full
   divisional breakdown with predicted vs actual columns, league leaders, and tabbed team batting
   and pitching statistics. A compact summary also appears on the
-  <a href="/season/2026">2026 Season page</a>.
+  <a href="/season/current">Current season page</a>.
 </div>
 
 

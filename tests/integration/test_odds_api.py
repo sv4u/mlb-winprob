@@ -73,6 +73,21 @@ def test_api_ev_opportunities_response_shape(api_client: TestClient) -> None:
     assert isinstance(data["count"], int)
     assert isinstance(data["opportunities"], list)
     assert data["count"] == len(data["opportunities"])
+    if data.get("configured"):
+        assert "season_used" in data
+        assert "min_edge" in data
+        assert isinstance(data["season_used"], int)
+        assert isinstance(data["min_edge"], int | float)
+
+
+def test_api_ev_opportunities_season_query_preserved(api_client: TestClient) -> None:
+    """Optional season query is accepted and reflected in season_used when configured."""
+    r = api_client.get("/api/ev-opportunities", params={"season": "2024"})
+    assert r.status_code == 200
+    data = r.json()
+    if not data.get("configured"):
+        pytest.skip("Odds API not configured")
+    assert data.get("season_used") == 2024
 
 
 def test_ev_calculator_redirects_to_odds_hub(api_client: TestClient) -> None:

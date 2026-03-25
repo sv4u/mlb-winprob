@@ -117,8 +117,9 @@
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings" class="active">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -145,7 +146,7 @@
 <div class="container-wide">
   <div class="hero">
     <div class="hero-badge">Predicted vs Actual</div>
-    <h2>2026 Season Standings</h2>
+    <h2 id="standings-hero-heading">Standings</h2>
     <p>
       <strong>Regular season</strong> standings from per-game win probabilities, compared against live MLB results.
       Pre-season (spring training) is shown in a separate subsection below when enabled.
@@ -287,7 +288,7 @@
 <footer class="site-footer">
   <div class="footer-links">
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/current">Current season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -301,6 +302,15 @@
 <script src="/static/base.js"></script>
 <script>
   const $ = id => document.getElementById(id);
+  var PAGE_SEASON_PARAM = new URLSearchParams(window.location.search).get('season');
+  var PAGE_SEASON =
+    PAGE_SEASON_PARAM && /^\d{4}$/.test(PAGE_SEASON_PARAM)
+      ? parseInt(PAGE_SEASON_PARAM, 10)
+      : null;
+
+  function standingsSeasonQueryPrefix() {
+    return PAGE_SEASON != null ? 'season=' + PAGE_SEASON + '&' : '';
+  }
 let statsLoaded = false;
 
   function showTab(name, el) {
@@ -526,7 +536,14 @@ let statsLoaded = false;
 
     async function loadStandings() {
       try {
-        var data = await timedFetch('/api/standings?season=2026&include_spring=true', 'timing-standings');
+        var data = await timedFetch(
+          '/api/standings?' + standingsSeasonQueryPrefix() + 'include_spring=true',
+          'timing-standings'
+        );
+        var heroH = $('standings-hero-heading');
+        if (heroH && data.season != null) {
+          heroH.textContent = data.season + ' season · standings';
+        }
         standingsFull = {
           divisions: data.divisions || [],
           league_leaders: data.league_leaders || {},
@@ -575,7 +592,8 @@ let statsLoaded = false;
 
 async function loadTeamStats() {
   try {
-    var data = await timedFetch('/api/team-stats?season=2026', 'timing-team-stats');
+    var tsQ = PAGE_SEASON != null ? '?season=' + PAGE_SEASON : '';
+    var data = await timedFetch('/api/team-stats' + tsQ, 'timing-team-stats');
     teamStatsFull = data.teams || [];
     applyBattingFilters();
     applyPitchingFilters();

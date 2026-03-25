@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>2026 Season — MLB Prediction System</title>
+  <title>{{ season }} Season — MLB Prediction System</title>
   <link rel="stylesheet" href="/static/base.css" />
   <style>
     .badge-soon { background: var(--gold-dim); color: var(--gold); }
@@ -49,14 +49,15 @@
     }
   </style>
 </head>
-<body>
+<body data-nav-season="{{ season }}">
 <header class="site-header">
   <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
+    {% include "partials/nav_season_picker.html" %}
     <a href="/">Home</a>
-    <a href="/season/2026" class="active">2026 Season</a>
+    <a href="/season/{{ season }}" class="active">{{ season }} Season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -82,11 +83,11 @@
 
 <div class="container">
   <div class="hero">
-    <div class="hero-badge">2026 Season Preview</div>
-    <h2>2026 Season Predictions</h2>
+    <div class="hero-badge">{{ season }} Season Preview</div>
+    <h2>{{ season }} Season Predictions</h2>
     <p>
       Win probabilities for all {{ total_games }} scheduled games, generated from
-      2025 end-of-season team strength. Predictions update as the season progresses.
+      {{ season - 1 }} end-of-season team strength. Predictions update as the season progresses.
     </p>
     <div class="hero-stats">
       <div class="hero-stat"><div class="num">{{ total_games }}</div><div class="lbl">Scheduled games</div></div>
@@ -98,8 +99,8 @@
 
   <div class="caveat">
     <span class="caveat-icon">⚠</span>
-    <div><strong>Pre-season note:</strong> All predictions are based on 2025 end-of-season team strength.
-      Roster moves, trades, and 2026 results will shift probabilities once the pipeline is re-run.</div>
+    <div><strong>Pre-season note:</strong> All predictions are based on {{ season - 1 }} end-of-season team strength.
+      Roster moves, trades, and {{ season }} results will shift probabilities once the pipeline is re-run.</div>
   </div>
 
   <!-- Standings summary -->
@@ -195,7 +196,7 @@
 <footer class="site-footer">
   <div class="footer-links">
     <a href="/">Home</a>
-    <a href="/season/2026">2026 Season</a>
+    <a href="/season/{{ season }}">{{ season }} Season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
@@ -208,6 +209,7 @@
 
 <script src="/static/base.js"></script>
 <script>
+const SEASON = {{ season }};
 const $ = id => document.getElementById(id);
 let currentPage = 0;
   let pageSize = 50;
@@ -224,7 +226,7 @@ function favouriteBadge(prob) {
 // ── Standings summary ─────────────────────────────────────────────────────
 async function loadStandingsSummary() {
   try {
-    const data = await timedFetch('/api/standings?season=2026', 'timing-standings-summary');
+    const data = await timedFetch('/api/standings?season=' + SEASON, 'timing-standings-summary');
     renderSummaryLeaders(data.league_leaders);
     renderSummaryDivisions(data.divisions);
   } catch (e) {
@@ -346,7 +348,7 @@ async function init() {
     const search = (document.getElementById('f-search') && document.getElementById('f-search').value) ? document.getElementById('f-search').value.trim() : '';
     const offset = currentPage * pageSize;
 
-    let url = '/api/games?season=2026&limit=' + pageSize + '&offset=' + offset + '&sort=date&order=asc';
+    let url = '/api/games?season=' + SEASON + '&limit=' + pageSize + '&offset=' + offset + '&sort=date&order=asc';
     if (home) url += '&home=' + encodeURIComponent(home);
     if (away) url += '&away=' + encodeURIComponent(away);
     if (search) url += '&q=' + encodeURIComponent(search);
@@ -435,7 +437,7 @@ function renderPagination(total) {
 // ── Power rankings sidebar ─────────────────────────────────────────────────
 async function loadRankings() {
   try {
-    const data = await api('/api/games?season=2026&limit=500&offset=0&sort=date&order=asc');
+    const data = await api('/api/games?season=' + SEASON + '&limit=500&offset=0&sort=date&order=asc');
     const games = data.games;
     const eloMap = {};
     games.forEach(g => {

@@ -91,9 +91,9 @@ def _create_server() -> FastMCP:
         return _call("get_season_summary")
 
     @mcp.tool()
-    def find_ev_bets() -> str:
-        """Find today's positive expected value bets vs the model."""
-        return _call("find_ev_bets")
+    def find_ev_bets(season: int | None = None, min_edge: float | None = None) -> str:
+        """Find positive-EV moneyline bets vs the model (optional season, min edge)."""
+        return _call("find_ev_bets", season=season, min_edge=min_edge)
 
     @mcp.tool()
     def get_live_odds() -> str:
