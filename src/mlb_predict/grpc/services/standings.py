@@ -66,7 +66,9 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
             context.set_details("System initializing — data not loaded yet.")
             raise Exception("Not ready")
         df = get_features()
-        avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
+        avail = (
+            df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
+        )
         req_season = int(request.season) if request.season > 0 else None
         season = resolve_api_season(req_season, available_seasons=avail)
         logger.debug("GetStandings season=%d", season)
@@ -170,7 +172,11 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
         req_season = int(request.season) if request.season > 0 else None
         if is_ready():
             df = get_features()
-            avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
+            avail = (
+                df["season"].dropna().astype(int).unique().tolist()
+                if "season" in df.columns
+                else []
+            )
             season = resolve_api_season(req_season, available_seasons=avail)
         else:
             season = resolve_api_season(req_season, available_seasons=[])

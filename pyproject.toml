@@ -85,6 +85,8 @@ disable_error_code = ["attr-defined", "name-defined"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Align fixture loop with function-scoped async tests (avoids teardown races on Py3.12).
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:.*Event loop is closed.*:pytest.PytestUnraisableExceptionWarning",

@@ -791,7 +791,7 @@ async def ws_repl_run(websocket: Any) -> None:
             source = msg.get("code", "")
             console = _get_repl(session_id)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             output, more = await loop.run_in_executor(None, console.execute, source)
 
             await websocket.send_text(

@@ -26,7 +26,9 @@ def test_resolve_api_season_explicit() -> None:
 
 def test_resolve_api_season_falls_back_to_loaded_data() -> None:
     """When inferred year is missing, pick the best season at or below it."""
-    assert resolve_api_season(None, available_seasons=[2024, 2025], reference=date(2026, 3, 1)) == 2025
+    assert (
+        resolve_api_season(None, available_seasons=[2024, 2025], reference=date(2026, 3, 1)) == 2025
+    )
 
 
 def test_resolve_api_season_empty_available() -> None:

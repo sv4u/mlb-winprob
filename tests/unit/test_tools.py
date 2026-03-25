@@ -66,8 +66,9 @@ def test_run_tool_get_season_summary_returns_valid_structure() -> None:
         assert "active_model" in data or "available_models" in data
 
 
-def test_run_tool_find_ev_bets_not_ready() -> None:
+def test_run_tool_find_ev_bets_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     """find_ev_bets returns error when data is not loaded."""
+    monkeypatch.setattr("mlb_predict.tools.run.is_ready", lambda: False)
     out = run_tool("find_ev_bets", {})
     data = json.loads(out)
     assert "error" in data or "message" in data

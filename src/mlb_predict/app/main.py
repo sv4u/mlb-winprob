@@ -1391,9 +1391,7 @@ async def page_season_current(request: Request):
     if not is_ready():
         return _init_page(request)
     df = get_features()
-    avail = (
-        df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    )
+    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
     if not avail:
         return RedirectResponse(url="/", status_code=302)
     y = resolve_api_season(None, available_seasons=avail)

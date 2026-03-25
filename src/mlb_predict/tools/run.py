@@ -41,23 +41,38 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 def _optional_positive_int(value: object) -> int | None:
     """Parse a tool parameter as a positive int, or None if absent or invalid."""
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
-    try:
+    n: int
+    if isinstance(value, int):
+        n = value
+    elif isinstance(value, str):
+        try:
+            n = int(value.strip())
+        except ValueError:
+            return None
+    elif isinstance(value, float):
+        if not value.is_integer():
+            return None
         n = int(value)
-    except (TypeError, ValueError):
+    else:
         return None
     return n if n > 0 else None
 
 
 def _optional_float_param(value: object) -> float | None:
     """Parse a tool parameter as float, or None if absent or invalid."""
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
-    try:
+    if isinstance(value, (int, float)):
         return float(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
 
 # Flat JSON schemas for each tool (required fields only where needed)
 TOOL_SCHEMAS: list[dict] = [

@@ -264,7 +264,9 @@ class TestDefaultUpdateSeasonYear:
 
         from mlb_predict.app.admin import _default_update_season_year
 
-        with patch("mlb_predict.app.admin._seasons_from_feature_parquets", return_value=[2025, 2024]):
+        with patch(
+            "mlb_predict.app.admin._seasons_from_feature_parquets", return_value=[2025, 2024]
+        ):
             with patch("mlb_predict.season.resolve_api_season", return_value=2025) as mock_resolve:
                 y = _default_update_season_year()
 
