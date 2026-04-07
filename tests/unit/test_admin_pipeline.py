@@ -251,27 +251,23 @@ class TestPipelineStateCore:
 
 
 # ---------------------------------------------------------------------------
-# UPDATE pipeline default season (matches UI)
+# UPDATE pipeline default season (calendar MLB year, not latest on disk)
 # ---------------------------------------------------------------------------
 
 
 class TestDefaultUpdateSeasonYear:
-    """``_default_update_season_year`` must use the same resolver as the dashboard."""
+    """``_default_update_season_year`` follows infer_target_mlb_season for refresh."""
 
-    def test_uses_resolve_api_season_with_on_disk_seasons(self) -> None:
-        """Resolver receives None and seasons from feature Parquet stems."""
+    def test_uses_infer_target_mlb_season(self) -> None:
+        """UPDATE targets the calendar MLB season even when disk data lags."""
         from unittest.mock import patch
 
         from mlb_predict.app.admin import _default_update_season_year
 
-        with patch(
-            "mlb_predict.app.admin._seasons_from_feature_parquets", return_value=[2025, 2024]
-        ):
-            with patch("mlb_predict.season.resolve_api_season", return_value=2025) as mock_resolve:
-                y = _default_update_season_year()
+        with patch("mlb_predict.season.infer_target_mlb_season", return_value=2026):
+            y = _default_update_season_year()
 
-        assert y == 2025
-        mock_resolve.assert_called_once_with(None, available_seasons=[2025, 2024])
+        assert y == 2026
 
     def test_update_commands_default_year_in_ingest_schedule_cmd(self) -> None:
         """_update_commands without opts.seasons embeds the resolved year in shell steps."""

@@ -29,25 +29,18 @@ _LOG_DIR = _REPO_ROOT / "logs"
 _MAX_LOG_LINES = 500
 
 
-def _seasons_from_feature_parquets() -> list[int]:
-    """List season years from ``data/processed/features/features_*.parquet`` file names."""
-    features_dir = _PROCESSED_DIR / "features"
-    if not features_dir.exists():
-        return []
-    out: list[int] = []
-    for f in features_dir.glob("features_*.parquet"):
-        try:
-            out.append(int(f.stem.split("_")[1]))
-        except (IndexError, ValueError):
-            continue
-    return out
-
-
 def _default_update_season_year() -> int:
-    """Default season for UPDATE pipeline — same rule as the web UI (``resolve_api_season``)."""
-    from mlb_predict.season import resolve_api_season
+    """Default season for the UPDATE admin pipeline (ingest refresh scripts).
 
-    return resolve_api_season(None, available_seasons=_seasons_from_feature_parquets())
+    Uses the calendar MLB season from :func:`mlb_predict.season.infer_target_mlb_season`
+    so a new year is refreshed even when ``features_{year}.parquet`` does not exist yet.
+    API and dashboard defaults for *reading* data still use
+    :func:`mlb_predict.season.resolve_api_season` in ``main.py`` / tools so empty
+    seasons are not shown by default.
+    """
+    from mlb_predict.season import infer_target_mlb_season
+
+    return infer_target_mlb_season()
 
 
 class PipelineKind(str, Enum):
@@ -311,9 +304,9 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
 def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str]]:
     """Update current season only (non-destructive).
 
-    When ``opts.seasons`` is omitted, the target year matches the UI default:
-    :func:`mlb_predict.season.resolve_api_season` over seasons found in
-    ``features_*.parquet`` on disk (not raw UTC calendar year alone).
+    When ``opts.seasons`` is omitted, the target year is
+    :func:`mlb_predict.season.infer_target_mlb_season` (calendar MLB season), not
+    the latest season on disk — so ingestion can create the new year's artifacts.
     """
     opts = opts or PipelineOptions()
     python = _python_bin()
