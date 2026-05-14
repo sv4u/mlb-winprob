@@ -509,6 +509,16 @@ async def api_seasons(request: Request) -> list[int] | dict | JSONResponse:
         return _not_ready_json()
     try:
         df = get_features()
+        if "season" not in df.columns:
+            return JSONResponse(
+                {
+                    "error": (
+                        "Features DataFrame is missing required 'season' column; "
+                        "re-run feature build or ingestion."
+                    )
+                },
+                status_code=503,
+            )
         return sorted(df["season"].dropna().unique().astype(int).tolist())
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
