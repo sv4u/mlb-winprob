@@ -41,12 +41,13 @@
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    {% include "partials/nav_season_picker.html" %}
     <a href="/">All Seasons</a>
-    <a href="/season/current">Current season</a>
+    <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
@@ -83,9 +84,9 @@
         <div class="desc">Home page with season browser, model cards, cross-validation results, and game search across all seasons (2000&ndash;2026).</div>
       </div>
       <div class="link-card">
-        <a href="/season/current">Current season</a>
-        <div class="path">/season/current</div>
-        <div class="desc">Redirects to the active prediction season: schedule, win probabilities, standings summary, power rankings, and date filters.</div>
+        <a href="/season/2026">2026 Season</a>
+        <div class="path">/season/2026</div>
+        <div class="desc">2026 overview: standings (live vs predicted), power rankings, and links to the full games list and odds.</div>
       </div>
       <div class="link-card">
         <a href="/standings">Standings</a>
@@ -97,19 +98,29 @@
         <div class="path">/leaders</div>
         <div class="desc">League leaders by hitting and pitching categories (top N per stat). Season and league filters. Data
           from MLB Stats API.</div>
+      </div>
+      <div class="link-card">
+        <a href="/players">Players</a>
+        <div class="path">/players</div>
+        <div class="desc">Full player stat tables (batting and pitching) by season. Sortable columns. Data from MLB Stats API.
         </div>
-        <div class="link-card">
-          <a href="/players">Players</a>
-          <div class="path">/players</div>
-          <div class="desc">Full player stat tables (batting and pitching) by season. Sortable columns. Data from MLB Stats API.
-          </div>
-        </div>
-        <div class="link-card">
+      </div>
+      <div class="link-card">
+        <a href="/today-odds">Today's Odds</a>
+        <div class="path">/today-odds</div>
+        <div class="desc">Today's money lines and implied probabilities from configured sportsbooks (Odds API cache).</div>
+      </div>
+      <div class="link-card">
+        <a href="/games">Games</a>
+        <div class="path">/games</div>
+        <div class="desc">Schedule browser with model win probabilities. Defaults to today's games and picks spring vs regular context from the schedule.</div>
+      </div>
+      <div class="link-card">
         <a href="/odds">Odds Hub</a>
         <div class="path">/odds</div>
         <div class="desc">Live odds board, positive-EV bet finder, and EV calculator. Shows moneyline odds from multiple
           sportsbooks, model-vs-market edge analysis, and Kelly criterion sizing.</div>
-        </div>
+      </div>
         <div class="link-card">
         <a href="/wiki">Wiki</a>
         <div class="path">/wiki</div>

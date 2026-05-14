@@ -132,13 +132,14 @@
     <code class="git-hash">{{ git_commit }}</code>
     <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
     <nav class="site-nav">
-      {% include "partials/nav_season_picker.html" %}
       <a href="/">Home</a>
-      <a href="/season/current">Current season</a>
+      <a href="/season/2026">2026 Season</a>
       <a href="/standings">Standings</a>
       <a href="/leaders">Leaders</a>
       <a href="/players" class="active">Players</a>
-      <a href="/odds">Odds & Bets</a>
+      <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
+    <a href="/odds">Odds & Bets</a>
       <span class="nav-divider"></span>
       <a href="/wiki">Wiki</a>
       <a href="/dashboard">Admin</a>
@@ -206,11 +207,13 @@
   <footer class="site-footer">
     <div class="footer-links">
       <a href="/">Home</a>
-      <a href="/season/current">Current season</a>
+      <a href="/season/2026">2026 Season</a>
       <a href="/standings">Standings</a>
       <a href="/leaders">Leaders</a>
       <a href="/players">Players</a>
-      <a href="/odds">Odds Hub</a>
+      <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
+    <a href="/odds">Odds Hub</a>
       <a href="/wiki">Wiki</a>
     </div>
     <div>MLB Prediction System · Player stats from MLB Stats API</div>
@@ -219,51 +222,16 @@
 
   <script src="/static/base.js"></script>
   <script>
-    (async function initPlayersPage() {
+    (function () {
       var seasonSelect = document.getElementById('players-season');
-      seasonSelect.innerHTML = '';
-      var seasons;
-      try {
-        seasons = await api('/api/seasons');
-      } catch (e) {
-        console.warn(e);
-        seasons = [];
+      var y = new Date().getFullYear();
+      for (var i = y; i >= 2000; i--) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = i;
+        if (i === y) opt.selected = true;
+        seasonSelect.appendChild(opt);
       }
-      if (!seasons.length) {
-        var y = new Date().getFullYear();
-        for (var i = y; i >= 2000; i--) {
-          var opt = document.createElement('option');
-          opt.value = i;
-          opt.textContent = i;
-          seasonSelect.appendChild(opt);
-        }
-      } else {
-        for (var j = seasons.length - 1; j >= 0; j--) {
-          var yy = seasons[j];
-          var o = document.createElement('option');
-          o.value = yy;
-          o.textContent = yy;
-          seasonSelect.appendChild(o);
-        }
-      }
-      var avail = [];
-      for (var k = 0; k < seasonSelect.options.length; k++) {
-        avail.push(parseInt(seasonSelect.options[k].value, 10));
-      }
-      var q = new URLSearchParams(window.location.search).get('season');
-      var pick = null;
-      if (q && /^\d{4}$/.test(q) && avail.indexOf(parseInt(q, 10)) !== -1) {
-        pick = parseInt(q, 10);
-      }
-      if (pick == null) {
-        try {
-          var ls = localStorage.getItem('mlb-predict-focus-season');
-          if (ls && avail.indexOf(parseInt(ls, 10)) !== -1) pick = parseInt(ls, 10);
-        } catch (e2) {}
-      }
-      if (pick == null) pick = avail.length ? avail[avail.length - 1] : new Date().getFullYear();
-      seasonSelect.value = String(pick);
-      loadPlayers(0);
     })();
 
         var playersCurrentPage = 0;
@@ -362,6 +330,15 @@
           return;
         }
         playersData = data.players || [];
+        if (!playersData.length && data.message) {
+          errEl.textContent = data.message;
+          errEl.style.display = 'block';
+          document.getElementById('players-tbody').innerHTML = '';
+          document.getElementById('players-thead').innerHTML = '';
+          document.getElementById('players-pagination').innerHTML = '';
+          setLoading('players-area', false);
+          return;
+        }
         var count = data.count || playersData.length;
         playersHasMore = count >= playersPageSize;
 
@@ -398,6 +375,7 @@
           });
         }
 
+        loadPlayers(0);
   </script>
 </body>
 

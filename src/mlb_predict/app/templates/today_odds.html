@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Today's Odds — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .odds-hero { margin-bottom: 1.25rem; }
+    .odds-hero h2 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .odds-hero p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.55; max-width: 720px; }
+    .odds-meta { font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/today-odds" class="active">Today's Odds</a>
+    <a href="/games">Games</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
+  </nav>
+</header>
+
+<div class="container-wide">
+  <div class="odds-hero">
+    <div class="hero-badge">Odds API</div>
+    <h2>Today's Odds</h2>
+    <p>
+      Best available money lines and implied win probabilities from configured sportsbooks.
+      For EV opportunities and historical context, use the <a href="/odds">Odds hub</a>.
+    </p>
+  </div>
+
+  <div id="odds-error" class="error-msg" style="display:none"></div>
+  <div class="card" id="odds-card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+      <h3 style="font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0;font-weight:600">Lines</h3>
+      <span id="odds-count" style="font-size:.72rem;color:var(--muted)"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th data-sort="string">Matchup</th>
+          <th data-sort="string">Time</th>
+          <th class="num" data-sort="number">Home ML</th>
+          <th class="num" data-sort="number">Away ML</th>
+          <th class="num" data-sort="number">Home Implied</th>
+          <th class="num" data-sort="number">Away Implied</th>
+          <th class="num" data-sort="number">Books</th>
+        </tr></thead>
+        <tbody id="odds-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <p id="odds-empty" class="muted" style="display:none">No odds events are configured or the Odds API returned no games.</p>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Prediction System</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
+<script src="/static/base.js"></script>
+<script>
+async function loadTodaysOdds() {
+  var err = document.getElementById('odds-error');
+  var card = document.getElementById('odds-card');
+  var empty = document.getElementById('odds-empty');
+  err.style.display = 'none';
+  err.textContent = '';
+  card.style.display = 'none';
+  empty.style.display = 'none';
+  try {
+    var data = await api('/api/odds');
+    if (!data.configured) {
+      empty.textContent = 'Odds API is not configured.';
+      empty.style.display = 'block';
+      return;
+    }
+    if (!data.events || !data.events.length) {
+      empty.style.display = 'block';
+      return;
+    }
+    document.getElementById('odds-count').textContent = data.events.length + ' game' + (data.events.length !== 1 ? 's' : '');
+    document.getElementById('odds-tbody').innerHTML = data.events.map(function (ev) {
+      var lt = ev.commence_time ? formatLocalTime(ev.commence_time) : { time: '—', tzAbbr: '' };
+      var timeStr = lt.time + (lt.tzAbbr ? ' ' + lt.tzAbbr : '');
+      var hp = ev.best_home_price || 0;
+      var ap = ev.best_away_price || 0;
+      var himp = ev.home_implied_prob;
+      var aimp = ev.away_implied_prob;
+      var books = (ev.bookmakers || []).length;
+      return '<tr>' +
+        '<td>' + (ev.away_team || '') + ' @ ' + (ev.home_team || '') + '</td>' +
+        '<td class="game-time">' + timeStr + '</td>' +
+        '<td class="num text-mono">' + (hp ? fmtOdds(hp) : '—') + '</td>' +
+        '<td class="num text-mono">' + (ap ? fmtOdds(ap) : '—') + '</td>' +
+        '<td class="num">' + (himp != null ? (himp * 100).toFixed(1) + '%' : '—') + '</td>' +
+        '<td class="num">' + (aimp != null ? (aimp * 100).toFixed(1) + '%' : '—') + '</td>' +
+        '<td class="num text-muted">' + books + '</td>' +
+        '</tr>';
+    }).join('');
+    card.style.display = 'block';
+    initAllSortables();
+  } catch (e) {
+    err.textContent = 'Failed to load odds: ' + (e.message || String(e));
+    err.style.display = 'block';
+  }
+}
+loadTodaysOdds();
+</script>
+</body>
+</html>

@@ -10,7 +10,6 @@ import asyncio
 import code
 import io
 import json
-import os
 import logging
 import time
 from contextlib import redirect_stderr, redirect_stdout
@@ -27,20 +26,6 @@ _PROCESSED_DIR = _REPO_ROOT / "data" / "processed"
 _MODEL_DIR = _REPO_ROOT / "data" / "models"
 _LOG_DIR = _REPO_ROOT / "logs"
 _MAX_LOG_LINES = 500
-
-
-def _default_update_season_year() -> int:
-    """Default season for the UPDATE admin pipeline (ingest refresh scripts).
-
-    Uses the calendar MLB season from :func:`mlb_predict.season.infer_target_mlb_season`
-    so a new year is refreshed even when ``features_{year}.parquet`` does not exist yet.
-    API and dashboard defaults for *reading* data still use
-    :func:`mlb_predict.season.resolve_api_season` in ``main.py`` / tools so empty
-    seasons are not shown by default.
-    """
-    from mlb_predict.season import infer_target_mlb_season
-
-    return infer_target_mlb_season()
 
 
 class PipelineKind(str, Enum):
@@ -302,12 +287,9 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
 
 
 def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str]]:
-    """Update current season only (non-destructive).
+    """Update current season only (non-destructive)."""
+    from datetime import datetime as dt
 
-    When ``opts.seasons`` is omitted, the target year is
-    :func:`mlb_predict.season.infer_target_mlb_season` (calendar MLB season), not
-    the latest season on disk — so ingestion can create the new year's artifacts.
-    """
     opts = opts or PipelineOptions()
     python = _python_bin()
 
@@ -315,9 +297,9 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
         year = " ".join(str(s) for s in opts.seasons)
         season_label = ", ".join(str(s) for s in opts.seasons)
     else:
-        yr = _default_update_season_year()
-        year = str(yr)
-        season_label = year
+        yr = str(dt.now(timezone.utc).year)
+        year = yr
+        season_label = yr
 
     preseason_flag = "" if opts.include_preseason else " --no-preseason"
     refresh_schedule = " --refresh-mlbapi" if opts.refresh_mlbapi else ""
@@ -384,10 +366,6 @@ def _retrain_commands(
     non-PR builds.
 
     Quick-tier and bootstrap retrains skip Stage 1 entirely.
-
-    Set ``MLB_RETRAIN_LOW_MEMORY=1`` on the server process to append
-    ``--low-memory`` to the training command (single-threaded tree fitting,
-    lower peak RAM).
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
@@ -396,17 +374,10 @@ def _retrain_commands(
     if effective_tier == "quick":
         flags += " --no-stage1"
     tier_label = "quick" if effective_tier == "quick" else "full"
-    low_mem = os.environ.get("MLB_RETRAIN_LOW_MEMORY", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-    mem_flag = " --low-memory" if low_mem else ""
     return [
         (
             f"Train all production models ({tier_label})",
-            f"{python} scripts/train_model.py --models {models}{flags}{mem_flag}",
+            f"{python} scripts/train_model.py --models {models}{flags}",
         ),
     ]
 
@@ -490,14 +461,7 @@ async def run_pipeline(
             logger.info("[%s] %s completed in %.1fs", kind.value, desc, step_elapsed)
             if rc != 0:
                 state.fail_step(step_idx)
-                err = f"Step '{desc}' exited with code {rc}"
-                if rc == 137:
-                    err += (
-                        " (SIGKILL — usually out-of-memory). Try: set MLB_RETRAIN_LOW_MEMORY=1 "
-                        "or MLB_PREDICT_LOW_MEMORY=1, use Admin quick retrain, stop other heavy "
-                        "processes, or add RAM / swap."
-                    )
-                state.finish(ok=False, error=err)
+                state.finish(ok=False, error=f"Step '{desc}' exited with code {rc}")
                 return
             state.complete_step(step_idx, step_elapsed)
 
@@ -784,7 +748,7 @@ async def ws_repl_run(websocket: Any) -> None:
             source = msg.get("code", "")
             console = _get_repl(session_id)
 
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             output, more = await loop.run_in_executor(None, console.execute, source)
 
             await websocket.send_text(

@@ -14,11 +14,11 @@ from typing import Annotated
 import grpc
 import pandas as pd
 from fastapi import FastAPI, Query, Request, WebSocket
-from fastapi import Path as PathParam
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import inspect
+from datetime import date
 
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel
@@ -36,7 +36,6 @@ from mlb_predict.app.admin import (
     ws_repl_run,
     ws_shell_run,
 )
-from mlb_predict.app.auto_update import spawn_auto_update_task
 from mlb_predict.app.data_cache import (
     TEAM_NAMES,
     available_model_types,
@@ -50,7 +49,6 @@ from mlb_predict.app.data_cache import (
     switch_model,
     try_startup,
 )
-from mlb_predict.season import infer_target_mlb_season, resolve_api_season
 from mlb_predict.app.game_detail_cache import get_game_detail_cached, set_game_detail_cached
 from mlb_predict.app.response_cache import cache_get_response
 from mlb_predict.app.timing import TimingMiddleware, timed_operation
@@ -141,8 +139,6 @@ async def _lifespan(app: FastAPI):
 
     app.state._grpc_stubs = None
     app.state._grpc_server = None
-    app.state._auto_update_task = spawn_auto_update_task(asyncio.get_running_loop(), _reload_app)
-
     if _GRPC_ENABLED:
         try:
             from mlb_predict.grpc.server import start_grpc_server
@@ -171,14 +167,6 @@ async def _lifespan(app: FastAPI):
             logger.warning("gRPC server or stubs failed: %s — running without gateway", exc)
 
     yield
-
-    auto_task = getattr(app.state, "_auto_update_task", None)
-    if auto_task is not None:
-        auto_task.cancel()
-        try:
-            await auto_task
-        except asyncio.CancelledError:
-            pass
 
     if getattr(app.state, "_grpc_server", None) is not None:
         from mlb_predict.grpc.server import stop_grpc_server
@@ -237,15 +225,6 @@ if _mcp_app is not None:
 
 
 _DEFAULT_MODEL_TYPE = "stacked"
-
-
-def _resolve_live_season(requested: int | None) -> int:
-    """Map API query season (optional) to a concrete year using calendar + loaded data."""
-    if not is_ready():
-        return int(requested) if requested is not None else infer_target_mlb_season()
-    df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    return resolve_api_season(requested, available_seasons=avail)
 
 
 def _reload_app() -> None:
@@ -530,11 +509,6 @@ async def api_seasons(request: Request) -> list[int] | dict | JSONResponse:
         return _not_ready_json()
     try:
         df = get_features()
-        if "season" not in df.columns:
-            return JSONResponse(
-                {"error": "Features data is missing required season column."},
-                status_code=503,
-            )
         return sorted(df["season"].dropna().unique().astype(int).tolist())
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
@@ -858,8 +832,7 @@ async def api_odds() -> dict:
 
 @app.get("/api/ev-opportunities", response_model=None)
 async def api_ev_opportunities(
-    min_edge: Annotated[float | None, Query(ge=0.0, le=0.5)] = None,
-    season: Annotated[int | None, Query(ge=2000, le=2035)] = None,
+    min_edge: Annotated[float, Query(ge=0.0, le=0.5)] = 0.0,
 ) -> dict:
     """Positive-EV moneyline bets: model edge over best market odds."""
     from mlb_predict.app.odds_cache import (
@@ -870,59 +843,25 @@ async def api_ev_opportunities(
 
     if not is_odds_configured():
         return {"configured": False, "count": 0, "opportunities": [], "betting_config": {}}
+    if not is_ready():
+        return {"configured": True, "count": 0, "opportunities": [], "betting_config": {}}
 
     from mlb_predict.external.betting_config import get_betting_config
 
     cfg = get_betting_config()
-    if not is_ready():
-        ev_season = resolve_api_season(
-            season if season is not None else cfg.ev_target_season,
-            available_seasons=[],
-        )
-        edge_floor = float(cfg.min_edge) if min_edge is None else float(min_edge)
-        return {
-            "configured": True,
-            "count": 0,
-            "opportunities": [],
-            "season_used": ev_season,
-            "min_edge": edge_floor,
-            "betting_config": {
-                "kelly_pct": cfg.kelly_pct,
-                "budget": cfg.budget,
-                "bet_amount": cfg.bet_amount,
-                "min_edge": cfg.min_edge,
-                "ev_target_season": cfg.ev_target_season,
-            },
-        }
-    df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    ev_season = resolve_api_season(
-        season if season is not None else cfg.ev_target_season,
-        available_seasons=avail,
-    )
-    edge_floor = float(cfg.min_edge) if min_edge is None else float(min_edge)
     events = await get_cached_odds()
+    df = get_features()
     opps = compute_ev_opportunities(
-        events,
-        df,
-        min_edge=edge_floor,
-        kelly_fraction=cfg.kelly_pct / 100.0,
-        budget=cfg.budget,
-        season=ev_season,
-        flat_bet_amount=cfg.bet_amount,
+        events, df, min_edge=min_edge, kelly_fraction=cfg.kelly_pct / 100.0, budget=cfg.budget
     )
     return {
         "configured": True,
         "count": len(opps),
-        "season_used": ev_season,
-        "min_edge": edge_floor,
         "opportunities": opps,
         "betting_config": {
             "kelly_pct": cfg.kelly_pct,
             "budget": cfg.budget,
             "bet_amount": cfg.bet_amount,
-            "min_edge": cfg.min_edge,
-            "ev_target_season": cfg.ev_target_season,
         },
     }
 
@@ -1077,7 +1016,7 @@ def _build_standings_payload(
 @cache_get_response(ttl_seconds=60)
 async def api_standings(
     request: Request,
-    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
     include_spring: Annotated[
         bool, Query(description="Include spring training standings subsection")
     ] = False,
@@ -1087,7 +1026,6 @@ async def api_standings(
     Main standings are regular-season only. Actual standings are from the MLB Stats API.
     When include_spring=true, also returns spring training predicted standings (no actuals).
     """
-    season = _resolve_live_season(season)
     stubs = _stubs(request)
     if stubs:
         try:
@@ -1162,10 +1100,9 @@ async def api_standings(
 @app.get("/api/team-stats", response_model=None)
 async def api_team_stats(
     request: Request,
-    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
 ) -> dict | JSONResponse:
     """Return batting and pitching stats for all teams in a season."""
-    season = _resolve_live_season(season)
     stubs = _stubs(request)
     if stubs:
         try:
@@ -1250,13 +1187,12 @@ async def api_team_stats(
 
 @app.get("/api/leaders", response_model=None)
 async def api_leaders(
-    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
     league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     stat_group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
 ) -> dict:
     """Return league leaders (top N per category) for a season from the MLB Stats API."""
-    season = _resolve_live_season(season)
     if not _live_api_enabled():
         return {
             "season": season,
@@ -1297,14 +1233,13 @@ async def api_leaders(
 
 @app.get("/api/player-stats", response_model=None)
 async def api_player_stats(
-    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
     group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
     league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
     """Return full player stats table (batting or pitching) for a season from the MLB Stats API."""
-    season = _resolve_live_season(season)
     if not _live_api_enabled():
         return {
             "season": season,
@@ -1385,56 +1320,59 @@ async def page_game(request: Request, game_pk: int):
     return templates.TemplateResponse(request, "game.html", _ctx(request, game_pk=game_pk))
 
 
-@app.get("/season/current", response_class=HTMLResponse)
-async def page_season_current(request: Request):
-    """Redirect to the resolved prediction season (calendar + loaded data)."""
+@app.get("/season/2026", response_class=HTMLResponse)
+async def page_season_2026(request: Request):
+    """Dedicated 2026 season schedule + pre-season predictions page."""
     if not is_ready():
         return _init_page(request)
     df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    if not avail:
-        return RedirectResponse(url="/", status_code=302)
-    y = resolve_api_season(None, available_seasons=avail)
-    return RedirectResponse(url=f"/season/{y}", status_code=302)
-
-
-@app.get("/season/{season_year}", response_class=HTMLResponse)
-async def page_season_hub(
-    request: Request,
-    season_year: Annotated[int, PathParam(ge=2000, le=2035)],
-):
-    """Season schedule, predicted standings summary, and power rankings for one year."""
-    if not is_ready():
-        return _init_page(request)
-    df = get_features()
-    available = (
-        sorted(df["season"].dropna().unique().astype(int).tolist())
-        if "season" in df.columns
-        else []
-    )
-    if season_year not in available:
-        return HTMLResponse(
-            content=templates.get_template("404_season.html").render(
-                request=request,
-                git_commit=get_git_commit(),
-                season=season_year,
-                available_seasons=available,
-            ),
-            status_code=404,
-        )
-    season_df = df[df["season"] == season_year]
+    season_df = df[df["season"] == 2026]
     total = len(season_df)
     first_date = str(season_df["date"].min())[:10] if total else "—"
     return templates.TemplateResponse(
         request,
         "season_2026.html",
-        _ctx(
-            request,
-            season=season_year,
-            total_games=total,
-            first_date=first_date,
-        ),
+        _ctx(request, total_games=total, first_date=first_date),
     )
+
+
+@app.get("/games", response_class=HTMLResponse)
+async def page_games(request: Request):
+    """Browse scheduled games and model probabilities (defaults to today's date on the client)."""
+    if not is_ready():
+        return _init_page(request)
+    y = min(max(date.today().year, 2000), 2030)
+    return templates.TemplateResponse(request, "games.html", _ctx(request, default_season=y))
+
+
+@app.get("/today-odds", response_class=HTMLResponse)
+async def page_today_odds(request: Request):
+    """Today's sportsbook lines (Odds API) in a dedicated view."""
+    if not is_ready():
+        return _init_page(request)
+    return templates.TemplateResponse(request, "today_odds.html", _ctx(request))
+
+
+@app.get("/season/{season}", response_class=HTMLResponse)
+async def page_season_generic(request: Request, season: int):
+    """Dynamic season page — redirects to the home page filtered by season."""
+    from fastapi.responses import RedirectResponse
+
+    if not is_ready():
+        return _init_page(request)
+    df = get_features()
+    available = sorted(df["season"].dropna().unique().astype(int).tolist())
+    if season not in available:
+        return HTMLResponse(
+            content=templates.get_template("404_season.html").render(
+                request=request,
+                git_commit=get_git_commit(),
+                season=season,
+                available_seasons=available,
+            ),
+            status_code=404,
+        )
+    return RedirectResponse(url=f"/?season={season}", status_code=302)
 
 
 @app.get("/standings", response_class=HTMLResponse)
@@ -1469,7 +1407,9 @@ async def xml_sitemap(request: Request) -> Response:
     base = str(request.base_url).rstrip("/")
     paths = [
         "/",
-        "/season/current",
+        "/season/2026",
+        "/games",
+        "/today-odds",
         "/standings",
         "/leaders",
         "/players",
@@ -1543,8 +1483,6 @@ class _BettingConfigRequest(BaseModel):
     kelly_pct: float = 25.0
     budget: float = 300.0
     bet_amount: float = 2.0
-    min_edge: float = 0.0
-    ev_target_season: int | None = None
 
 
 class _PipelineOptionsRequest(BaseModel):
@@ -1667,13 +1605,7 @@ async def api_admin_get_betting_config() -> dict:
     from mlb_predict.external.betting_config import get_betting_config
 
     cfg = get_betting_config()
-    return {
-        "kelly_pct": cfg.kelly_pct,
-        "budget": cfg.budget,
-        "bet_amount": cfg.bet_amount,
-        "min_edge": cfg.min_edge,
-        "ev_target_season": cfg.ev_target_season,
-    }
+    return {"kelly_pct": cfg.kelly_pct, "budget": cfg.budget, "bet_amount": cfg.bet_amount}
 
 
 @app.post("/api/admin/betting-config", response_model=None)
@@ -1685,8 +1617,6 @@ async def api_admin_save_betting_config(body: _BettingConfigRequest) -> dict:
         kelly_pct=max(1.0, min(100.0, body.kelly_pct)),
         budget=max(0.0, body.budget),
         bet_amount=max(0.01, body.bet_amount),
-        min_edge=max(0.0, min(0.5, body.min_edge)),
-        ev_target_season=body.ev_target_season,
     )
     save_betting_config(cfg)
     return {
@@ -1694,8 +1624,6 @@ async def api_admin_save_betting_config(body: _BettingConfigRequest) -> dict:
         "kelly_pct": cfg.kelly_pct,
         "budget": cfg.budget,
         "bet_amount": cfg.bet_amount,
-        "min_edge": cfg.min_edge,
-        "ev_target_season": cfg.ev_target_season,
     }
 
 

@@ -84,6 +84,7 @@ async def fetch_leaders(
         "season": season,
         "limit": max(1, min(limit, 50)),
         "statGroup": stat_group,
+        "sportId": 1,
     }
     if league_id is not None:
         params["leagueId"] = league_id
@@ -163,6 +164,7 @@ async def fetch_player_stats(
         "season": season,
         "limit": max(1, min(limit, 250)),
         "offset": offset,
+        "sportId": 1,
     }
     if league_id is not None:
         params["leagueId"] = league_id

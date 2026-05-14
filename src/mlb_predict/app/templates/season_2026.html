@@ -3,15 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ season }} Season — MLB Prediction System</title>
+  <title>2026 Season — MLB Prediction System</title>
   <link rel="stylesheet" href="/static/base.css" />
   <style>
-    .badge-soon { background: var(--gold-dim); color: var(--gold); }
-    .badge-upcoming { background: var(--accent-dim); color: var(--accent); }
-    .badge-home-fav { background: var(--green-dim); color: var(--green); }
-    .badge-away-fav { background: var(--red-dim); color: var(--red); }
-    .badge-tossup { background: rgba(107,115,148,.1); color: var(--muted); }
-    .preseason-caveat { background: rgba(251,191,36,.06); border: 1px solid rgba(251,191,36,.2); border-radius: var(--radius); padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--gold); line-height: 1.55; display: flex; align-items: flex-start; gap: 0.5rem; }
     .standings-summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.5rem; }
     .standings-summary h3 { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem; font-weight: 600; }
     .standings-summary h3 a { font-size: 0.75rem; font-weight: 400; text-transform: none; letter-spacing: normal; }
@@ -19,20 +13,17 @@
     .summary-div { background: var(--card); border-radius: var(--radius-sm); padding: 0.85rem; }
     .summary-div-header { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
     .summary-div-badge { display: inline-block; padding: 0.12rem 0.4rem; border-radius: 3px; font-size: 0.62rem; font-weight: 700; }
-    .summary-team-row { display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0; font-size: 0.78rem; }
-    .summary-team-row .rank { color: var(--muted); width: 1.2rem; text-align: right; margin-right: 0.4rem; font-family: var(--font-mono); }
-    .summary-team-row .name { flex: 1; font-weight: 500; }
-    .summary-team-row .record { color: var(--text-secondary); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.75rem; }
+    .summary-team-row { display: flex; justify-content: space-between; align-items: center; padding: 0.28rem 0; font-size: 0.78rem; gap: 0.5rem; }
+    .summary-team-row .rank { color: var(--muted); width: 1.2rem; text-align: right; margin-right: 0.35rem; font-family: var(--font-mono); flex-shrink: 0; }
+    .summary-team-row .name { flex: 1; font-weight: 500; min-width: 0; }
+    .summary-team-row .record { flex-shrink: 0; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.74rem; text-align: right; line-height: 1.35; }
     .summary-leader-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
     .leader-mini { background: var(--card); border-radius: var(--radius-sm); padding: 0.75rem; }
     .leader-mini-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 0.3rem; font-weight: 600; }
     .leader-mini-team { font-size: 0.95rem; font-weight: 700; }
     .leader-mini-record { font-size: 0.82rem; color: var(--text-secondary); font-family: var(--font-mono); }
 
-    .todays-odds-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .todays-odds-header h3 { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0; font-weight: 600; }
-
-    .rankings-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem; position: sticky; top: 72px; }
+    .rankings-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem; position: sticky; top: 56px; }
     .rankings-card h3 { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem; font-weight: 600; }
     .rank-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.78rem; }
     .rank-row:last-child { border-bottom: none; }
@@ -49,18 +40,19 @@
     }
   </style>
 </head>
-<body data-nav-season="{{ season }}">
+<body>
 <header class="site-header">
   <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
   <code class="git-hash">{{ git_commit }}</code>
   <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
   <nav class="site-nav">
-    {% include "partials/nav_season_picker.html" %}
     <a href="/">Home</a>
-    <a href="/season/{{ season }}" class="active">{{ season }} Season</a>
+    <a href="/season/2026" class="active">2026 Season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
     <a href="/odds">Odds & Bets</a>
     <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
@@ -83,11 +75,11 @@
 
 <div class="container">
   <div class="hero">
-    <div class="hero-badge">{{ season }} Season Preview</div>
-    <h2>{{ season }} Season Predictions</h2>
+    <div class="hero-badge">2026 Season Preview</div>
+    <h2>2026 Season Predictions</h2>
     <p>
       Win probabilities for all {{ total_games }} scheduled games, generated from
-      {{ season - 1 }} end-of-season team strength. Predictions update as the season progresses.
+      2025 end-of-season team strength. Predictions update as the season progresses.
     </p>
     <div class="hero-stats">
       <div class="hero-stat"><div class="num">{{ total_games }}</div><div class="lbl">Scheduled games</div></div>
@@ -99,107 +91,56 @@
 
   <div class="caveat">
     <span class="caveat-icon">⚠</span>
-    <div><strong>Pre-season note:</strong> All predictions are based on {{ season - 1 }} end-of-season team strength.
-      Roster moves, trades, and {{ season }} results will shift probabilities once the pipeline is re-run.</div>
+    <div><strong>Pre-season note:</strong> All predictions are based on 2025 end-of-season team strength.
+      Roster moves, trades, and 2026 results will shift probabilities once the pipeline is re-run.</div>
   </div>
 
-  <!-- Standings summary -->
   <div class="standings-summary" id="standings-summary">
-    <h3>Predicted Standings <a href="/standings">View full standings →</a>
+    <h3>Standings — live record vs model <a href="/standings">Full standings →</a>
       <span class="timing-badge" id="timing-standings-summary" style="display:none"></span>
     </h3>
+    <p style="font-size:0.78rem;color:var(--muted);margin:-0.5rem 0 1rem;line-height:1.5">
+      <strong>Live</strong> wins and losses come from the MLB Stats API when enabled (<code style="font-size:0.72rem">MLB_PREDICT_LIVE_API</code>).
+      <strong>Pred</strong> is the model’s expected record from remaining win probabilities.
+    </p>
     <div class="summary-leader-cards" id="summary-leaders"></div>
     <div class="summary-grid" id="summary-divisions"></div>
   </div>
 
-  <!-- Today's Odds -->
-  <div class="card" id="todays-odds-card" style="display:none;margin-bottom:1.5rem">
-    <div class="todays-odds-header">
-      <h3>Today's Odds <a href="/odds"
-          style="font-size:0.75rem;font-weight:400;text-transform:none;letter-spacing:normal;margin-left:0.5rem">Odds Hub
-          →</a></h3>
-      <span id="odds-count" style="font-size:.72rem;color:var(--muted)"></span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th data-sort="string">Matchup</th>
-          <th data-sort="string">Time</th>
-          <th class="num" data-sort="number">Home ML</th>
-          <th class="num" data-sort="number">Away ML</th>
-          <th class="num" data-sort="number">Home Implied</th>
-          <th class="num" data-sort="number">Away Implied</th>
-          <th class="num" data-sort="number">Books</th>
-        </tr></thead>
-        <tbody id="todays-odds-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
   <div class="layout">
-    <div>
-      <div style="display:flex;align-items:center;margin-bottom:0.75rem">
-        <span style="font-size:0.82rem;font-weight:600;color:var(--text-secondary)">Show:</span>
-        <div class="game-type-tabs" id="game-type-tabs">
-          <button class="game-type-tab active" onclick="setGameType('',this)">All</button>
-          <button class="game-type-tab" onclick="setGameType('R',this)">Regular</button>
-          <button class="game-type-tab" onclick="setGameType('S',this)">Spring</button>
-        </div>
+    <div class="card" style="margin-bottom:0">
+      <h3 style="font-size:0.85rem;margin-bottom:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600">Games &amp; markets</h3>
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1rem;line-height:1.55">
+        Browse the full schedule with filters (defaults to <strong>today</strong> on the games page),
+        view consolidated sportsbook lines, or open the odds hub for EV tools.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:0.65rem">
+        <a class="btn" href="/games">Games →</a>
+        <a class="btn sec" href="/today-odds">Today's odds →</a>
+        <a class="btn sec" href="/odds">Odds hub →</a>
       </div>
-      <div class="filter-panel">
-        <div class="filter-row">
-          <div class="filter-group">
-            <label for="f-search">Search</label>
-            <input type="text" id="f-search" placeholder="Team or matchup…" aria-label="Search matchup" />
-          </div>
-          <div class="filter-group">
-            <label for="f-home">Home team</label>
-            <select id="f-home">
-              <option value="">Any</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label for="f-away">Away team</label>
-            <select id="f-away">
-              <option value="">Any</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label for="f-from">From date</label>
-            <input type="date" id="f-from" />
-          </div>
-          <div class="filter-group">
-            <label for="f-to">To date</label>
-            <input type="date" id="f-to" />
-          </div>
-          <button onclick="loadGames(0)">Apply</button>
-          <button class="btn sec" onclick="resetFilters()">Reset</button>
-          </div>
-      </div>
-
-      <div id="table-wrap"></div>
-      <div class="pagination" id="pagination"></div>
-      <span class="timing-badge" id="timing-games" style="display:none"></span>
     </div>
 
     <div class="rankings-card">
-      <h3>Power Rankings (End-of-2025 Elo)</h3>
+      <h3>Power Rankings (Elo snapshot)</h3>
       <div id="rankings-list">
         <div class="skeleton skeleton-text"></div>
         <div class="skeleton skeleton-text"></div>
         <div class="skeleton skeleton-text"></div>
       </div>
-      </div>
-      </div>
+    </div>
+  </div>
 </div>
 
 <footer class="site-footer">
   <div class="footer-links">
     <a href="/">Home</a>
-    <a href="/season/{{ season }}">{{ season }} Season</a>
+    <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
     <a href="/leaders">Leaders</a>
     <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
   </div>
@@ -209,24 +150,11 @@
 
 <script src="/static/base.js"></script>
 <script>
-const SEASON = {{ season }};
 const $ = id => document.getElementById(id);
-let currentPage = 0;
-  let pageSize = 50;
-let totalRows = 0;
-  let oddsMap = {};
-  let gameTypeFilter = '';
 
-function favouriteBadge(prob) {
-  if (prob >= 0.60) return '<span class="badge badge-home-fav">Home fav</span>';
-  if (prob <= 0.40) return '<span class="badge badge-away-fav">Away fav</span>';
-  return '<span class="badge badge-tossup">Toss-up</span>';
-}
-
-// ── Standings summary ─────────────────────────────────────────────────────
 async function loadStandingsSummary() {
   try {
-    const data = await timedFetch('/api/standings?season=' + SEASON, 'timing-standings-summary');
+    const data = await timedFetch('/api/standings?season=2026', 'timing-standings-summary');
     renderSummaryLeaders(data.league_leaders);
     renderSummaryDivisions(data.divisions);
   } catch (e) {
@@ -241,7 +169,7 @@ function renderSummaryLeaders(leaders) {
     const l = leaders[league];
     if (!l) return;
     const badgeCls = league === 'AL' ? 'badge-al' : 'badge-nl';
-    html += '<div class="leader-mini"><div class="leader-mini-label"><span class="summary-div-badge ' + badgeCls + '">' + league + '</span> Predicted Leader</div>';
+    html += '<div class="leader-mini"><div class="leader-mini-label"><span class="summary-div-badge ' + badgeCls + '">' + league + '</span> Division pace (pred)</div>';
     if (l.predicted_leader) {
       const pl = l.predicted_leader;
       html += '<div class="leader-mini-team">' + (pl.team_name || pl.retro_code) + '</div>' +
@@ -249,7 +177,8 @@ function renderSummaryLeaders(leaders) {
     }
     if (l.actual_leader) {
       const al = l.actual_leader;
-      html += '<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">Actual: <strong style="color:var(--text)">' + (al.team_name || al.retro_code) + '</strong> ' + al.actual_wins + '-' + al.actual_losses + ' (' + (al.actual_win_pct * 100).toFixed(1) + '%)</div>';
+      html += '<div style="margin-top:0.35rem;font-size:0.75rem;color:var(--muted)">Live leader: <strong style="color:var(--green)">' + (al.team_name || al.retro_code) + '</strong> ' +
+        al.actual_wins + '-' + al.actual_losses + ' (' + (al.actual_win_pct * 100).toFixed(1) + '%)</div>';
     }
     html += '</div>';
   });
@@ -263,181 +192,22 @@ function renderSummaryDivisions(divisions) {
     const badgeCls = div.league === 'AL' ? 'badge-al' : 'badge-nl';
     html += '<div class="summary-div"><div class="summary-div-header"><span class="summary-div-badge ' + badgeCls + '">' + div.league + '</span> ' + div.division_name + '</div>';
     div.teams.forEach((t, i) => {
-      const predRec = t.pred_wins.toFixed(0) + '-' + t.pred_losses.toFixed(0);
-      let extra = '';
-      if (t.actual_wins != null) {
-        extra = ' <span style="color:var(--muted);font-size:0.68rem">(act: ' + t.actual_wins + '-' + t.actual_losses + ')</span>';
-      }
-      html += '<div class="summary-team-row"><span class="rank">' + (i + 1) + '</span><span class="name">' + t.team_name + '</span><span class="record">' + predRec + extra + '</span></div>';
+      const predRec = Math.round(t.pred_wins) + '-' + Math.round(t.pred_losses);
+      const liveRec = (t.actual_wins != null && t.actual_losses != null)
+        ? '<span style="color:var(--green);font-weight:600">' + t.actual_wins + '-' + t.actual_losses + '</span>'
+        : '<span style="color:var(--muted)">n/a</span>';
+      const predHtml = '<span style="color:var(--accent);font-weight:600">' + predRec + '</span>';
+      html += '<div class="summary-team-row"><span class="rank">' + (i + 1) + '</span><span class="name">' + t.team_name + '</span>' +
+        '<span class="record">Live ' + liveRec + ' <span style="color:var(--muted);font-weight:400">·</span> Pred ' + predHtml + '</span></div>';
     });
     html += '</div>';
   });
   $('summary-divisions').innerHTML = html;
 }
 
-async function loadOdds() {
-  try {
-    const data = await api('/api/odds');
-    if (!data.configured || !data.events || !data.events.length) return;
-    data.events.forEach(ev => {
-      if (ev.home_retro && ev.away_retro) {
-        oddsMap[ev.home_retro + '|' + ev.away_retro] = ev;
-      }
-    });
-    renderTodaysOdds(data.events);
-  } catch (e) { }
-}
-
-function renderTodaysOdds(events) {
-  if (!events.length) return;
-  $('todays-odds-card').style.display = '';
-  $('odds-count').textContent = events.length + ' game' + (events.length !== 1 ? 's' : '');
-  $('todays-odds-tbody').innerHTML = events.map(function (ev) {
-    var lt = ev.commence_time ? formatLocalTime(ev.commence_time) : { time: '—', tzAbbr: '' };
-    var timeStr = lt.time + (lt.tzAbbr ? ' ' + lt.tzAbbr : '');
-    var hp = ev.best_home_price || 0;
-    var ap = ev.best_away_price || 0;
-    var himp = ev.home_implied_prob;
-    var aimp = ev.away_implied_prob;
-    var books = (ev.bookmakers || []).length;
-    return '<tr>' +
-      '<td>' + (ev.away_team || '') + ' @ ' + (ev.home_team || '') + '</td>' +
-      '<td class="game-time">' + timeStr + '</td>' +
-      '<td class="num text-mono">' + (hp ? fmtOdds(hp) : '—') + '</td>' +
-      '<td class="num text-mono">' + (ap ? fmtOdds(ap) : '—') + '</td>' +
-      '<td class="num">' + (himp != null ? (himp * 100).toFixed(1) + '%' : '—') + '</td>' +
-      '<td class="num">' + (aimp != null ? (aimp * 100).toFixed(1) + '%' : '—') + '</td>' +
-      '<td class="num text-muted">' + books + '</td>' +
-      '</tr>';
-  }).join('');
-  initAllSortables();
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────
-async function init() {
-  let teams = [];
-  try { teams = await api('/api/teams'); } catch (e) {}
-
-  ['f-home', 'f-away'].forEach(id => {
-    const s = $(id);
-    teams.forEach(t => {
-      const o = document.createElement('option');
-      o.value = t.code; o.textContent = t.name;
-      s.appendChild(o);
-    });
-  });
-
-  ['f-from', 'f-to', 'f-search'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(0); });
-  });
-
-  await loadOdds();
-  await Promise.all([loadGames(0), loadRankings(), loadStandingsSummary()]);
-}
-
-// ── Games table ───────────────────────────────────────────────────────────
-  async function loadGames(page) {
-    currentPage = page || 0;
-    setLoading('table-wrap', true);
-  try {
-    const home = $('f-home').value;
-    const away = $('f-away').value;
-    const from = $('f-from').value;
-    const to   = $('f-to').value;
-    const search = (document.getElementById('f-search') && document.getElementById('f-search').value) ? document.getElementById('f-search').value.trim() : '';
-    const offset = currentPage * pageSize;
-
-    let url = '/api/games?season=' + SEASON + '&limit=' + pageSize + '&offset=' + offset + '&sort=date&order=asc';
-    if (home) url += '&home=' + encodeURIComponent(home);
-    if (away) url += '&away=' + encodeURIComponent(away);
-    if (search) url += '&q=' + encodeURIComponent(search);
-    if (gameTypeFilter) url += '&game_type=' + encodeURIComponent(gameTypeFilter);
-
-    const data = await timedFetch(url, 'timing-games');
-    let games = data.games;
-
-    if (from) games = games.filter(g => g.date >= from);
-    if (to)   games = games.filter(g => g.date <= to);
-
-    totalRows = data.total;
-
-    if (data.total > 0) {
-      const probs = data.games.map(g => g.prob_home ?? 0.5);
-      const mean = probs.reduce((a, b) => a + b, 0) / probs.length;
-      $('hs-mean-prob').textContent = (mean * 100).toFixed(1) + '%';
-    }
-
-    if (!games.length) {
-      $('table-wrap').innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No games match your filters.</p></div>';
-      $('pagination').innerHTML = '';
-      return;
-    }
-
-    const hasOdds = Object.keys(oddsMap).length > 0;
-    const hasSpring = games.some(g => g.game_type === 'S');
-    let html = '';
-    if (hasSpring) {
-      html += '<div class="preseason-caveat"><span>⚠</span><div><strong>Spring Training games included.</strong> Model predictions for exhibition games use prior-season team strength.</div></div>';
-    }
-    html += '<div class="table-wrap"><table><thead><tr>' +
-      '<th data-sort="date">Date</th><th data-sort="string">Status</th><th data-sort="string">Matchup</th>' +
-      '<th data-sort="percent">Home Win</th><th data-sort="percent">Away Win</th><th data-sort="string">Outlook</th>';
-    if (hasOdds) html += '<th class="num" data-sort="number">Home ML</th><th class="num" data-sort="number">Away ML</th>';
-    if (hasSpring) html += '<th data-sort="string">Type</th>';
-    html += '</tr></thead><tbody>';
-
-    games.forEach(g => {
-      const ph = g.prob_home ?? 0.5;
-      const pa = 1 - ph;
-      const odds = oddsMap[g.home_retro + '|' + g.away_retro];
-      let oddsCols = '';
-      if (hasOdds) {
-        if (odds) {
-          oddsCols = '<td class="num text-mono">' + fmtOdds(odds.best_home_price) + '</td><td class="num text-mono">' + fmtOdds(odds.best_away_price) + '</td>';
-        } else {
-          oddsCols = '<td class="num text-muted">—</td><td class="num text-muted">—</td>';
-        }
-      }
-      html += '<tr>' +
-        '<td data-sort-value="' + g.date + '" style="white-space:nowrap;font-size:0.8rem">' + formatGameDate(g.date) + '</td>' +
-        '<td>' + dateBadge(g.date) + '</td>' +
-        '<td><a href="/game/' + g.game_pk + '">' + g.away_name + ' @ ' + g.home_name + '</a></td>' +
-        '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(ph * 100) + '%;background:' + probColor(ph) + '"></div></div><span class="tabular-nums" style="font-weight:' + (ph >= 0.55 ? '700' : '400') + '">' + (ph * 100).toFixed(1) + '%</span></div></td>' +
-        '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(pa * 100) + '%;background:' + probColor(pa) + '"></div></div><span class="tabular-nums" style="font-weight:' + (pa >= 0.55 ? '700' : '400') + '">' + (pa * 100).toFixed(1) + '%</span></div></td>' +
-        '<td>' + favouriteBadge(ph) + '</td>' +
-        oddsCols +
-        (hasSpring ? '<td>' + gameTypeBadge(g.game_type) + '</td>' : '') +
-        '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-    $('table-wrap').innerHTML = html;
-    initAllSortables();
-    renderPagination(data.total);
-  } catch (e) {
-    $('table-wrap').innerHTML = '<p style="color:var(--red);padding:1.5rem">Failed to load games: ' + e.message + '</p>';
-  } finally {
-    setLoading('table-wrap', false);
-  }
-}
-
-function renderPagination(total) {
-  renderFullPagination('pagination', {
-    total: total,
-    currentPage: currentPage,
-    pageSize: pageSize,
-    onPageChange: function (pg, sz) {
-      if (sz !== pageSize) { pageSize = sz; }
-      loadGames(pg);
-    }
-  });
-}
-
-// ── Power rankings sidebar ─────────────────────────────────────────────────
 async function loadRankings() {
   try {
-    const data = await api('/api/games?season=' + SEASON + '&limit=500&offset=0&sort=date&order=asc');
+    const data = await api('/api/games?season=2026&limit=500&offset=0&sort=date&order=asc');
     const games = data.games;
     const eloMap = {};
     games.forEach(g => {
@@ -464,24 +234,19 @@ async function loadRankings() {
   }
 }
 
-  function setGameType(gt, btn) {
-    gameTypeFilter = gt;
-    document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
-    loadGames(0);
-  }
+async function loadMeanProb() {
+  try {
+    const data = await api('/api/games?season=2026&limit=100&offset=0&sort=date&order=asc');
+    if (data.games && data.games.length) {
+      const probs = data.games.map(g => g.prob_home ?? 0.5);
+      const mean = probs.reduce((a, b) => a + b, 0) / probs.length;
+      $('hs-mean-prob').textContent = (mean * 100).toFixed(1) + '%';
+    }
+  } catch (e) { }
+}
 
-function resetFilters() {
-  ['f-home', 'f-away'].forEach(id => $(id).value = '');
-  $('f-from').value = '';
-  $('f-to').value = '';
-  const fs = document.getElementById('f-search');
-  if (fs) fs.value = '';
-  gameTypeFilter = '';
-  document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
-  var allTab = document.querySelector('.game-type-tab');
-  if (allTab) allTab.classList.add('active');
-  loadGames(0);
+async function init() {
+  await Promise.all([loadRankings(), loadStandingsSummary(), loadMeanProb()]);
 }
 
 init();

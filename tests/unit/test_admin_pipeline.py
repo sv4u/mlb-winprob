@@ -248,34 +248,3 @@ class TestPipelineStateCore:
         d = state.to_dict()
         assert len(d["log_tail"]) == 80
         assert d["log_line_count"] == 200
-
-
-# ---------------------------------------------------------------------------
-# UPDATE pipeline default season (calendar MLB year, not latest on disk)
-# ---------------------------------------------------------------------------
-
-
-class TestDefaultUpdateSeasonYear:
-    """``_default_update_season_year`` follows infer_target_mlb_season for refresh."""
-
-    def test_uses_infer_target_mlb_season(self) -> None:
-        """UPDATE targets the calendar MLB season even when disk data lags."""
-        from unittest.mock import patch
-
-        from mlb_predict.app.admin import _default_update_season_year
-
-        with patch("mlb_predict.season.infer_target_mlb_season", return_value=2026):
-            y = _default_update_season_year()
-
-        assert y == 2026
-
-    def test_update_commands_default_year_in_ingest_schedule_cmd(self) -> None:
-        """_update_commands without opts.seasons embeds the resolved year in shell steps."""
-        from unittest.mock import patch
-
-        from mlb_predict.app.admin import _update_commands
-
-        with patch("mlb_predict.app.admin._default_update_season_year", return_value=2027):
-            cmds = _update_commands(None)
-        first_cmd = cmds[0][1]
-        assert "--seasons 2027" in first_cmd or "2027" in first_cmd

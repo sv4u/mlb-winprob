@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Games — MLB Prediction System</title>
+  <link rel="stylesheet" href="/static/base.css" />
+  <style>
+    .badge-soon { background: var(--gold-dim); color: var(--gold); }
+    .badge-upcoming { background: var(--accent-dim); color: var(--accent); }
+    .badge-home-fav { background: var(--green-dim); color: var(--green); }
+    .badge-away-fav { background: var(--red-dim); color: var(--red); }
+    .badge-tossup { background: rgba(107,115,148,.1); color: var(--muted); }
+    .preseason-caveat { background: rgba(251,191,36,.06); border: 1px solid rgba(251,191,36,.2); border-radius: var(--radius); padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--gold); line-height: 1.55; display: flex; align-items: flex-start; gap: 0.5rem; }
+    .games-hero { margin-bottom: 1.25rem; }
+    .games-hero h2 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .games-hero p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.55; max-width: 760px; }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games" class="active">Games</a>
+    <a href="/odds">Odds & Bets</a>
+    <span class="nav-divider"></span>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
+  </nav>
+</header>
+
+<div class="container-wide">
+  <div class="games-hero">
+    <div class="hero-badge">Schedule</div>
+    <h2>Games</h2>
+    <p>
+      Model win probabilities for each matchup. This page opens on <strong>today's date</strong> in your time zone.
+      Before the regular season begins, the <strong>Spring</strong> tab is selected automatically so spring-training
+      games appear first; after opening day data is available, <strong>Regular</strong> is selected.
+    </p>
+  </div>
+
+  <div style="display:flex;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+    <span style="font-size:0.82rem;font-weight:600;color:var(--text-secondary)">Show:</span>
+    <div class="game-type-tabs" id="game-type-tabs">
+      <button type="button" class="game-type-tab active" data-gt="">All</button>
+      <button type="button" class="game-type-tab" data-gt="R">Regular</button>
+      <button type="button" class="game-type-tab" data-gt="S">Spring</button>
+    </div>
+  </div>
+
+  <div class="filter-panel">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label for="f-search">Search</label>
+        <input type="text" id="f-search" placeholder="Team or matchup…" aria-label="Search matchup" />
+      </div>
+      <div class="filter-group">
+        <label for="f-home">Home team</label>
+        <select id="f-home"><option value="">Any</option></select>
+      </div>
+      <div class="filter-group">
+        <label for="f-away">Away team</label>
+        <select id="f-away"><option value="">Any</option></select>
+      </div>
+      <div class="filter-group">
+        <label for="f-from">From date</label>
+        <input type="date" id="f-from" />
+      </div>
+      <div class="filter-group">
+        <label for="f-to">To date</label>
+        <input type="date" id="f-to" />
+      </div>
+      <button type="button" onclick="loadGames(0)">Apply</button>
+      <button type="button" class="btn sec" onclick="resetFilters()">Reset</button>
+    </div>
+  </div>
+
+  <div id="table-wrap"></div>
+  <div class="pagination" id="pagination"></div>
+  <span class="timing-badge" id="timing-games" style="display:none"></span>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
+    <a href="/today-odds">Today's Odds</a>
+    <a href="/games">Games</a>
+    <a href="/odds">Odds Hub</a>
+    <a href="/wiki">Wiki</a>
+  </div>
+  <div>MLB Prediction System</div>
+  <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
+</footer>
+
+<script src="/static/base.js"></script>
+<script>
+const DEFAULT_SEASON = {{ default_season }};
+const $ = function (id) { return document.getElementById(id); };
+let currentPage = 0;
+let pageSize = 50;
+let totalRows = 0;
+let oddsMap = {};
+let gameTypeFilter = '';
+
+function todayISO() {
+  var d = new Date();
+  var z = function (n) { return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+
+function favouriteBadge(prob) {
+  if (prob >= 0.60) return '<span class="badge badge-home-fav">Home fav</span>';
+  if (prob <= 0.40) return '<span class="badge badge-away-fav">Away fav</span>';
+  return '<span class="badge badge-tossup">Toss-up</span>';
+}
+
+async function loadOddsMap() {
+  try {
+    var data = await api('/api/odds');
+    if (!data.configured || !data.events || !data.events.length) return;
+    data.events.forEach(function (ev) {
+      if (ev.home_retro && ev.away_retro) {
+        oddsMap[ev.home_retro + '|' + ev.away_retro] = ev;
+      }
+    });
+  } catch (e) { }
+}
+
+async function pickDefaultGameType() {
+  var t = todayISO();
+  try {
+    var r = await fetch('/api/games?season=' + DEFAULT_SEASON + '&game_type=R&limit=1&sort=date&order=asc');
+    var data = await r.json();
+    var g = (data.games && data.games[0]) ? data.games[0] : null;
+    if (!g || !g.date) return '';
+    return t < String(g.date).slice(0, 10) ? 'S' : 'R';
+  } catch (e) {
+    return '';
+  }
+}
+
+function wireGameTypeTabs() {
+  document.querySelectorAll('#game-type-tabs .game-type-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      gameTypeFilter = btn.getAttribute('data-gt') || '';
+      document.querySelectorAll('#game-type-tabs .game-type-tab').forEach(function (t) { t.classList.remove('active'); });
+      btn.classList.add('active');
+      loadGames(0);
+    });
+  });
+}
+
+function setGameTypeTab(gt) {
+  gameTypeFilter = gt;
+  document.querySelectorAll('#game-type-tabs .game-type-tab').forEach(function (t) {
+    t.classList.toggle('active', (t.getAttribute('data-gt') || '') === gt);
+  });
+}
+
+async function loadGames(page) {
+  currentPage = page || 0;
+  setLoading('table-wrap', true);
+  try {
+    var home = $('f-home').value;
+    var away = $('f-away').value;
+    var from = $('f-from').value;
+    var to = $('f-to').value;
+    var search = $('f-search').value ? $('f-search').value.trim() : '';
+    var offset = currentPage * pageSize;
+
+    var url = '/api/games?season=' + DEFAULT_SEASON + '&limit=' + pageSize + '&offset=' + offset + '&sort=date&order=asc';
+    if (home) url += '&home=' + encodeURIComponent(home);
+    if (away) url += '&away=' + encodeURIComponent(away);
+    if (search) url += '&q=' + encodeURIComponent(search);
+    if (gameTypeFilter) url += '&game_type=' + encodeURIComponent(gameTypeFilter);
+
+    var data = await timedFetch(url, 'timing-games');
+    var games = data.games;
+
+    if (from) games = games.filter(function (g) { return g.date >= from; });
+    if (to) games = games.filter(function (g) { return g.date <= to; });
+
+    totalRows = data.total;
+
+    if (!games.length) {
+      $('table-wrap').innerHTML = '<div class="empty-state"><div class="icon">⚾</div><p>No games match your filters.</p></div>';
+      $('pagination').innerHTML = '';
+      return;
+    }
+
+    var hasOdds = Object.keys(oddsMap).length > 0;
+    var hasSpring = games.some(function (g) { return g.game_type === 'S'; });
+    var html = '';
+    if (hasSpring) {
+      html += '<div class="preseason-caveat"><span>⚠</span><div><strong>Spring Training games included.</strong> Model predictions for exhibition games use prior-season team strength.</div></div>';
+    }
+    html += '<div class="table-wrap"><table><thead><tr>' +
+      '<th data-sort="date">Date</th><th data-sort="string">Status</th><th data-sort="string">Matchup</th>' +
+      '<th data-sort="percent">Home Win</th><th data-sort="percent">Away Win</th><th data-sort="string">Outlook</th>';
+    if (hasOdds) html += '<th class="num" data-sort="number">Home ML</th><th class="num" data-sort="number">Away ML</th>';
+    if (hasSpring) html += '<th data-sort="string">Type</th>';
+    html += '</tr></thead><tbody>';
+
+    games.forEach(function (g) {
+      var ph = g.prob_home != null ? g.prob_home : 0.5;
+      var pa = 1 - ph;
+      var odds = oddsMap[g.home_retro + '|' + g.away_retro];
+      var oddsCols = '';
+      if (hasOdds) {
+        if (odds) {
+          oddsCols = '<td class="num text-mono">' + fmtOdds(odds.best_home_price) + '</td><td class="num text-mono">' + fmtOdds(odds.best_away_price) + '</td>';
+        } else {
+          oddsCols = '<td class="num text-muted">—</td><td class="num text-muted">—</td>';
+        }
+      }
+      html += '<tr>' +
+        '<td data-sort-value="' + g.date + '" style="white-space:nowrap;font-size:0.8rem">' + formatGameDate(g.date) + '</td>' +
+        '<td>' + dateBadge(g.date) + '</td>' +
+        '<td><a href="/game/' + g.game_pk + '">' + g.away_name + ' @ ' + g.home_name + '</a></td>' +
+        '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(ph * 100) + '%;background:' + probColor(ph) + '"></div></div><span class="tabular-nums" style="font-weight:' + (ph >= 0.55 ? '700' : '400') + '">' + (ph * 100).toFixed(1) + '%</span></div></td>' +
+        '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(pa * 100) + '%;background:' + probColor(pa) + '"></div></div><span class="tabular-nums" style="font-weight:' + (pa >= 0.55 ? '700' : '400') + '">' + (pa * 100).toFixed(1) + '%</span></div></td>' +
+        '<td>' + favouriteBadge(ph) + '</td>' +
+        oddsCols +
+        (hasSpring ? '<td>' + gameTypeBadge(g.game_type) + '</td>' : '') +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    $('table-wrap').innerHTML = html;
+    initAllSortables();
+    renderPagination(data.total);
+  } catch (e) {
+    $('table-wrap').innerHTML = '<p style="color:var(--red);padding:1.5rem">Failed to load games: ' + e.message + '</p>';
+  } finally {
+    setLoading('table-wrap', false);
+  }
+}
+
+function renderPagination(total) {
+  renderFullPagination('pagination', {
+    total: total,
+    currentPage: currentPage,
+    pageSize: pageSize,
+    onPageChange: function (pg, sz) {
+      if (sz !== pageSize) { pageSize = sz; }
+      loadGames(pg);
+    }
+  });
+}
+
+function resetFilters() {
+  $('f-home').value = '';
+  $('f-away').value = '';
+  $('f-from').value = todayISO();
+  $('f-to').value = todayISO();
+  $('f-search').value = '';
+  gameTypeFilter = '';
+  document.querySelectorAll('#game-type-tabs .game-type-tab').forEach(function (t, i) {
+    t.classList.toggle('active', i === 0);
+  });
+  loadGames(0);
+}
+
+async function init() {
+  var teams = [];
+  try { teams = await api('/api/teams'); } catch (e) {}
+  ['f-home', 'f-away'].forEach(function (id) {
+    var s = $(id);
+    teams.forEach(function (t) {
+      var o = document.createElement('option');
+      o.value = t.code;
+      o.textContent = t.name;
+      s.appendChild(o);
+    });
+  });
+
+  $('f-from').value = todayISO();
+  $('f-to').value = todayISO();
+  wireGameTypeTabs();
+
+  var gt = await pickDefaultGameType();
+  if (gt === 'S') setGameTypeTab('S');
+  else if (gt === 'R') setGameTypeTab('R');
+  else setGameTypeTab('');
+
+  ['f-from', 'f-to', 'f-search'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') loadGames(0); });
+  });
+
+  await loadOddsMap();
+  await loadGames(0);
+}
+
+init();
+</script>
+</body>
+</html>

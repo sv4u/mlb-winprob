@@ -770,10 +770,7 @@ class TestFeatureIntegration:
 
     def test_feature_version_is_v4(self) -> None:
         """Training module must report v4 feature version."""
-        try:
-            from mlb_predict.model.train import _FEATURE_VERSION
-        except OSError:
-            pytest.skip("lightgbm native library not loadable (e.g. missing libomp)")
+        from mlb_predict.model.train import _FEATURE_VERSION
 
         assert _FEATURE_VERSION == "v4"
 

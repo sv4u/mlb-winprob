@@ -56,22 +56,7 @@ from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
-
-def _resolve_n_jobs() -> int:
-    """Thread/worker count for tree libraries (LightGBM, XGBoost, CatBoost).
-
-    ``MLB_PREDICT_LOW_MEMORY=1`` forces single-threaded fitting to cut peak RAM.
-    ``MLB_PREDICT_N_JOBS`` overrides the default cap (up to 4 workers).
-    """
-
-    raw_low = os.environ.get("MLB_PREDICT_LOW_MEMORY", "").strip().lower()
-    if raw_low in ("1", "true", "yes", "on"):
-        return 1
-    default_cap = min(os.cpu_count() or 1, 4)
-    return max(1, int(os.environ.get("MLB_PREDICT_N_JOBS", str(default_cap))))
-
-
-_N_JOBS: int = _resolve_n_jobs()
+_N_JOBS: int = max(1, int(os.environ.get("MLB_PREDICT_N_JOBS", min(os.cpu_count() or 1, 4))))
 
 
 # ---------------------------------------------------------------------------
@@ -776,25 +761,21 @@ def _load_all_feature_files(features_dir: Path) -> dict[int, pd.DataFrame]:
     scanning individual Parquet files.  Adds ``is_spring = 0.0`` to DataFrames
     that lack the column for backward compatibility.
     """
-    canonical_features = (
-        Path(__file__).resolve().parent.parent.parent.parent / "data" / "processed" / "features"
-    ).resolve()
-    if features_dir.resolve() == canonical_features:
-        try:
-            from mlb_predict.storage.duckdb_store import get_store
+    try:
+        from mlb_predict.storage.duckdb_store import get_store
 
-            store = get_store()
+        store = get_store()
+        row_count = store.feature_count()
+        if row_count == 0:
+            store.ingest_all_features(features_dir)
             row_count = store.feature_count()
-            if row_count == 0:
-                store.ingest_all_features(features_dir)
-                row_count = store.feature_count()
-            if row_count > 0:
-                result = store.query_training_data()
-                if result:
-                    logger.info("Loaded %d seasons from DuckDB store", len(result))
-                    return result
-        except Exception as exc:
-            logger.info("DuckDB load unavailable (%s), falling back to Parquet", exc)
+        if row_count > 0:
+            result = store.query_training_data()
+            if result:
+                logger.info("Loaded %d seasons from DuckDB store", len(result))
+                return result
+    except Exception as exc:
+        logger.info("DuckDB load unavailable (%s), falling back to Parquet", exc)
 
     season_dfs: dict[int, list[pd.DataFrame]] = {}
 

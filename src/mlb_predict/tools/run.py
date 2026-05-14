@@ -21,7 +21,6 @@ from mlb_predict.app.data_cache import (
     get_model,
     is_ready,
 )
-from mlb_predict.season import infer_target_mlb_season, resolve_api_season
 from mlb_predict.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
@@ -37,42 +36,6 @@ from mlb_predict.tools.knowledge import (
 logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-
-def _optional_positive_int(value: object) -> int | None:
-    """Parse a tool parameter as a positive int, or None if absent or invalid."""
-    if value is None or isinstance(value, bool):
-        return None
-    n: int
-    if isinstance(value, int):
-        n = value
-    elif isinstance(value, str):
-        try:
-            n = int(value.strip())
-        except ValueError:
-            return None
-    elif isinstance(value, float):
-        if not value.is_integer():
-            return None
-        n = int(value)
-    else:
-        return None
-    return n if n > 0 else None
-
-
-def _optional_float_param(value: object) -> float | None:
-    """Parse a tool parameter as float, or None if absent or invalid."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError:
-            return None
-    return None
-
 
 # Flat JSON schemas for each tool (required fields only where needed)
 TOOL_SCHEMAS: list[dict] = [
@@ -215,21 +178,8 @@ TOOL_SCHEMAS: list[dict] = [
         "type": "function",
         "function": {
             "name": "find_ev_bets",
-            "description": "Find positive-EV moneyline bets vs model (optional season + min edge)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "season": {
-                        "type": "integer",
-                        "description": "MLB season year; omit to use betting config or inferred current season",
-                    },
-                    "min_edge": {
-                        "type": "number",
-                        "description": "Minimum model edge over implied prob; omit to use config default",
-                    },
-                },
-                "required": [],
-            },
+            "description": "Find today's positive expected value bets vs model",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -347,9 +297,8 @@ def _tool_get_team_stats(season: int | None) -> str:
     """Return per-team feature averages (Elo, win%, Pythagorean, SP ERA, wOBA, FIP) for a season."""
     if not is_ready():
         return json.dumps({"error": "Data not loaded yet."})
+    season = season or 2026
     df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    season = resolve_api_season(season, available_seasons=avail)
     sdf = df[df["season"] == int(season)]
     if sdf.empty:
         return json.dumps({"season": season, "teams": [], "message": "No data for this season."})
@@ -385,9 +334,8 @@ def _tool_get_team_stats(season: int | None) -> str:
 def _tool_get_standings(season: int | None) -> str:
     if not is_ready():
         return json.dumps({"error": "Data not loaded yet."})
+    season = season or 2026
     df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    season = resolve_api_season(season, available_seasons=avail)
     pred_df = compute_predicted_standings(df, season=season)
     if pred_df.empty:
         return json.dumps({"season": season, "divisions": [], "message": "No predicted standings."})
@@ -497,20 +445,10 @@ def _tool_get_season_summary() -> str:
         seasons = []
     active = get_active_model_type() if is_ready() else None
     available = list(available_model_types()) if is_ready() else []
-    inferred = infer_target_mlb_season()
-    default_season = resolve_api_season(None, available_seasons=seasons)
-    return json.dumps(
-        {
-            "seasons": seasons,
-            "inferred_season": inferred,
-            "default_season": default_season,
-            "active_model": active,
-            "available_models": available,
-        }
-    )
+    return json.dumps({"seasons": seasons, "active_model": active, "available_models": available})
 
 
-def _tool_find_ev_bets(season: int | None, min_edge: float | None) -> str:
+def _tool_find_ev_bets() -> str:
     """Find positive-EV moneyline bets by comparing model probabilities with live odds."""
     if not is_ready():
         return json.dumps({"error": "Data not loaded yet."})
@@ -532,39 +470,16 @@ def _tool_find_ev_bets(season: int | None, min_edge: float | None) -> str:
         )
     client.events_to_retro(events)
     cfg = get_betting_config()
-    df = get_features()
-    avail = df["season"].dropna().astype(int).unique().tolist() if "season" in df.columns else []
-    ev_season = resolve_api_season(
-        season if season is not None else cfg.ev_target_season,
-        available_seasons=avail,
-    )
-    edge_floor = float(cfg.min_edge) if min_edge is None else float(min_edge)
     opps = compute_ev_opportunities(
         events,
-        df,
-        min_edge=edge_floor,
+        get_features(),
+        min_edge=0.0,
         kelly_fraction=cfg.kelly_pct / 100.0,
         budget=cfg.budget,
-        season=ev_season,
-        flat_bet_amount=cfg.bet_amount,
     )
     if not opps:
-        return json.dumps(
-            {
-                "message": "No positive-EV opportunities found.",
-                "opportunities": [],
-                "season_used": ev_season,
-                "min_edge": edge_floor,
-            }
-        )
-    return json.dumps(
-        {
-            "opportunities": opps[:20],
-            "count": len(opps),
-            "season_used": ev_season,
-            "min_edge": edge_floor,
-        }
-    )
+        return json.dumps({"message": "No positive-EV opportunities found.", "opportunities": []})
+    return json.dumps({"opportunities": opps[:20], "count": len(opps)})
 
 
 def _tool_get_live_odds() -> str:
@@ -635,10 +550,7 @@ def run_tool(name: str, params: dict) -> str:
     if name == "get_season_summary":
         return _tool_get_season_summary()
     if name == "find_ev_bets":
-        return _tool_find_ev_bets(
-            _optional_positive_int(p.get("season")),
-            _optional_float_param(p.get("min_edge")),
-        )
+        return _tool_find_ev_bets()
     if name == "get_live_odds":
         return _tool_get_live_odds()
     return json.dumps({"error": f"Unknown tool: {name}"})
