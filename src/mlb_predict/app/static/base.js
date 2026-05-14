@@ -306,19 +306,31 @@ function closeMobileNav() {
   document.body.classList.remove("nav-open");
   var b = document.getElementById("nav-backdrop");
   if (b) b.classList.remove("visible");
+  syncNavDrawerAttributes();
+}
+
+function syncNavDrawerAttributes() {
+  document.querySelectorAll(".site-nav").forEach(function (nav) {
+    if (nav.classList.contains("open")) nav.removeAttribute("inert");
+    else nav.setAttribute("inert", "");
+  });
+  var ham = document.querySelector(".hamburger");
+  if (ham) {
+    ham.setAttribute("aria-expanded", document.querySelector(".site-nav.open") ? "true" : "false");
+  }
 }
 
 function toggleMobileNav() {
   var nav = document.querySelector(".site-nav");
   if (!nav) return;
-  var open = !nav.classList.contains("open");
-  if (open) {
-    nav.classList.add("open");
-    document.body.classList.add("nav-open");
-    ensureNavBackdrop().classList.add("visible");
-  } else {
+  if (nav.classList.contains("open")) {
     closeMobileNav();
+    return;
   }
+  nav.classList.add("open");
+  document.body.classList.add("nav-open");
+  ensureNavBackdrop().classList.add("visible");
+  syncNavDrawerAttributes();
 }
 
 document.addEventListener("click", function (e) {
@@ -915,6 +927,11 @@ async function exportAs(format) {
 
 /* ── Auto-init on DOMContentLoaded ─────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", function () {
+  syncNavDrawerAttributes();
+  document.querySelectorAll(".hamburger").forEach(function (btn) {
+    if (!btn.getAttribute("aria-expanded")) btn.setAttribute("aria-expanded", "false");
+    if (!btn.getAttribute("type")) btn.setAttribute("type", "button");
+  });
   initAllSortables();
   initModelSelector();
   initFooterTimezone();

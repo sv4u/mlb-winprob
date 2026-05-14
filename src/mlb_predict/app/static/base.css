@@ -176,6 +176,10 @@ img { max-width: 100%; display: block; }
 .site-nav.open {
   transform: translateX(0);
   box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+}
+.site-nav:not(.open) {
+  pointer-events: none;
 }
 .site-nav a {
   font-size: 0.85rem;
@@ -290,7 +294,7 @@ img { max-width: 100%; display: block; }
   outline: none;
   border-color: var(--accent);
 }
-/* Hamburger — opens sidebar on all viewports */
+/* Hamburger — opens sidebar (keep left of theme; only theme uses margin-left:auto) */
 .hamburger {
   display: flex;
   align-items: center;
@@ -301,7 +305,6 @@ img { max-width: 100%; display: block; }
   font-size: 1.3rem;
   cursor: pointer;
   padding: 0.35rem;
-  margin-left: auto;
   line-height: 1;
   border-radius: var(--radius-sm);
   transition: background var(--transition);
@@ -1324,7 +1327,7 @@ h2.section-heading {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  z-index: 50;
+  z-index: 280;
   min-width: 170px;
   overflow: hidden;
 }
