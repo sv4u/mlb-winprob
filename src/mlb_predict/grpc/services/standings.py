@@ -140,12 +140,14 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
             )
             if "actual_leader" in entry:
                 act = entry["actual_leader"]
-                section.actual_leader = common_pb2.ActualLeader(
-                    team_name=act.get("team_name", ""),
-                    retro_code=act.get("retro_code", ""),
-                    actual_wins=act.get("actual_wins", 0),
-                    actual_losses=act.get("actual_losses", 0),
-                    actual_win_pct=act.get("actual_win_pct", 0),
+                section.actual_leader.CopyFrom(
+                    common_pb2.ActualLeader(
+                        team_name=act.get("team_name", ""),
+                        retro_code=act.get("retro_code", ""),
+                        actual_wins=act.get("actual_wins", 0),
+                        actual_losses=act.get("actual_losses", 0),
+                        actual_win_pct=act.get("actual_win_pct", 0),
+                    )
                 )
             if league == "AL":
                 ll.AL.CopyFrom(section)
