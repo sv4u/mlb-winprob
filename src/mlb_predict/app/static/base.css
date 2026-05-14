@@ -121,6 +121,11 @@ img { max-width: 100%; display: block; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+/* Drawer lives inside the header; .nav-backdrop is body-level z-index 250. Without this,
+   the backdrop paints above the header subtree and steals clicks from the open sidebar. */
+body.nav-open .site-header {
+  z-index: 300;
+}
 .site-header .logo {
   font-size: 1.1rem;
   font-weight: 800;
