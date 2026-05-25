@@ -63,7 +63,7 @@ mlb-predict provides:
 - **SHAP attribution** — per-game explanation of which features drove the prediction.
 - **Live odds integration** — moneyline odds from The Odds API, converted to implied probabilities and expected-value (EV) opportunities.
 - **Drift monitoring** — snapshot-to-snapshot probability drift across daily runs.
-- **Web dashboard** — a full interactive web UI covering games, standings, leaders, players, odds.
+- **Web dashboard** — a full interactive web UI covering games, standings, leaders, players, odds, and sabermetric team/player statistics (traditional + advanced).
 - **REST API, gRPC API, and MCP server** — machine-readable access to all system outputs.
 
 ## 1.2 Scope
@@ -78,6 +78,7 @@ mlb-predict provides:
 | Live lineup ingestion (MLB Stats API) | In-game lineup substitution modeling |
 | Six trained ML models + neural player model | |
 | Positive-EV bet identification | |
+| Sabermetrics dashboard (traditional + advanced team/player stats) | Play-by-play derived metrics (launch angle, sprint speed) as first-class UI |
 
 ## 1.3 Conventions
 
@@ -88,6 +89,20 @@ mlb-predict provides:
 - **Immutable snapshots**: prediction Parquet files are never overwritten.
 - **Determinism**: identical inputs always produce identical outputs (seeded RNG, canonical sort order).
 - **Provenance**: every derived artifact is traceable to its source data via SHA256 hashes.
+
+## 1.4 Current season default (UI + API)
+
+All pages and API endpoints that accept an optional `season` query parameter use a **single MLB-aware default** when the parameter is omitted:
+
+| Calendar month | Default season year |
+|---|---|
+| January | Previous calendar year (offseason before spring training) |
+| February–October | Current calendar year (spring training + regular season) |
+| November–December | Current calendar year (recently completed season still labeled by start year) |
+
+Implementation: `src/mlb_predict/season.py` (`current_mlb_season`, `resolve_season`). Exposed to clients via `GET /api/current-season`. JavaScript mirror: `currentMlbSeason()` and `fetchCurrentSeason()` in `app/static/base.js`.
+
+**Cold start / hot start:** On application startup (including model hot-swap reload), the UI must select this default season—not the latest ingested feature season and not a hard-coded year. If the default season has no rows in the feature matrix yet (e.g. 2026 before ingest), the UI still selects it and shows an empty state with a link to **Admin → Update season**.
 
 ------------------------------------------------------------------------
 
@@ -1439,7 +1454,53 @@ Location: `src/mlb_predict/app/admin.py`
 | `/sitemap.xml` | XML sitemap |
 | *(initializing)* | Bootstrap dashboard (shown when `is_ready()` is false) |
 
-## 13.5 Hot-Swapping Models
+## 13.5 Sabermetrics dashboard (traditional + advanced)
+
+The platform evolves from a **win-probability / odds model** into a combined **prediction + sabermetrics research dashboard**. Model features already ingest FanGraphs advanced team metrics and Statcast player signals; the dashboard exposes those statistics for human exploration independent of game-level predictions.
+
+### 13.5.1 Product surfaces
+
+| Surface | Path / API | Stat tier | Data source |
+|---|---|---|---|
+| Team standings (predicted vs actual) | `/standings` · `GET /api/standings` | Win–loss, run differential | Model + MLB Stats API |
+| **Traditional team stats** | `/standings` (Batting / Pitching tabs) · `GET /api/team-stats` | AVG, OBP, SLG, OPS, R, HR, RBI, SB; ERA, WHIP, IP, SO | MLB Stats API (live) |
+| **Advanced team stats** *(planned UI)* | `/stats/teams` · `GET /api/team-advanced-stats` *(planned)* | wOBA, xwOBA, ISO, BABIP, barrel%, hard%; FIP, xFIP, K%, BB%, HR/FB | FanGraphs Parquet (`data/processed/fangraphs/`) |
+| League leaders | `/leaders` · `GET /api/leaders` | Category tops (HR, ERA, …) | MLB Stats API |
+| Full player tables | `/players` · `GET /api/player-stats` | Season counting + rate stats | MLB Stats API |
+| **Advanced player stats** *(planned UI)* | `/stats/players` · `GET /api/player-advanced-stats` *(planned)* | xwOBA, barrel%, chase%, whiff%; SP/RP FIP, Stuff+ proxies | FanGraphs + Statcast Parquet (`data/processed/player/`) |
+| Game-level feature attribution | `/game/{game_pk}` · SHAP panel | All 136 model inputs incl. FanGraphs diffs | Scored feature matrix |
+
+### 13.5.2 Traditional vs advanced definitions
+
+**Traditional (counting + classic rate stats)** — what appears on a baseball card or MLB.com team page:
+
+- **Batting:** G, PA, AB, R, H, 2B, 3B, HR, RBI, BB, SO, SB, AVG, OBP, SLG, OPS
+- **Pitching:** W, L, SV, IP, H, R, ER, BB, SO, HR, ERA, WHIP
+
+**Advanced (sabermetric)** — already used inside the 136-feature model (§8.1.8–8.1.9):
+
+- **Batting:** wOBA, xwOBA, ISO, BABIP, barrel%, hard-hit%, wRC+ *(team)*
+- **Pitching:** FIP, xFIP, K%, BB%, HR/FB, SIERA *(where available)*
+- **Player / lineup:** lineup-weighted xwOBA, barrel%, SP estimated xwOBA allowed
+
+### 13.5.3 UI requirements (implementation backlog)
+
+1. **Season sync:** Every stats view defaults to `current_mlb_season()` (§1.4) on cold and hot start.
+2. **Tab layout on `/standings`:** Keep existing Standings / Team Batting / Team Pitching tabs for traditional stats; add **Advanced** tab with FanGraphs columns sortable via `makeSortable`.
+3. **Dedicated `/stats` hub** *(optional)* linking team advanced, player advanced, and league percentile charts.
+4. **Percentile badges:** For each advanced metric, show league percentile (0–100) using season-wide distribution from ingested Parquet.
+5. **Offline resilience:** When `MLB_PREDICT_LIVE_API=0`, traditional team stats may be unavailable; advanced stats from local Parquet should still render for ingested seasons.
+6. **Export:** Advanced tables participate in the global PDF/image export (`base.js`).
+
+### 13.5.4 Planned API additions
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/current-season` | MLB-aware default season for clients |
+| `GET` | `/api/team-advanced-stats` | FanGraphs team batting + pitching advanced columns by season |
+| `GET` | `/api/player-advanced-stats` | Paginated player advanced stats (Statcast + FanGraphs join) |
+
+## 13.6 Hot-Swapping Models
 
 The active model can be changed at runtime without restarting:
 
@@ -1461,6 +1522,7 @@ Base URL: `http://host:30087`
 | `GET` | `/api/health` | Health/readiness probe |
 | `GET` | `/api/version` | App version + git commit |
 | `GET` | `/api/seasons` | Available seasons |
+| `GET` | `/api/current-season` | MLB-aware default season (§1.4) |
 | `GET` | `/api/teams` | All teams (Retrosheet codes) |
 
 ### Games
@@ -1485,9 +1547,11 @@ Base URL: `http://host:30087`
 | Method | Path | Query Params | Description |
 |---|---|---|---|
 | `GET` | `/api/standings` | `season`, `include_spring` | Predicted vs actual standings |
-| `GET` | `/api/team-stats` | `season` | Team batting/pitching stats |
+| `GET` | `/api/team-stats` | `season` | Team batting/pitching stats (traditional) |
+| `GET` | `/api/team-advanced-stats` *(planned)* | `season` | FanGraphs advanced team metrics |
 | `GET` | `/api/leaders` | `season`, `league_id`, `limit`, `stat_group` | League leaders |
-| `GET` | `/api/player-stats` | `season`, `group`, `league_id`, `limit`, `offset` | Full player stats |
+| `GET` | `/api/player-stats` | `season`, `group`, `league_id`, `limit`, `offset` | Full player stats (traditional) |
+| `GET` | `/api/player-advanced-stats` *(planned)* | `season`, `group`, `limit`, `offset` | Player advanced / Statcast stats |
 
 ### Odds and Betting
 
@@ -1837,6 +1901,9 @@ Agents must preserve system integrity across time.
 | v4: Batter + pitcher embedding regularization | done (v4) |
 | v4: Per-team putout-based IP estimation | done (v4) |
 | Global betting configuration | done |
+| MLB-aware current season default (UI + API) | done |
+| Sabermetrics dashboard — traditional team stats UI | done (standings batting/pitching tabs) |
+| Sabermetrics dashboard — advanced team/player stats UI | planned |
 | Lineup Monte Carlo simulation | planned |
 | Hierarchical team Bayesian priors | planned |
 | Market comparison module | planned |

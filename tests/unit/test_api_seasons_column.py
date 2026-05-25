@@ -2,9 +2,28 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 import pytest
 from starlette.testclient import TestClient
+
+
+def test_api_current_season_uses_mlb_aware_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET /api/current-season returns the MLB-aware default season."""
+    from mlb_predict.app import main as app_main
+    from mlb_predict.season import current_mlb_season
+
+    monkeypatch.setattr(
+        "mlb_predict.app.main.current_mlb_season",
+        lambda: current_mlb_season(as_of=date(2026, 5, 25)),
+    )
+    client = TestClient(app_main.app)
+    response = client.get("/api/current-season")
+    assert response.status_code == 200
+    assert response.json()["season"] == 2026
 
 
 def test_api_seasons_missing_season_column_returns_503(monkeypatch: pytest.MonkeyPatch) -> None:

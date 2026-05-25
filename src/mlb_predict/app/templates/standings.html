@@ -147,7 +147,7 @@
 <div class="container-wide">
   <div class="hero">
     <div class="hero-badge">Predicted vs Actual</div>
-    <h2>2026 Season Standings</h2>
+    <h2>{{ current_season }} Season Standings</h2>
     <p>
       <strong>Regular season</strong> standings from per-game win probabilities, compared against live MLB results.
       Pre-season (spring training) is shown in a separate subsection below when enabled.
@@ -304,6 +304,7 @@
 
 <script src="/static/base.js"></script>
 <script>
+const CURRENT_SEASON = {{ current_season }};
   const $ = id => document.getElementById(id);
 let statsLoaded = false;
 
@@ -530,7 +531,7 @@ let statsLoaded = false;
 
     async function loadStandings() {
       try {
-        var data = await timedFetch('/api/standings?season=2026&include_spring=true', 'timing-standings');
+        var data = await timedFetch('/api/standings?season=' + CURRENT_SEASON + '&include_spring=true', 'timing-standings');
         standingsFull = {
           divisions: data.divisions || [],
           league_leaders: data.league_leaders || {},
@@ -579,7 +580,7 @@ let statsLoaded = false;
 
 async function loadTeamStats() {
   try {
-    var data = await timedFetch('/api/team-stats?season=2026', 'timing-team-stats');
+    var data = await timedFetch('/api/team-stats?season=' + CURRENT_SEASON, 'timing-team-stats');
     teamStatsFull = data.teams || [];
     applyBattingFilters();
     applyPitchingFilters();

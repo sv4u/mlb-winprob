@@ -223,17 +223,6 @@
 
   <script src="/static/base.js"></script>
   <script>
-    (function () {
-      var seasonSelect = document.getElementById('leaders-season');
-      var y = new Date().getFullYear();
-      for (var i = y; i >= 2000; i--) {
-        var opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = i;
-        if (i === y) opt.selected = true;
-        seasonSelect.appendChild(opt);
-      }
-    })();
 
       async function loadLeaders() {
       var errEl = document.getElementById('leaders-error');
@@ -285,7 +274,17 @@
       }
     }
 
-    loadLeaders();
+    fetchCurrentSeason().then(function (current) {
+      var seasonSelect = document.getElementById('leaders-season');
+      for (var i = current; i >= 2000; i--) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = i;
+        if (i === current) opt.selected = true;
+        seasonSelect.appendChild(opt);
+      }
+      loadLeaders();
+    });
   </script>
 </body>
 

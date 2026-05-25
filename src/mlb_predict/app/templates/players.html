@@ -222,17 +222,17 @@
 
   <script src="/static/base.js"></script>
   <script>
-    (function () {
+    fetchCurrentSeason().then(function (current) {
       var seasonSelect = document.getElementById('players-season');
-      var y = new Date().getFullYear();
-      for (var i = y; i >= 2000; i--) {
+      for (var i = current; i >= 2000; i--) {
         var opt = document.createElement('option');
         opt.value = i;
         opt.textContent = i;
-        if (i === y) opt.selected = true;
+        if (i === current) opt.selected = true;
         seasonSelect.appendChild(opt);
       }
-    })();
+      loadPlayers(0);
+    });
 
         var playersCurrentPage = 0;
         var playersPageSize = 50;
@@ -375,7 +375,6 @@
           });
         }
 
-        loadPlayers(0);
   </script>
 </body>
 

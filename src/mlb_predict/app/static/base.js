@@ -219,6 +219,51 @@ if (document.readyState === 'loading') {
   injectThemeToggle();
 }
 
+/* ── MLB season default (mirrors server current_mlb_season) ─────────── */
+
+function currentMlbSeason(d) {
+  d = d || new Date();
+  if (d.getMonth() === 0) return d.getFullYear() - 1;
+  return d.getFullYear();
+}
+
+/** Fetch authoritative current season from API; falls back to client-side rule. */
+function fetchCurrentSeason() {
+  return fetch('/api/current-season')
+    .then(function (r) {
+      if (!r.ok) throw new Error('current-season unavailable');
+      return r.json();
+    })
+    .then(function (data) {
+      return data.season != null ? parseInt(data.season, 10) : currentMlbSeason();
+    })
+    .catch(function () {
+      return currentMlbSeason();
+    });
+}
+
+/** Ensure a season select includes and selects the MLB-aware current season. */
+function initSeasonSelect(selectEl, availableSeasons, preferredSeason) {
+  if (!selectEl) return preferredSeason;
+  var current = preferredSeason != null ? preferredSeason : currentMlbSeason();
+  var seasons = Array.isArray(availableSeasons) ? availableSeasons.slice() : [];
+  selectEl.innerHTML = '';
+  if (seasons.indexOf(current) === -1) {
+    var missing = document.createElement('option');
+    missing.value = current;
+    missing.textContent = current + ' (no model data yet)';
+    selectEl.appendChild(missing);
+  }
+  seasons.sort(function (a, b) { return b - a; }).forEach(function (s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    selectEl.appendChild(opt);
+  });
+  selectEl.value = String(current);
+  return current;
+}
+
 /* ── Timezone Detection & Formatting ──────────────────────────────── */
 
 const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;

@@ -1,36 +1,36 @@
-"""Tests for mlb_predict.season — calendar-based default season resolution."""
+"""Unit tests for MLB-aware season resolution."""
 
 from __future__ import annotations
 
 from datetime import date
 
-from mlb_predict.season import infer_target_mlb_season, resolve_api_season
+import pytest
+
+from mlb_predict.season import current_mlb_season, resolve_season
 
 
-def test_infer_target_mlb_season_regular_months() -> None:
-    """Jan–Oct map to the same calendar year."""
-    assert infer_target_mlb_season(date(2026, 3, 15)) == 2026
-    assert infer_target_mlb_season(date(2025, 8, 1)) == 2025
+@pytest.mark.parametrize(
+    ("as_of", "expected"),
+    [
+        (date(2026, 5, 25), 2026),
+        (date(2026, 2, 1), 2026),
+        (date(2026, 1, 15), 2025),
+        (date(2025, 11, 10), 2025),
+        (date(2025, 12, 31), 2025),
+        (date(2026, 10, 31), 2026),
+    ],
+)
+def test_current_mlb_season(as_of: date, expected: int) -> None:
+    """current_mlb_season follows Feb–Oct/Nov–Dec calendar year and Jan previous year."""
+    assert current_mlb_season(as_of=as_of) == expected
 
 
-def test_infer_target_mlb_season_off_season() -> None:
-    """Nov–Dec point at the upcoming season year."""
-    assert infer_target_mlb_season(date(2025, 11, 1)) == 2026
-    assert infer_target_mlb_season(date(2025, 12, 31)) == 2026
+def test_resolve_season_explicit() -> None:
+    """Explicit requested season is returned unchanged."""
+    assert resolve_season(2019, available=[2000, 2019, 2025]) == 2019
 
 
-def test_resolve_api_season_explicit() -> None:
-    """Explicit positive season bypasses inference."""
-    assert resolve_api_season(2024, available_seasons=[2023, 2024, 2025]) == 2024
-
-
-def test_resolve_api_season_falls_back_to_loaded_data() -> None:
-    """When inferred year is missing, pick the best season at or below it."""
-    assert (
-        resolve_api_season(None, available_seasons=[2024, 2025], reference=date(2026, 3, 1)) == 2025
-    )
-
-
-def test_resolve_api_season_empty_available() -> None:
-    """No data → pure inference."""
-    assert resolve_api_season(None, available_seasons=[], reference=date(2026, 1, 10)) == 2026
+def test_resolve_season_default_current() -> None:
+    """Missing request uses MLB-aware current season even when not in available list."""
+    as_of = date(2026, 5, 25)
+    assert resolve_season(None, available=[2000, 2025], as_of=as_of) == 2026

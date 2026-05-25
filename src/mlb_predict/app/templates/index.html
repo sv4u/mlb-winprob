@@ -474,6 +474,12 @@ async function init() {
   }
 
   const sel = $('f-season');
+  let currentSeason = currentMlbSeason();
+  try {
+    const cs = await api('/api/current-season');
+    if (cs.season != null) currentSeason = parseInt(cs.season, 10);
+  } catch (_) {}
+
   [...seasons].reverse().forEach(s => {
     const o = document.createElement('option');
     o.value = s; o.textContent = s;
@@ -483,6 +489,14 @@ async function init() {
   const urlSeason = new URLSearchParams(window.location.search).get('season');
   if (urlSeason && seasons.includes(parseInt(urlSeason, 10))) {
     sel.value = urlSeason;
+  } else if (seasons.includes(currentSeason)) {
+    sel.value = String(currentSeason);
+  } else {
+    const o = document.createElement('option');
+    o.value = currentSeason;
+    o.textContent = currentSeason + ' (no model data yet)';
+    sel.insertBefore(o, sel.firstChild);
+    sel.value = String(currentSeason);
   }
 
   ['f-home','f-away'].forEach(id => {

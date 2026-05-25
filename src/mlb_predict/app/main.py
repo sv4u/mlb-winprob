@@ -18,7 +18,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import inspect
-from datetime import date
 
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel
@@ -53,6 +52,7 @@ from mlb_predict.app.game_detail_cache import get_game_detail_cached, set_game_d
 from mlb_predict.app.response_cache import cache_get_response
 from mlb_predict.app.timing import TimingMiddleware, timed_operation
 from mlb_predict.mcp import create_mcp_app
+from mlb_predict.season import current_mlb_season, resolve_season
 from mlb_predict.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
@@ -490,6 +490,15 @@ def _not_ready_json() -> JSONResponse:
         {"error": "System initializing — data not loaded yet.", "status": "initializing"},
         status_code=503,
     )
+
+
+@app.get("/api/current-season", response_model=None)
+async def api_current_season() -> dict:
+    """Return the MLB-aware default season for UI and API clients."""
+    return {
+        "season": current_mlb_season(),
+        "rule": "Feb–Oct and Nov–Dec use calendar year; January uses previous year.",
+    }
 
 
 @app.get("/api/seasons", response_model=None)
@@ -1026,7 +1035,7 @@ def _build_standings_payload(
 @cache_get_response(ttl_seconds=60)
 async def api_standings(
     request: Request,
-    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
     include_spring: Annotated[
         bool, Query(description="Include spring training standings subsection")
     ] = False,
@@ -1036,6 +1045,7 @@ async def api_standings(
     Main standings are regular-season only. Actual standings are from the MLB Stats API.
     When include_spring=true, also returns spring training predicted standings (no actuals).
     """
+    season = resolve_season(season)
     stubs = _stubs(request)
     if stubs:
         try:
@@ -1110,20 +1120,22 @@ async def api_standings(
 @app.get("/api/team-stats", response_model=None)
 async def api_team_stats(
     request: Request,
-    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
 ) -> dict | JSONResponse:
     """Return batting and pitching stats for all teams in a season."""
+    resolved_season = resolve_season(season)
     stubs = _stubs(request)
     if stubs:
         try:
             from mlb_predict.grpc.generated.mlb_predict.v1 import standings_pb2
 
             r = await stubs["standings"].GetTeamStats(
-                standings_pb2.GetTeamStatsRequest(season=season)
+                standings_pb2.GetTeamStatsRequest(season=resolved_season)
             )
             return _grpc_dict(r)
         except grpc.RpcError as e:
             return _grpc_error_to_response(e)
+    season = resolved_season
     if not _live_api_enabled():
         return {
             "season": season,
@@ -1197,12 +1209,13 @@ async def api_team_stats(
 
 @app.get("/api/leaders", response_model=None)
 async def api_leaders(
-    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
     league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     stat_group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
 ) -> dict:
     """Return league leaders (top N per category) for a season from the MLB Stats API."""
+    season = resolve_season(season)
     if not _live_api_enabled():
         return {
             "season": season,
@@ -1243,13 +1256,14 @@ async def api_leaders(
 
 @app.get("/api/player-stats", response_model=None)
 async def api_player_stats(
-    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
     group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
     league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
     """Return full player stats table (batting or pitching) for a season from the MLB Stats API."""
+    season = resolve_season(season)
     if not _live_api_enabled():
         return {
             "season": season,
@@ -1303,6 +1317,7 @@ def _ctx(request: Request, **extra: object) -> dict:
         "request": request,
         "git_commit": get_git_commit(),
         "active_model": get_active_model_type(),
+        "current_season": current_mlb_season(),
         **extra,
     }
 
@@ -1351,8 +1366,11 @@ async def page_games(request: Request):
     """Browse scheduled games and model probabilities (defaults to today's date on the client)."""
     if not is_ready():
         return _init_page(request)
-    y = min(max(date.today().year, 2000), 2030)
-    return templates.TemplateResponse(request, "games.html", _ctx(request, default_season=y))
+    return templates.TemplateResponse(
+        request,
+        "games.html",
+        _ctx(request, default_season=current_mlb_season()),
+    )
 
 
 @app.get("/today-odds", response_class=HTMLResponse)

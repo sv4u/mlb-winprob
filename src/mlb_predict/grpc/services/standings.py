@@ -12,6 +12,7 @@ import pandas as pd
 from mlb_predict.app.data_cache import TEAM_NAMES, get_features, is_ready
 from mlb_predict.app.timing import timed_operation
 from mlb_predict.grpc.generated.mlb_predict.v1 import common_pb2, standings_pb2, standings_pb2_grpc
+from mlb_predict.season import current_mlb_season
 from mlb_predict.standings import (
     DIVISION_DISPLAY_ORDER,
     DIVISIONS,
@@ -64,7 +65,7 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("System initializing — data not loaded yet.")
             raise Exception("Not ready")
-        season = request.season or 2026
+        season = request.season or current_mlb_season()
         logger.debug("GetStandings season=%d", season)
 
         with timed_operation("predicted_standings"):
@@ -166,7 +167,7 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> standings_pb2.TeamStatsResponse:
         """Return batting and pitching stats for all teams in a season."""
-        season = request.season or 2026
+        season = request.season or current_mlb_season()
         if os.environ.get("MLB_PREDICT_LIVE_API", "1").strip() == "0":
             return standings_pb2.TeamStatsResponse(
                 season=season,
