@@ -970,6 +970,61 @@ async function exportAs(format) {
   }
 }
 
+/* ── Unified site navigation (human-centric grouping) ─────────────── */
+
+function _navActiveClass(href, path) {
+  if (!href || href === "/") return path === "/" ? " active" : "";
+  if (href.indexOf("/season/") === 0) {
+    return path.indexOf("/season/") === 0 ? " active" : "";
+  }
+  return path === href || path.indexOf(href + "/") === 0 ? " active" : "";
+}
+
+function _buildUnifiedNavLinks(season, path) {
+  var seasonHref = "/season/" + season;
+  return (
+    '<a href="/"' + _navActiveClass("/", path) + '>Home</a>' +
+    '<span class="nav-group-label">Stats</span>' +
+    '<a href="/standings"' + _navActiveClass("/standings", path) + '>Standings &amp; teams</a>' +
+    '<a href="/leaders"' + _navActiveClass("/leaders", path) + '>League leaders</a>' +
+    '<a href="/players"' + _navActiveClass("/players", path) + '>Player stats</a>' +
+    '<span class="nav-group-label">Games &amp; odds</span>' +
+    '<a href="' + seasonHref + '"' + _navActiveClass(seasonHref, path) + ">" + season + " season</a>" +
+    '<a href="/games"' + _navActiveClass("/games", path) + '>Browse games</a>' +
+    '<a href="/today-odds"' + _navActiveClass("/today-odds", path) + ">Today\u2019s odds</a>" +
+    '<a href="/odds"' + _navActiveClass("/odds", path) + '>Odds hub</a>' +
+    '<span class="nav-divider"></span>' +
+    '<a href="/wiki"' + _navActiveClass("/wiki", path) + '>Wiki</a>' +
+    '<a href="/dashboard"' + _navActiveClass("/dashboard", path) + '>Admin</a>' +
+    '<a href="/sitemap"' + _navActiveClass("/sitemap", path) + '>Sitemap</a>'
+  );
+}
+
+function injectUnifiedNav() {
+  var nav = document.querySelector(".site-nav");
+  if (!nav || nav.getAttribute("data-unified-nav") === "1") return;
+
+  var modelSel = nav.querySelector(".model-selector");
+  var path = window.location.pathname || "/";
+
+  function apply(season) {
+    nav.innerHTML = _buildUnifiedNavLinks(season, path);
+    if (modelSel) nav.appendChild(modelSel);
+    nav.setAttribute("data-unified-nav", "1");
+    injectExportButton();
+  }
+
+  var bodySeason = document.body && document.body.getAttribute("data-current-season");
+  if (bodySeason) {
+    apply(parseInt(bodySeason, 10) || currentMlbSeason());
+    return;
+  }
+
+  fetchCurrentSeason().then(apply).catch(function () {
+    apply(currentMlbSeason());
+  });
+}
+
 /* ── Auto-init on DOMContentLoaded ─────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", function () {
   syncNavDrawerAttributes();
@@ -980,7 +1035,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAllSortables();
   initModelSelector();
   initFooterTimezone();
-  injectExportButton();
+  injectUnifiedNav();
   document.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest(".site-nav a")) closeMobileNav();
   });

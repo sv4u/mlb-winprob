@@ -123,10 +123,48 @@
         min-width: 500px;
       }
     }
+
+    .pctile-badge {
+      display: inline-block;
+      margin-left: 0.35rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      vertical-align: middle;
+      opacity: 0.9;
+    }
+
+    .pctile-high {
+      background: rgba(80, 200, 120, 0.2);
+      color: #50c878;
+    }
+
+    .pctile-mid {
+      background: rgba(200, 180, 80, 0.15);
+      color: #c8b450;
+    }
+
+    .pctile-low {
+      background: rgba(200, 100, 100, 0.15);
+      color: #c86464;
+    }
+
+    #players-advanced-filters {
+      display: none;
+    }
+
+    #players-traditional-filters .filter-group-league {
+      display: flex;
+    }
+
+    #players-advanced-filters .filter-group-league {
+      display: none;
+    }
   </style>
 </head>
 
-<body>
+<body data-current-season="{{ current_season }}">
   <header class="site-header">
     <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
     <code class="git-hash">{{ git_commit }}</code>
@@ -161,22 +199,27 @@
 
   <div class="container-wide">
     <div class="hero">
-      <div class="hero-badge">MLB Stats API</div>
+      <div class="hero-badge">Sabermetrics</div>
       <h2>Player Statistics</h2>
       <p>
-        Full batting and pitching stat tables by season. Sort by column header.
-        Data is loaded live from the MLB Stats API. Use filters and pagination to browse all players.
+        <strong>Traditional</strong> stats come from the MLB Stats API (counting and rate stats).
+        <strong>Advanced</strong> stats combine FanGraphs and Statcast from your local ingest cache, with league percentiles.
       </p>
     </div>
 
-    <div class="filter-panel">
+    <div class="tab-bar">
+      <div class="tab-btn active" id="tab-btn-traditional" onclick="showPlayersTab('traditional', this)">Traditional (MLB)</div>
+      <div class="tab-btn" id="tab-btn-advanced" onclick="showPlayersTab('advanced', this)">Advanced (FG + Statcast)</div>
+    </div>
+
+    <div class="filter-panel" id="players-traditional-filters">
       <div class="filter-group">
         <label for="players-season">Season</label>
-        <select id="players-season" onchange="loadPlayers(0)"></select>
+        <select id="players-season" onchange="onPlayersFilterChange()"></select>
       </div>
-      <div class="filter-group">
+      <div class="filter-group filter-group-league">
         <label for="players-league">League</label>
-        <select id="players-league" onchange="loadPlayers(0)">
+        <select id="players-league" onchange="onPlayersFilterChange()">
           <option value="">All (MLB)</option>
           <option value="103">American League</option>
           <option value="104">National League</option>
@@ -184,12 +227,31 @@
       </div>
       <div class="filter-group">
         <label for="players-group">Type</label>
-        <select id="players-group" onchange="loadPlayers(0)">
+        <select id="players-group" onchange="onPlayersFilterChange()">
           <option value="hitting">Batting</option>
           <option value="pitching">Pitching</option>
         </select>
       </div>
       <span class="timing-badge" id="timing-players" style="display:none"></span>
+    </div>
+
+    <div class="filter-panel" id="players-advanced-filters">
+      <div class="filter-group">
+        <label for="players-adv-season">Season</label>
+        <select id="players-adv-season" onchange="onPlayersFilterChange()"></select>
+      </div>
+      <div class="filter-group">
+        <label for="players-adv-group">Type</label>
+        <select id="players-adv-group" onchange="onPlayersFilterChange()">
+          <option value="hitting">Batting</option>
+          <option value="pitching">Pitching</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="players-search">Search</label>
+        <input type="text" id="players-search" placeholder="Player name…" oninput="onPlayersSearchInput()" />
+      </div>
+      <span class="timing-badge" id="timing-players-adv" style="display:none"></span>
     </div>
 
     <div id="players-error" class="error-msg" style="display:none"></div>
@@ -216,31 +278,74 @@
     <a href="/odds">Odds Hub</a>
       <a href="/wiki">Wiki</a>
     </div>
-    <div>MLB Prediction System · Player stats from MLB Stats API</div>
+    <div>MLB Prediction System · Traditional (MLB API) and advanced (FanGraphs + Statcast)</div>
     <div class="footer-tz">🕐 <span class="footer-tz-value"></span></div>
   </footer>
 
   <script src="/static/base.js"></script>
   <script>
-    fetchCurrentSeason().then(function (current) {
-      var seasonSelect = document.getElementById('players-season');
-      for (var i = current; i >= 2000; i--) {
-        var opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = i;
-        if (i === current) opt.selected = true;
-        seasonSelect.appendChild(opt);
-      }
-      loadPlayers(0);
-    });
-
-        var playersCurrentPage = 0;
-        var playersPageSize = 50;
-        var playersTotalEstimate = 0;
-        var playersHasMore = false;
+    var playersView = 'traditional';
+    var playersCurrentPage = 0;
+    var playersPageSize = 50;
+    var playersTotalEstimate = 0;
+    var playersHasMore = false;
     var playersSortCol = null;
     var playersSortDir = 1;
-        var playersData = [];
+    var playersData = [];
+    var playersSearchTimer = null;
+
+    function showPlayersTab(view, btn) {
+      playersView = view;
+      document.querySelectorAll('.tab-bar .tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      document.getElementById('players-traditional-filters').style.display = view === 'traditional' ? '' : 'none';
+      document.getElementById('players-advanced-filters').style.display = view === 'advanced' ? '' : 'none';
+      playersCurrentPage = 0;
+      playersTotalEstimate = 0;
+      onPlayersFilterChange();
+    }
+
+    function onPlayersFilterChange() {
+      if (playersView === 'advanced') loadAdvancedPlayers(0);
+      else loadPlayers(0);
+    }
+
+    function onPlayersSearchInput() {
+      if (playersView !== 'advanced') return;
+      clearTimeout(playersSearchTimer);
+      playersSearchTimer = setTimeout(function () { loadAdvancedPlayers(0); }, 300);
+    }
+
+    function pctileBadge(pct) {
+      if (pct == null || pct === undefined || isNaN(pct)) return '';
+      var cls = pct >= 70 ? 'pctile-high' : pct >= 40 ? 'pctile-mid' : 'pctile-low';
+      return '<span class="pctile-badge ' + cls + '" title="League percentile">' + pct + '</span>';
+    }
+
+    function statCell(value, pct, decimals) {
+      if (value == null || value === undefined || isNaN(value)) return '—';
+      var fmt = typeof decimals === 'number' ? Number(value).toFixed(decimals) : value;
+      return fmt + pctileBadge(pct);
+    }
+
+    function fillSeasonSelects(current) {
+      ['players-season', 'players-adv-season'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        if (!sel || sel.options.length) return;
+        for (var i = current; i >= 2000; i--) {
+          var opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = i;
+          if (i === current) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      });
+    }
+
+    fetchCurrentSeason().then(function (current) {
+      fillSeasonSelects(current);
+      loadPlayers(0);
+    });
 
     function labelForStat(key) {
       var labels = {
@@ -360,20 +465,104 @@
         setLoading('players-area', false);
     }
 
-        function renderPlayersPagination() {
-          renderFullPagination('players-pagination', {
-            total: playersTotalEstimate,
-            currentPage: playersCurrentPage,
-            pageSize: playersPageSize,
-            onPageChange: function (pg, sz) {
-              if (sz !== playersPageSize) {
-                playersPageSize = sz;
-                playersTotalEstimate = 0;
-              }
-              loadPlayers(pg);
-            }
-          });
+    function renderPlayersPagination() {
+      renderFullPagination('players-pagination', {
+        total: playersTotalEstimate,
+        currentPage: playersCurrentPage,
+        pageSize: playersPageSize,
+        onPageChange: function (pg, sz) {
+          if (sz !== playersPageSize) {
+            playersPageSize = sz;
+            playersTotalEstimate = 0;
+          }
+          if (playersView === 'advanced') loadAdvancedPlayers(pg);
+          else loadPlayers(pg);
         }
+      });
+    }
+
+    var ADV_BAT_COLS = [
+      ['woba', 'wOBA', 3], ['wrc_plus', 'wRC+', 0], ['ops', 'OPS', 3], ['iso', 'ISO', 3],
+      ['xwoba', 'xwOBA', 3], ['xba', 'xBA', 3], ['xslg', 'xSLG', 3],
+      ['barrel_pct', 'Barrel%', 1], ['hard_hit_pct', 'Hard%', 1], ['k_pct', 'K%', 1], ['bb_pct', 'BB%', 1]
+    ];
+    var ADV_PIT_COLS = [
+      ['fip', 'FIP', 2], ['xfip', 'xFIP', 2], ['era', 'ERA', 2], ['whip', 'WHIP', 2],
+      ['k_pct', 'K%', 1], ['bb_pct', 'BB%', 1], ['est_woba', 'xwOBA allowed', 3], ['whiff_rate', 'Whiff%', 1]
+    ];
+
+    function buildAdvancedPlayersTable(players, group) {
+      var cols = group === 'pitching' ? ADV_PIT_COLS : ADV_BAT_COLS;
+      if (!players || !players.length) {
+        document.getElementById('players-tbody').innerHTML =
+          '<tr><td colspan="12" class="muted">No advanced data. Run ingest for this season.</td></tr>';
+        document.getElementById('players-thead').innerHTML = '';
+        return;
+      }
+      var thead = document.getElementById('players-thead');
+      var headerRow = '<tr><th>Name</th><th>Team</th>';
+      cols.forEach(function (c) { headerRow += '<th class="num">' + c[1] + '</th>'; });
+      headerRow += '</tr>';
+      thead.innerHTML = headerRow;
+
+      var tbody = document.getElementById('players-tbody');
+      tbody.innerHTML = players.map(function (p) {
+        var s = p.stats || {};
+        var row = '<tr><td>' + (p.name || p.player_id || '—') + '</td><td>' + (p.team_abbrev || '—') + '</td>';
+        cols.forEach(function (c) {
+          var key = c[0];
+          row += '<td class="num tabular-nums">' + statCell(s[key], s[key + '_pctile'], c[2]) + '</td>';
+        });
+        return row + '</tr>';
+      }).join('');
+      initAllSortables();
+    }
+
+    async function loadAdvancedPlayers(page) {
+      if (page == null) page = 0;
+      playersCurrentPage = page;
+      var errEl = document.getElementById('players-error');
+      var season = parseInt(document.getElementById('players-adv-season').value, 10);
+      var group = document.getElementById('players-adv-group').value;
+      var search = (document.getElementById('players-search').value || '').trim();
+      var offset = page * playersPageSize;
+
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+      setLoading('players-area', true);
+      document.getElementById('players-tbody').innerHTML = '<tr><td colspan="12">Loading…</td></tr>';
+
+      var params = 'season=' + season + '&group=' + encodeURIComponent(group) +
+        '&limit=' + playersPageSize + '&offset=' + offset;
+      if (search) params += '&search=' + encodeURIComponent(search);
+      var start = performance.now();
+      try {
+        var r = await fetch('/api/player-advanced-stats?' + params);
+        var serverMs = r.headers.get('X-Process-Time-Ms');
+        if (serverMs) showTiming('timing-players-adv', serverMs, performance.now() - start);
+        var data = await r.json();
+        if (data.message && (!data.players || !data.players.length)) {
+          errEl.textContent = data.message;
+          errEl.style.display = 'block';
+          document.getElementById('players-tbody').innerHTML = '';
+          document.getElementById('players-thead').innerHTML = '';
+          document.getElementById('players-pagination').innerHTML = '';
+          setLoading('players-area', false);
+          return;
+        }
+        playersData = data.players || [];
+        playersTotalEstimate = data.total != null ? data.total : playersData.length;
+        buildAdvancedPlayersTable(playersData, group);
+        renderPlayersPagination();
+      } catch (e) {
+        errEl.textContent = 'Failed to load advanced stats: ' + (e.message || String(e));
+        errEl.style.display = 'block';
+        document.getElementById('players-tbody').innerHTML = '';
+        document.getElementById('players-thead').innerHTML = '';
+        document.getElementById('players-pagination').innerHTML = '';
+      }
+      setLoading('players-area', false);
+    }
 
   </script>
 </body>

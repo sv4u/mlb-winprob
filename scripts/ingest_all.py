@@ -112,13 +112,21 @@ async def main() -> None:
         )
     )
 
+    season_args = " ".join(map(str, seasons))
+    results.append(
+        await run_stage(
+            "fangraphs_team",
+            -1,
+            f"{sys.executable} scripts/ingest_fangraphs.py --seasons {season_args}",
+        )
+    )
+
     # Player-level stats (FanGraphs + Statcast + biographical)
     results.append(
         await run_stage(
             "player_data",
             -1,
-            f"{sys.executable} scripts/ingest_player_data.py "
-            f"--start {min(seasons)} --end {max(seasons)}",
+            f"{sys.executable} scripts/ingest_player_data.py --seasons {season_args}",
         )
     )
 

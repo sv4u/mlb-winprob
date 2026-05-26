@@ -1323,6 +1323,34 @@ async def api_player_stats(
         }
 
 
+@app.get("/api/player-advanced-stats", response_model=None)
+@cache_get_response(ttl_seconds=300)
+async def api_player_advanced_stats(
+    request: Request,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+    group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: Annotated[str | None, Query(description="Filter by player name substring")] = None,
+) -> dict:
+    """Return FanGraphs + Statcast advanced player stats from on-disk Parquet.
+
+    Data is loaded from ``data/processed/player/batter_stats_{season}.parquet`` or
+    ``pitcher_stats_{season}.parquet`` (offline; does not require ``is_ready()``).
+    """
+    from mlb_predict.player.player_advanced import load_player_advanced_stats
+
+    resolved = resolve_season(season)
+    normalized_group = "pitching" if group.strip().lower() == "pitching" else "hitting"
+    return load_player_advanced_stats(
+        resolved,
+        normalized_group,
+        limit=limit,
+        offset=offset,
+        search=search,
+    )
+
+
 # ---------------------------------------------------------------------------
 # HTML pages
 # ---------------------------------------------------------------------------

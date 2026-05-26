@@ -220,6 +220,20 @@
         <div class="desc">Full player stats table (batting or pitching) for a season. Params: season, group, league_id, limit,
           offset.</div>
       </div>
+      <div class="link-card">
+        <a href="/api/player-advanced-stats?season=2026&amp;group=hitting"><span
+            class="method-badge method-get">GET</span>/api/player-advanced-stats</a>
+        <div class="desc">Advanced player stats (FanGraphs + Statcast) from local Parquet. Params: season, group, limit, offset, search.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/team-advanced-stats?season=2026"><span
+            class="method-badge method-get">GET</span>/api/team-advanced-stats</a>
+        <div class="desc">FanGraphs advanced team batting and pitching metrics from local Parquet.</div>
+      </div>
+      <div class="link-card">
+        <a href="/api/current-season"><span class="method-badge method-get">GET</span>/api/current-season</a>
+        <div class="desc">MLB-aware default season year for the dashboard (January uses prior year).</div>
+      </div>
     </div>
   </div>
 

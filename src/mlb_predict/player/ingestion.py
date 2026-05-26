@@ -223,20 +223,9 @@ def get_batter_stats_for_season(season: int, cache_dir: Path) -> pd.DataFrame:
     if not fg.empty:
         fg = _attach_mlbam_to_fg(fg, "batter")
 
-    if not sc.empty and not fg.empty:
-        merged = sc.merge(
-            fg.drop(columns=["name", "team", "season"], errors="ignore"),
-            left_on="player_id",
-            right_on="mlbam_id",
-            how="outer",
-        )
-        merged["player_id"] = merged["player_id"].fillna(merged["mlbam_id"]).astype(int)
-        merged = merged.drop(columns=["mlbam_id"], errors="ignore")
-    elif not sc.empty:
-        merged = sc
-    else:
-        merged = fg.rename(columns={"mlbam_id": "player_id"})
-        merged = merged.drop(columns=["name", "team", "season", "fg_id"], errors="ignore")
+    merged = _merge_sc_fg_frames(sc, fg)
+    if not merged.empty and "team" in merged.columns:
+        merged = merged.rename(columns={"team": "team_abbrev"})
 
     merged = merged.drop_duplicates(subset=["player_id"], keep="first").reset_index(drop=True)
     merged.to_parquet(path, index=False)
@@ -261,25 +250,37 @@ def get_pitcher_stats_for_season(season: int, cache_dir: Path) -> pd.DataFrame:
     if not fg.empty:
         fg = _attach_mlbam_to_fg(fg, "pitcher")
 
-    if not sc.empty and not fg.empty:
-        merged = sc.merge(
-            fg.drop(columns=["name", "team", "season"], errors="ignore"),
-            left_on="player_id",
-            right_on="mlbam_id",
-            how="outer",
-        )
-        merged["player_id"] = merged["player_id"].fillna(merged["mlbam_id"]).astype(int)
-        merged = merged.drop(columns=["mlbam_id"], errors="ignore")
-    elif not sc.empty:
-        merged = sc
-    else:
-        merged = fg.rename(columns={"mlbam_id": "player_id"})
-        merged = merged.drop(columns=["name", "team", "season", "fg_id"], errors="ignore")
+    merged = _merge_sc_fg_frames(sc, fg)
+    if not merged.empty and "team" in merged.columns:
+        merged = merged.rename(columns={"team": "team_abbrev"})
 
     merged = merged.drop_duplicates(subset=["player_id"], keep="first").reset_index(drop=True)
     merged.to_parquet(path, index=False)
     logger.info("Saved pitcher stats: %d players for %d → %s", len(merged), season, path)
     return merged
+
+
+def _merge_sc_fg_frames(sc: pd.DataFrame, fg: pd.DataFrame) -> pd.DataFrame:
+    """Outer-join Statcast and FanGraphs frames on MLBAM player id."""
+    if sc.empty and fg.empty:
+        return pd.DataFrame()
+
+    if not sc.empty and not fg.empty:
+        fg_merge = fg.drop(columns=["season", "fg_id"], errors="ignore")
+        merged = sc.merge(
+            fg_merge,
+            left_on="player_id",
+            right_on="mlbam_id",
+            how="outer",
+        )
+        merged["player_id"] = merged["player_id"].fillna(merged["mlbam_id"]).astype(int)
+        return merged.drop(columns=["mlbam_id"], errors="ignore")
+
+    if not sc.empty:
+        return sc.copy()
+
+    out = fg.rename(columns={"mlbam_id": "player_id"})
+    return out.drop(columns=["fg_id"], errors="ignore")
 
 
 def _attach_mlbam_to_fg(fg_df: pd.DataFrame, player_type: str) -> pd.DataFrame:
