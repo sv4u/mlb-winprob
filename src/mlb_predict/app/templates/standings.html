@@ -98,6 +98,25 @@
     .filter-panel .range-hint { font-size: 0.72rem; color: var(--muted); margin-left: 0.25rem; }
     .team-filter-mode { display: flex; align-items: center; gap: 0.5rem; }
     .team-filter-mode input[type="radio"] { margin: 0; }
+    .pctile-badge {
+      display: inline-block;
+      margin-left: 0.25rem;
+      padding: 0.08rem 0.35rem;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      vertical-align: middle;
+      font-variant-numeric: tabular-nums;
+    }
+    .pctile-high { background: rgba(52, 211, 153, 0.18); color: var(--green); }
+    .pctile-mid { background: rgba(251, 191, 36, 0.15); color: var(--gold); }
+    .pctile-low { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+    .advanced-note {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+      line-height: 1.55;
+    }
     @media (max-width: 768px) {
       .leaders-grid { grid-template-columns: 1fr; }
       .filter-row { flex-direction: column; align-items: stretch; }
@@ -158,6 +177,7 @@
     <div class="tab-btn active" onclick="showTab('standings',this)">Standings</div>
     <div class="tab-btn" onclick="showTab('batting',this)">Team Batting</div>
     <div class="tab-btn" onclick="showTab('pitching',this)">Team Pitching</div>
+    <div class="tab-btn" onclick="showTab('advanced',this)">Advanced (FG)</div>
   </div>
 
   <!-- Standings tab -->
@@ -284,6 +304,32 @@
       <div class="skeleton skeleton-card" style="height:200px"></div>
     </div>
   </div>
+
+  <!-- Advanced sabermetrics tab (FanGraphs Parquet) -->
+  <div id="tab-advanced" class="tab-content">
+    <p class="advanced-note">
+      Team-level advanced metrics from <strong>FanGraphs</strong> (ingested Parquet).
+      Badges show league percentile for the selected season (higher is better except FIP, xFIP, BB%, HR/FB, WHIP).
+      Works offline — no MLB Stats API required.
+    </p>
+    <div class="filter-panel" id="advanced-filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="advanced-filter-search">Search</label>
+          <input type="text" id="advanced-filter-search" placeholder="Team name…" aria-label="Search team" />
+        </div>
+        <button type="button" class="btn" onclick="applyAdvancedFilters()">Apply</button>
+        <button type="button" class="btn sec" onclick="resetAdvancedFilters()">Reset</button>
+      </div>
+    </div>
+    <div id="advanced-batting-area">
+      <div class="skeleton skeleton-card" style="height:200px"></div>
+    </div>
+    <div id="advanced-pitching-area">
+      <div class="skeleton skeleton-card" style="height:200px"></div>
+    </div>
+    <span class="timing-badge" id="timing-advanced" style="display:none"></span>
+  </div>
 </div>
 
 <footer class="site-footer">
@@ -307,6 +353,7 @@
 const CURRENT_SEASON = {{ current_season }};
   const $ = id => document.getElementById(id);
 let statsLoaded = false;
+let advancedLoaded = false;
 
   function showTab(name, el) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -317,6 +364,22 @@ let statsLoaded = false;
     statsLoaded = true;
     loadTeamStats();
   }
+  if (name === 'advanced' && !advancedLoaded) {
+    advancedLoaded = true;
+    loadAdvancedStats();
+  }
+}
+
+function pctileBadge(pct) {
+  if (pct == null || pct === undefined || isNaN(pct)) return '';
+  var cls = pct >= 70 ? 'pctile-high' : pct >= 40 ? 'pctile-mid' : 'pctile-low';
+  return '<span class="pctile-badge ' + cls + '" title="League percentile">' + pct + '</span>';
+}
+
+function statCell(value, pct, decimals) {
+  if (value == null || value === undefined || isNaN(value)) return '—';
+  var fmt = typeof decimals === 'number' ? value.toFixed(decimals) : value;
+  return fmt + pctileBadge(pct);
 }
 
   function deltaHtml(val, decimals, invert) {
@@ -706,6 +769,117 @@ function renderPitching(teams) {
   });
   html += '</tbody></table></div></div>';
   $('pitching-area').innerHTML = html;
+  initAllSortables();
+}
+
+// ── Advanced stats (FanGraphs) ────────────────────────────────────────────
+var advancedStatsFull = null;
+
+async function loadAdvancedStats() {
+  try {
+    var data = await timedFetch('/api/team-advanced-stats?season=' + CURRENT_SEASON, 'timing-advanced');
+    if (data.message && (!data.teams || !data.teams.length)) {
+      $('advanced-batting-area').innerHTML = '<div class="empty-state"><p>' + data.message + '</p></div>';
+      $('advanced-pitching-area').innerHTML = '';
+      return;
+    }
+    advancedStatsFull = data.teams || [];
+    applyAdvancedFilters();
+  } catch (e) {
+    advancedStatsFull = null;
+    $('advanced-batting-area').innerHTML = '<div class="error-msg">Failed to load advanced stats: ' + e.message + '</div>';
+    $('advanced-pitching-area').innerHTML = '';
+  }
+}
+
+function getAdvancedFilters() {
+  var el = document.getElementById('advanced-filter-search');
+  return { search: el && el.value ? el.value.trim().toLowerCase() : '' };
+}
+
+function filterAdvancedTeams(teams) {
+  var f = getAdvancedFilters();
+  if (!f.search) return teams;
+  return teams.filter(function (t) {
+    var name = (t.team_name || '').toLowerCase();
+    var retro = (t.retro_code || '').toLowerCase();
+    var fg = (t.team_fg || '').toLowerCase();
+    return name.indexOf(f.search) !== -1 || retro.indexOf(f.search) !== -1 || fg.indexOf(f.search) !== -1;
+  });
+}
+
+function applyAdvancedFilters() {
+  if (!advancedStatsFull) return;
+  var filtered = filterAdvancedTeams(advancedStatsFull);
+  renderAdvancedBatting(filtered);
+  renderAdvancedPitching(filtered);
+}
+
+function resetAdvancedFilters() {
+  var el = document.getElementById('advanced-filter-search');
+  if (el) el.value = '';
+  applyAdvancedFilters();
+}
+
+function renderAdvancedBatting(teams) {
+  if (!teams || !teams.length) {
+    $('advanced-batting-area').innerHTML = '<div class="empty-state"><p>No advanced batting data for this season.</p></div>';
+    return;
+  }
+  var sorted = teams.slice().sort(function (a, b) {
+    var av = (a.batting && a.batting.woba != null) ? a.batting.woba : 0;
+    var bv = (b.batting && b.batting.woba != null) ? b.batting.woba : 0;
+    return bv - av;
+  });
+  var html = '<div class="stats-section"><h3>Advanced Batting (FanGraphs)</h3><div class="stats-table-wrap"><table><thead><tr>' +
+    '<th data-sort="number">#</th><th data-sort="string">Team</th>' +
+    '<th class="num" data-sort="number">wOBA</th><th class="num" data-sort="number">xwOBA</th>' +
+    '<th class="num" data-sort="number">ISO</th><th class="num" data-sort="number">BABIP</th>' +
+    '<th class="num" data-sort="number">Barrel%</th><th class="num" data-sort="number">Hard%</th>' +
+    '</tr></thead><tbody>';
+  sorted.forEach(function (t, i) {
+    var b = t.batting || {};
+    html += '<tr><td class="num">' + (i + 1) + '</td><td class="team-name">' + (t.team_name || t.retro_code) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.woba, b.woba_pctile, 3) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.xwoba, b.xwoba_pctile, 3) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.iso, b.iso_pctile, 3) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.babip, b.babip_pctile, 3) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.barrel_pct, b.barrel_pct_pctile, 1) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(b.hard_pct, b.hard_pct_pctile, 1) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+  $('advanced-batting-area').innerHTML = html;
+  initAllSortables();
+}
+
+function renderAdvancedPitching(teams) {
+  if (!teams || !teams.length) {
+    $('advanced-pitching-area').innerHTML = '<div class="empty-state"><p>No advanced pitching data for this season.</p></div>';
+    return;
+  }
+  var sorted = teams.slice().sort(function (a, b) {
+    var av = (a.pitching && a.pitching.fip != null) ? a.pitching.fip : 999;
+    var bv = (b.pitching && b.pitching.fip != null) ? b.pitching.fip : 999;
+    return av - bv;
+  });
+  var html = '<div class="stats-section"><h3>Advanced Pitching (FanGraphs)</h3><div class="stats-table-wrap"><table><thead><tr>' +
+    '<th data-sort="number">#</th><th data-sort="string">Team</th>' +
+    '<th class="num" data-sort="number">FIP</th><th class="num" data-sort="number">xFIP</th>' +
+    '<th class="num" data-sort="number">K%</th><th class="num" data-sort="number">BB%</th>' +
+    '<th class="num" data-sort="number">HR/FB</th><th class="num" data-sort="number">WHIP</th>' +
+    '</tr></thead><tbody>';
+  sorted.forEach(function (t, i) {
+    var p = t.pitching || {};
+    html += '<tr><td class="num">' + (i + 1) + '</td><td class="team-name">' + (t.team_name || t.retro_code) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.fip, p.fip_pctile, 2) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.xfip, p.xfip_pctile, 2) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.k_pct, p.k_pct_pctile, 1) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.bb_pct, p.bb_pct_pctile, 1) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.hr_fb, p.hr_fb_pctile, 1) + '</td>' +
+      '<td class="num tabular-nums">' + statCell(p.whip, p.whip_pctile, 2) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+  $('advanced-pitching-area').innerHTML = html;
   initAllSortables();
 }
 

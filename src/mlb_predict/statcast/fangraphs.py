@@ -63,6 +63,56 @@ RETRO_TO_FG: dict[str, str] = {
     "WAS": "WSN",  # Nationals (post-2005)
 }
 
+# When multiple Retrosheet codes map to one FanGraphs abbrev, prefer the active franchise code.
+_FG_TO_RETRO_PRIORITY: tuple[str, ...] = (
+    "NYA",
+    "NYN",
+    "LAN",
+    "ANA",
+    "TBA",
+    "KCA",
+    "CHA",
+    "CHN",
+    "SDN",
+    "SFN",
+    "SLN",
+    "WAS",
+    "ATH",
+    "MIA",
+    "OAK",
+    "TOR",
+    "TEX",
+    "SEA",
+    "HOU",
+    "MIN",
+    "MIL",
+    "COL",
+    "ARI",
+    "ATL",
+    "BAL",
+    "BOS",
+    "CIN",
+    "CLE",
+    "DET",
+    "PHI",
+    "PIT",
+)
+
+
+def fg_to_retro_code(fg_code: str) -> str:
+    """Map a FanGraphs team abbreviation to a canonical Retrosheet code."""
+    fg = fg_code.strip().upper()
+    if fg in _FG_TO_RETRO_PRIORITY:
+        return fg
+    candidates = [retro for retro, mapped in RETRO_TO_FG.items() if mapped == fg]
+    if not candidates:
+        return fg
+    for retro in _FG_TO_RETRO_PRIORITY:
+        if retro in candidates:
+            return retro
+    return candidates[0]
+
+
 _BAT_COLS = {
     "Team": "team_fg",
     "wOBA": "bat_woba",

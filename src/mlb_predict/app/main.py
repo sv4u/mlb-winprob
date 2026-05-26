@@ -1207,6 +1207,23 @@ async def api_team_stats(
     return {"season": season, "teams": teams}
 
 
+@app.get("/api/team-advanced-stats", response_model=None)
+@cache_get_response(ttl_seconds=300)
+async def api_team_advanced_stats(
+    request: Request,
+    season: Annotated[int | None, Query(ge=2000, le=2030)] = None,
+) -> dict:
+    """Return FanGraphs advanced batting and pitching stats for all teams in a season.
+
+    Data is loaded from ``data/processed/fangraphs/fangraphs_{season}.parquet``
+    (offline; does not require MLB Stats API or ``is_ready()``).
+    """
+    from mlb_predict.statcast.team_advanced import load_team_advanced_stats
+
+    resolved = resolve_season(season)
+    return load_team_advanced_stats(resolved)
+
+
 @app.get("/api/leaders", response_model=None)
 async def api_leaders(
     season: Annotated[int | None, Query(ge=2000, le=2030)] = None,

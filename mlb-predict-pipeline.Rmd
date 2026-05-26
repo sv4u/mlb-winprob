@@ -1464,7 +1464,7 @@ The platform evolves from a **win-probability / odds model** into a combined **p
 |---|---|---|---|
 | Team standings (predicted vs actual) | `/standings` · `GET /api/standings` | Win–loss, run differential | Model + MLB Stats API |
 | **Traditional team stats** | `/standings` (Batting / Pitching tabs) · `GET /api/team-stats` | AVG, OBP, SLG, OPS, R, HR, RBI, SB; ERA, WHIP, IP, SO | MLB Stats API (live) |
-| **Advanced team stats** *(planned UI)* | `/stats/teams` · `GET /api/team-advanced-stats` *(planned)* | wOBA, xwOBA, ISO, BABIP, barrel%, hard%; FIP, xFIP, K%, BB%, HR/FB | FanGraphs Parquet (`data/processed/fangraphs/`) |
+| **Advanced team stats** | `/standings` (Advanced tab) · `GET /api/team-advanced-stats` | wOBA, xwOBA, ISO, BABIP, barrel%, hard%; FIP, xFIP, K%, BB%, HR/FB | FanGraphs Parquet (`data/processed/fangraphs/`) |
 | League leaders | `/leaders` · `GET /api/leaders` | Category tops (HR, ERA, …) | MLB Stats API |
 | Full player tables | `/players` · `GET /api/player-stats` | Season counting + rate stats | MLB Stats API |
 | **Advanced player stats** *(planned UI)* | `/stats/players` · `GET /api/player-advanced-stats` *(planned)* | xwOBA, barrel%, chase%, whiff%; SP/RP FIP, Stuff+ proxies | FanGraphs + Statcast Parquet (`data/processed/player/`) |
@@ -1548,7 +1548,7 @@ Base URL: `http://host:30087`
 |---|---|---|---|
 | `GET` | `/api/standings` | `season`, `include_spring` | Predicted vs actual standings |
 | `GET` | `/api/team-stats` | `season` | Team batting/pitching stats (traditional) |
-| `GET` | `/api/team-advanced-stats` *(planned)* | `season` | FanGraphs advanced team metrics |
+| `GET` | `/api/team-advanced-stats` | `season` | FanGraphs advanced team metrics (Parquet) |
 | `GET` | `/api/leaders` | `season`, `league_id`, `limit`, `stat_group` | League leaders |
 | `GET` | `/api/player-stats` | `season`, `group`, `league_id`, `limit`, `offset` | Full player stats (traditional) |
 | `GET` | `/api/player-advanced-stats` *(planned)* | `season`, `group`, `limit`, `offset` | Player advanced / Statcast stats |
@@ -1903,7 +1903,8 @@ Agents must preserve system integrity across time.
 | Global betting configuration | done |
 | MLB-aware current season default (UI + API) | done |
 | Sabermetrics dashboard — traditional team stats UI | done (standings batting/pitching tabs) |
-| Sabermetrics dashboard — advanced team/player stats UI | planned |
+| Sabermetrics dashboard — advanced team stats UI | done (standings Advanced tab + `/api/team-advanced-stats`) |
+| Sabermetrics dashboard — advanced player stats UI | planned |
 | Lineup Monte Carlo simulation | planned |
 | Hierarchical team Bayesian priors | planned |
 | Market comparison module | planned |
