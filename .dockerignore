@@ -55,6 +55,8 @@ server.pid
 # CI
 .github/
 
-# Docs (not needed in image)
+# Docs (not needed in image), except the team-ID crosswalk template that
+# entrypoint.sh seeds into data/processed/ on first run.
 docs/
+!docs/team_id_map_template.csv
 *.md

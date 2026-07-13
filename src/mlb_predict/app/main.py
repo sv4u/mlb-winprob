@@ -240,8 +240,12 @@ def _reload_app() -> None:
         store = get_store()
         store.ingest_all_features()
         logger.info("DuckDB store refreshed before reload")
-    except Exception as exc:
-        logger.warning("DuckDB refresh failed (non-fatal): %s", exc)
+    except Exception:
+        # NOT actually non-fatal to data correctness: if this fails, startup()
+        # below falls back to whatever is already in the DuckDB store, which
+        # can silently omit newly-ingested seasons. Log loudly so that never
+        # goes unnoticed again.
+        logger.exception("DuckDB refresh failed — falling back to stale DuckDB contents")
 
     model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     startup(model_type)
@@ -255,8 +259,8 @@ def _populate_duckdb() -> None:
         store = get_store()
         store.ingest_all_features()
         logger.info("DuckDB store populated after ingest")
-    except Exception as exc:
-        logger.warning("DuckDB population failed (non-fatal): %s", exc)
+    except Exception:
+        logger.exception("DuckDB population failed — freshly ingested data may not be served")
 
 
 def _reload_after_pipeline() -> None:

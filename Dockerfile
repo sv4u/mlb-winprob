@@ -223,6 +223,7 @@ FROM base AS production
 COPY scripts/ scripts/
 COPY docker/  docker/
 COPY proto/   proto/
+COPY docs/team_id_map_template.csv docs/team_id_map_template.csv
 
 # Proto codegen — generate gRPC stubs (grpcio-tools required at build time).
 # After codegen, remove build-only tools (uv, pip, setuptools) that are not

@@ -50,6 +50,18 @@ mkdir -p \
     logs
 
 # ---------------------------------------------------------------------------
+# Seed the Retrosheet↔MLB team ID crosswalk if missing (first run on a fresh
+# volume).  Every ingest run depends on this file (scripts/build_crosswalk.py)
+# and it is deliberately preserved across destructive re-ingests, so it must
+# exist before the first ingest ever runs.  Never overwrites an existing file.
+# ---------------------------------------------------------------------------
+if [ ! -f data/processed/team_id_map_retro_to_mlb.csv ] && [ -f docs/team_id_map_template.csv ]; then
+    mkdir -p data/processed
+    cp docs/team_id_map_template.csv data/processed/team_id_map_retro_to_mlb.csv
+    log "Seeded data/processed/team_id_map_retro_to_mlb.csv from docs/team_id_map_template.csv"
+fi
+
+# ---------------------------------------------------------------------------
 # Status check (informational only — no blocking bootstrap)
 # ---------------------------------------------------------------------------
 if ls data/models/stacked_v*_train*/model.joblib 2>/dev/null | grep -q .; then

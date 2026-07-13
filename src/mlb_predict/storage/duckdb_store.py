@@ -125,6 +125,28 @@ class DuckDBStore:
             table, parquet_path, season=season, replace_season=replace_season
         )
 
+    def _sync_features_schema(self, parquet_path: Path) -> None:
+        """Add any columns present in *parquet_path* but missing from the
+        features table (e.g. ``game_type`` on the current season's file but
+        not on older season files).  Without this, ``INSERT ... SELECT *``
+        fails with a column-count mismatch and — because callers treat that
+        as non-fatal — the season being inserted silently never lands.
+        """
+        file_schema = self._conn.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
+        ).fetchall()
+        existing_cols = {
+            row[0]
+            for row in self._conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'main' AND table_name = 'features'"
+            ).fetchall()
+        }
+        for col_name, col_type, *_rest in file_schema:
+            if col_name not in existing_cols:
+                self._conn.execute(f'ALTER TABLE features ADD COLUMN "{col_name}" {col_type}')
+                logger.info("features table: added missing column %s (%s)", col_name, col_type)
+
     def _ingest_features(
         self,
         parquet_path: Path,
@@ -136,13 +158,17 @@ class DuckDBStore:
 
         On first call the features table is created from the Parquet schema so
         that all ~143 columns are preserved.  Subsequent calls INSERT into the
-        existing table.
+        existing table, first reconciling the schema (see
+        ``_sync_features_schema``) and matching columns by name so files with
+        extra or missing columns (e.g. the in-progress season's ``game_type``
+        column) never abort the insert.
         """
         if self._features_table_exists():
+            self._sync_features_schema(parquet_path)
             if replace_season and season is not None:
                 self._conn.execute("DELETE FROM features WHERE season = ?", [season])
             self._conn.execute(f"""
-                INSERT INTO features
+                INSERT INTO features BY NAME
                 SELECT *, '{parquet_path.name}' as _source_file
                 FROM read_parquet('{parquet_path}')
             """)
@@ -214,8 +240,15 @@ class DuckDBStore:
     def ingest_all_features(self, features_dir: Path | None = None) -> int:
         """Bulk-ingest all feature Parquet files from the features directory.
 
-        Drops and recreates the features table from the first file so the schema
-        always matches the Parquet layout (all ~143 columns).
+        Loads every file in a single ``read_parquet(..., union_by_name=True)``
+        call so the table schema is the *union* of every file's columns, not
+        just the first file's (alphabetically that's ``features_2000.parquet``,
+        which lacks the ``game_type`` column that the current season's file
+        has). Loading file-by-file with a fixed schema meant any later file
+        with an extra column — e.g. the in-progress season — aborted the
+        whole load with a column-count mismatch, and because the table was
+        already dropped first, that season silently vanished from every
+        subsequent query rather than merely failing to update.
         """
         features_dir = features_dir or (_REPO_ROOT / "data" / "processed" / "features")
         if not features_dir.exists():
@@ -230,27 +263,22 @@ class DuckDBStore:
         if self._features_table_exists():
             self._conn.execute("DROP TABLE features")
 
-        total = 0
-        for idx, f in enumerate(parquet_files):
-            if idx == 0:
-                self._conn.execute(f"""
-                    CREATE TABLE features AS
-                    SELECT *, '{f.name}' as _source_file
-                    FROM read_parquet('{f}')
-                """)
-            else:
-                self._conn.execute(f"""
-                    INSERT INTO features
-                    SELECT *, '{f.name}' as _source_file
-                    FROM read_parquet('{f}')
-                """)
+        file_list_sql = "[" + ", ".join(f"'{f}'" for f in parquet_files) + "]"
+        self._conn.execute(f"""
+            CREATE TABLE features AS
+            SELECT * EXCLUDE (filename), filename AS _source_file
+            FROM read_parquet({file_list_sql}, union_by_name=True, filename=True)
+        """)
+        self._conn.execute(
+            "UPDATE features SET _source_file = regexp_replace(_source_file, '.*[/\\\\]', '')"
+        )
 
-            count_result = self._conn.execute(
-                "SELECT count(*) FROM features WHERE _source_file = ?", [f.name]
-            ).fetchone()
-            count = count_result[0] if count_result else 0
-            total += count
-            logger.debug("  %s: %d rows", f.name, count)
+        total = self._scalar("SELECT count(*) FROM features")
+        per_file = self._conn.execute(
+            "SELECT _source_file, count(*) FROM features GROUP BY _source_file ORDER BY _source_file"
+        ).fetchall()
+        for name, count in per_file:
+            logger.debug("  %s: %d rows", name, count)
 
         logger.info("Bulk-ingested %d total rows from %d files", total, len(parquet_files))
         return total
