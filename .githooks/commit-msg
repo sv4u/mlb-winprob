@@ -1,0 +1,34 @@
+#!/bin/sh
+# commit-msg hook — enforce the project rule that commits carry NO AI/Claude sign-off.
+#
+# It strips (rather than rejects) any AI sign-off trailer so such lines can never
+# land, regardless of who or what generated the message. Legitimate human
+# "Co-authored-by:" trailers are preserved — only lines referencing Claude,
+# Anthropic, the Anthropic noreply address, or the "Generated with Claude Code"
+# advertisement are removed.
+#
+# Enabled via:  git config core.hooksPath .githooks
+# (run once per clone.)
+
+msg_file="$1"
+tmp_file="$(mktemp)"
+
+# Drop AI sign-off lines (case-insensitive).
+grep -viE \
+  'co-authored-by:[[:space:]].*(claude|anthropic)|noreply@anthropic\.com|generated with \[?claude|🤖.*generated with' \
+  "$msg_file" > "$tmp_file"
+
+# If nothing changed, leave the original untouched.
+if cmp -s "$msg_file" "$tmp_file"; then
+  rm -f "$tmp_file"
+  exit 0
+fi
+
+# Something was stripped: trim any trailing blank lines left behind, write back,
+# and notify (non-blocking) so the removal is transparent.
+awk 'NF{last=NR} {line[NR]=$0} END{for (i=1; i<=last; i++) print line[i]}' \
+  "$tmp_file" > "$msg_file"
+rm -f "$tmp_file"
+
+echo "commit-msg hook: removed AI sign-off line(s) from the commit message." >&2
+exit 0
