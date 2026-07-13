@@ -325,6 +325,50 @@
 <script>
 let pollTimer = null;
 
+  /* ------------------------------------------------------------------ */
+  /*  Admin token — prompted once, stored in localStorage, sent on every */
+  /*  /api/admin/* and /ws/admin/* request.                              */
+  /* ------------------------------------------------------------------ */
+
+  const ADMIN_TOKEN_KEY = 'mlb_admin_token';
+
+  function getAdminToken() {
+    let token = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (!token) {
+      token = window.prompt('Admin token required (see server logs for MLB_ADMIN_TOKEN):') || '';
+      if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    }
+    return token;
+  }
+
+  function clearAdminToken() {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  }
+
+  async function adminFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers, { 'X-Admin-Token': getAdminToken() });
+    const res = await fetch(url, opts);
+    if (res.status === 403) {
+      clearAdminToken();
+      alert('Admin token rejected. Please try again with the correct token.');
+    }
+    return res;
+  }
+
+  function adminTimedFetch(url, timingId) {
+    const start = performance.now();
+    return adminFetch(url).then(function (r) {
+      if (!r.ok) throw new Error('API error ' + r.status + ': ' + r.statusText);
+      const serverMs = r.headers.get('X-Process-Time-Ms');
+      return r.json().then(function (data) {
+        const clientMs = performance.now() - start;
+        if (timingId) showTiming(timingId, serverMs, clientMs);
+        return data;
+      });
+    });
+  }
+
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -339,7 +383,7 @@ function setBadge(id, status) {
 
   async function fetchOddsConfig() {
     try {
-      const r = await fetch('/api/admin/odds-config');
+      const r = await adminFetch('/api/admin/odds-config');
       const d = await r.json();
       const statusEl = document.getElementById('odds-config-status');
       if (d.configured) {
@@ -362,7 +406,7 @@ function setBadge(id, status) {
     }
     resultEl.textContent = 'Saving…';
     try {
-      const r = await fetch('/api/admin/odds-config', {
+      const r = await adminFetch('/api/admin/odds-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: key })
@@ -382,7 +426,7 @@ function setBadge(id, status) {
 
 async function fetchStatus() {
   try {
-    const s = await timedFetch('/api/admin/status', 'timing-status');
+    const s = await adminTimedFetch('/api/admin/status', 'timing-status');
     fetchOddsConfig();
     renderOverview(s);
     const anyRunning = s.pipelines.ingest.status === 'running' || s.pipelines.update.status === 'running' || s.pipelines.retrain.status === 'running';
@@ -532,7 +576,7 @@ function renderCV(rows) {
       fetchOpts.headers = { 'Content-Type': 'application/json' };
       fetchOpts.body = JSON.stringify(body);
     }
-    const res = await fetch('/api/admin/' + kind, fetchOpts);
+    const res = await adminFetch('/api/admin/' + kind, fetchOpts);
     const data = await res.json();
     if (!data.ok) {
       alert(data.message);
@@ -582,7 +626,7 @@ function renderCV(rows) {
     status.textContent = 'Switching…';
     status.style.color = 'var(--gold)';
 
-  fetch('/api/admin/switch-model', {
+  adminFetch('/api/admin/switch-model', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model_type: sel.value })
@@ -624,7 +668,7 @@ function renderCV(rows) {
 
   function shellConnect() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    shellWs = new WebSocket(proto + '//' + location.host + '/ws/admin/shell');
+    shellWs = new WebSocket(proto + '//' + location.host + '/ws/admin/shell?token=' + encodeURIComponent(getAdminToken()));
     shellWs.onopen = () => shellSetStatus(true);
     shellWs.onclose = () => { shellSetStatus(false); shellRunning = false; document.getElementById('btn-shell-kill').disabled = true; };
     shellWs.onmessage = (ev) => {
@@ -703,7 +747,7 @@ function renderCV(rows) {
 
   function replConnect() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    replWs = new WebSocket(proto + '//' + location.host + '/ws/admin/repl');
+    replWs = new WebSocket(proto + '//' + location.host + '/ws/admin/repl?token=' + encodeURIComponent(getAdminToken()));
     replWs.onopen = () => replSetStatus(true);
     replWs.onclose = () => replSetStatus(false);
     replWs.onmessage = (ev) => {

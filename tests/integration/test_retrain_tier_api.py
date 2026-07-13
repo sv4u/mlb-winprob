@@ -18,15 +18,24 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def client() -> TestClient:
-    """TestClient configured with patched startup to avoid model loading."""
+    """TestClient configured with patched startup to avoid model loading.
+
+    Overrides the admin-token dependency since these tests exercise
+    retrain/pipeline behavior, not authentication (see test_admin_auth.py).
+    """
     with (
         patch("mlb_predict.app.main.has_processed_data", return_value=True),
         patch("mlb_predict.app.main.has_trained_models", return_value=True),
         patch("mlb_predict.app.main.try_startup", return_value=True),
     ):
         from mlb_predict.app.main import app
+        from mlb_predict.app.admin_auth import require_admin_token
 
-        yield TestClient(app, raise_server_exceptions=False)
+        app.dependency_overrides[require_admin_token] = lambda: None
+        try:
+            yield TestClient(app, raise_server_exceptions=False)
+        finally:
+            app.dependency_overrides.pop(require_admin_token, None)
 
 
 # ---------------------------------------------------------------------------

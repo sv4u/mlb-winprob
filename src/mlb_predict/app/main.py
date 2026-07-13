@@ -13,7 +13,7 @@ from typing import Annotated
 
 import grpc
 import pandas as pd
-from fastapi import FastAPI, Query, Request, WebSocket
+from fastapi import Depends, FastAPI, Query, Request, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,6 +22,7 @@ import inspect
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel
 
+from mlb_predict.app.admin_auth import check_ws_admin_token, require_admin_token
 from mlb_predict.app.admin import (
     PipelineKind,
     PipelineOptions,
@@ -1593,7 +1594,9 @@ async def api_active_model(request: Request) -> dict | JSONResponse:
     }
 
 
-@app.post("/api/admin/switch-model", response_model=None)
+@app.post(
+    "/api/admin/switch-model", response_model=None, dependencies=[Depends(require_admin_token)]
+)
 async def api_switch_model(request: Request, body: _SwitchModelRequest) -> dict | JSONResponse:
     """Hot-swap the active prediction model at runtime."""
     stubs = _stubs(request)
@@ -1626,7 +1629,7 @@ async def api_switch_model(request: Request, body: _SwitchModelRequest) -> dict 
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/admin/status", response_model=None)
+@app.get("/api/admin/status", response_model=None, dependencies=[Depends(require_admin_token)])
 async def api_admin_status(request: Request) -> dict | JSONResponse:
     """Full system status: data coverage, model inventory, pipeline states."""
     stubs = _stubs(request)
@@ -1655,7 +1658,7 @@ async def api_admin_status(request: Request) -> dict | JSONResponse:
     }
 
 
-@app.get("/api/admin/odds-config", response_model=None)
+@app.get("/api/admin/odds-config", response_model=None, dependencies=[Depends(require_admin_token)])
 async def api_admin_get_odds_config() -> dict:
     """Return whether the Odds API key is configured and from where. Never returns the key."""
     from mlb_predict.external.odds_config import get_odds_config_status
@@ -1663,7 +1666,9 @@ async def api_admin_get_odds_config() -> dict:
     return get_odds_config_status()
 
 
-@app.post("/api/admin/odds-config", response_model=None)
+@app.post(
+    "/api/admin/odds-config", response_model=None, dependencies=[Depends(require_admin_token)]
+)
 async def api_admin_save_odds_config(body: _OddsConfigRequest) -> dict:
     """Save the Odds API key to data/processed/odds/config.json. Key is never logged."""
     from mlb_predict.external.odds_config import set_odds_api_key
@@ -1672,7 +1677,9 @@ async def api_admin_save_odds_config(body: _OddsConfigRequest) -> dict:
     return {"ok": True}
 
 
-@app.get("/api/admin/betting-config", response_model=None)
+@app.get(
+    "/api/admin/betting-config", response_model=None, dependencies=[Depends(require_admin_token)]
+)
 async def api_admin_get_betting_config() -> dict:
     """Return current betting configuration (Kelly %, budget, bet amount)."""
     from mlb_predict.external.betting_config import get_betting_config
@@ -1681,7 +1688,9 @@ async def api_admin_get_betting_config() -> dict:
     return {"kelly_pct": cfg.kelly_pct, "budget": cfg.budget, "bet_amount": cfg.bet_amount}
 
 
-@app.post("/api/admin/betting-config", response_model=None)
+@app.post(
+    "/api/admin/betting-config", response_model=None, dependencies=[Depends(require_admin_token)]
+)
 async def api_admin_save_betting_config(body: _BettingConfigRequest) -> dict:
     """Save betting configuration to data/processed/odds/betting_config.json."""
     from mlb_predict.external.betting_config import BettingConfig, save_betting_config
@@ -1700,7 +1709,7 @@ async def api_admin_save_betting_config(body: _BettingConfigRequest) -> dict:
     }
 
 
-@app.post("/api/admin/ingest")
+@app.post("/api/admin/ingest", dependencies=[Depends(require_admin_token)])
 async def api_admin_ingest(body: _PipelineOptionsRequest | None = None) -> dict:
     """Full re-ingestion: clears all processed data and re-ingests every season."""
     blocker = conflicting_pipeline()
@@ -1721,7 +1730,7 @@ async def api_admin_ingest(body: _PipelineOptionsRequest | None = None) -> dict:
     return {"ok": True, "message": "Full re-ingestion started."}
 
 
-@app.post("/api/admin/update")
+@app.post("/api/admin/update", dependencies=[Depends(require_admin_token)])
 async def api_admin_update(body: _PipelineOptionsRequest | None = None) -> dict:
     """Update current season data only (non-destructive)."""
     blocker = conflicting_pipeline()
@@ -1742,7 +1751,7 @@ async def api_admin_update(body: _PipelineOptionsRequest | None = None) -> dict:
     return {"ok": True, "message": "Season update started."}
 
 
-@app.post("/api/admin/retrain")
+@app.post("/api/admin/retrain", dependencies=[Depends(require_admin_token)])
 async def api_admin_retrain(body: _RetrainOptionsRequest | None = None) -> dict:
     """Archive existing models of the target tier and retrain."""
     blocker = conflicting_pipeline()
@@ -1776,10 +1785,16 @@ async def api_admin_retrain(body: _RetrainOptionsRequest | None = None) -> dict:
 @app.websocket("/ws/admin/shell")
 async def ws_admin_shell(websocket: WebSocket) -> None:
     """WebSocket endpoint for executing shell commands with streaming output."""
+    if not check_ws_admin_token(websocket):
+        await websocket.close(code=4401, reason="Missing or invalid admin token")
+        return
     await ws_shell_run(websocket)
 
 
 @app.websocket("/ws/admin/repl")
 async def ws_admin_repl(websocket: WebSocket) -> None:
     """WebSocket endpoint for an interactive Python REPL session."""
+    if not check_ws_admin_token(websocket):
+        await websocket.close(code=4401, reason="Missing or invalid admin token")
+        return
     await ws_repl_run(websocket)
