@@ -47,7 +47,9 @@ _PIT_API_KEYS = {
     "pit_whip": "whip",
 }
 
-_PCT_DISPLAY_COLS = frozenset({"bat_barrel_pct", "bat_hard_pct", "pit_k_pct", "pit_bb_pct", "pit_hr_fb"})
+_PCT_DISPLAY_COLS = frozenset(
+    {"bat_barrel_pct", "bat_hard_pct", "pit_k_pct", "pit_bb_pct", "pit_hr_fb"}
+)
 
 
 def default_fangraphs_dir() -> Path:

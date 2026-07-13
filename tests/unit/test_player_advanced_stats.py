@@ -64,9 +64,7 @@ def test_load_player_advanced_search(tmp_path: Path) -> None:
     )
     df.to_parquet(tmp_path / "batter_stats_2025.parquet", index=False)
 
-    payload = load_player_advanced_stats(
-        2025, "hitting", search="judge", player_dir=tmp_path
-    )
+    payload = load_player_advanced_stats(2025, "hitting", search="judge", player_dir=tmp_path)
     assert payload["total"] == 1
     assert payload["players"][0]["name"] == "Aaron Judge"
 

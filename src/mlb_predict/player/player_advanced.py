@@ -164,7 +164,9 @@ def load_player_advanced_stats(
         players.append(
             {
                 "player_id": int(row["player_id"]),
-                "name": str(row["name"]) if "name" in work.columns and pd.notna(row.get("name")) else None,
+                "name": str(row["name"])
+                if "name" in work.columns and pd.notna(row.get("name"))
+                else None,
                 "team_abbrev": (
                     str(row["team_abbrev"])
                     if "team_abbrev" in work.columns and pd.notna(row.get("team_abbrev"))
