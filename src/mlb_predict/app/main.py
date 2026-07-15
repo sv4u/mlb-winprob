@@ -1492,6 +1492,7 @@ async def xml_sitemap(request: Request) -> Response:
         "/leaders",
         "/players",
         "/odds",
+        "/tools/ev-calculator",
         "/wiki",
         "/dashboard",
         "/sitemap",

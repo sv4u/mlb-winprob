@@ -121,7 +121,12 @@
         <div class="desc">Live odds board, positive-EV bet finder, and EV calculator. Shows moneyline odds from multiple
           sportsbooks, model-vs-market edge analysis, and Kelly criterion sizing.</div>
       </div>
-        <div class="link-card">
+      <div class="link-card">
+        <a href="/tools/ev-calculator">EV Calculator</a>
+        <div class="path">/tools/ev-calculator</div>
+        <div class="desc">Standalone expected-value calculator: enter odds and a win probability to get EV, edge, ROI, and Kelly criterion stake sizing.</div>
+      </div>
+      <div class="link-card">
         <a href="/wiki">Wiki</a>
         <div class="path">/wiki</div>
         <div class="desc">Technical documentation: model architecture, feature engineering, data sources, calibration, and training pipeline.</div>
@@ -132,11 +137,11 @@
         <div class="desc">Model Context Protocol server on the same host as the web UI. Exposes tools for predictions,
           standings, SHAP, odds, and model info. Use from Cursor or other MCP clients when on your home network. See <a
             href="/wiki#mcp-server">Wiki → MCP Server</a>.</div>
-        </div>
-        <div class="link-card">
+      </div>
+      <div class="link-card">
         <a href="/dashboard">Dashboard</a>
         <div class="path">/dashboard</div>
-        <div class="desc">Admin dashboard with system status, data coverage, model inventory, and pipeline controls (ingest, update, retrain).</div>
+        <div class="desc">Admin dashboard with system status, data coverage, model inventory, and pipeline controls (ingest, update, retrain). Requires an admin token — see <a href="/wiki#admin-console">Wiki → Admin Console</a>.</div>
       </div>
       <div class="link-card">
         <a href="/sitemap">Sitemap</a>
@@ -234,15 +239,45 @@
         <a href="/api/current-season"><span class="method-badge method-get">GET</span>/api/current-season</a>
         <div class="desc">MLB-aware default season year for the dashboard (January uses prior year).</div>
       </div>
+      <div class="link-card">
+        <a href="/api/active-model"><span class="method-badge method-get">GET</span>/api/active-model</a>
+        <div class="desc">Currently active prediction model and the list of available model types.</div>
+      </div>
     </div>
   </div>
 
   <div class="section">
     <h3><span class="section-icon">&#128736;</span> Admin API</h3>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">
+      Every endpoint and WebSocket below requires an admin token (<code>X-Admin-Token</code> header,
+      <code>Authorization: Bearer</code> header, or <code>?token=</code> query param) — see
+      <a href="/wiki#admin-console">Wiki &rarr; Admin Console</a>. Links are shown for reference
+      only; opening them directly without a token returns <code>403 Forbidden</code>.
+    </p>
     <div class="link-grid">
       <div class="link-card">
-        <a href="/api/admin/status"><span class="method-badge method-get">GET</span>/api/admin/status</a>
+        <div class="path"><span class="method-badge method-get">GET</span>/api/admin/status</div>
         <div class="desc">Full system status: data coverage, model inventory, and pipeline states.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/switch-model</div>
+        <div class="desc">Hot-swap the active prediction model at runtime.</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-get">GET</span>/api/admin/odds-config</div>
+        <div class="desc">Whether an Odds API key is configured, and from where (never returns the key).</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/odds-config</div>
+        <div class="desc">Save the Odds API key (written to data/processed/odds/config.json).</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-get">GET</span>/api/admin/betting-config</div>
+        <div class="desc">Current betting configuration (Kelly %, budget, bet amount).</div>
+      </div>
+      <div class="link-card">
+        <div class="path"><span class="method-badge method-post">POST</span>/api/admin/betting-config</div>
+        <div class="desc">Save betting configuration.</div>
       </div>
       <div class="link-card">
         <div class="path"><span class="method-badge method-post">POST</span>/api/admin/ingest</div>

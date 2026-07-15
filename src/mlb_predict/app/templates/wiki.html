@@ -46,6 +46,9 @@
     .info-box { background: rgba(79,142,247,.06); border: 1px solid rgba(79,142,247,.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; }
     .info-box strong { color: var(--accent); }
     .warn-box { background: rgba(247,201,79,.06); border: 1px solid rgba(247,201,79,.25); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; color: var(--gold); }
+    .tip-box { background: rgba(46,204,113,.06); border: 1px solid rgba(46,204,113,.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; }
+    .tip-box strong { color: var(--green); }
+    .tip-box code { background: var(--card); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.82rem; color: var(--accent); font-family: 'SF Mono', 'Fira Code', monospace; }
 
     .feature-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-bottom: 1.25rem; }
     .feature-table th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
@@ -209,6 +212,7 @@
         <li><a href="#f-context">Context &amp; Venue</a></li>
         <li><a href="#f-vegas-weather">Vegas &amp; Weather</a></li>
         <li><a href="#f-gametype">Game Type</a></li>
+        <li><a href="#f-lineup">Player Lineup Embeddings</a></li>
       </ul>
     </li>
     <li><a href="#models">Models</a>
@@ -248,6 +252,12 @@
         <li><a href="#st-comparison">Comparison Metrics</a></li>
       </ul>
     </li>
+    <li><a href="#players-page">Players Page</a>
+      <ul class="sub">
+        <li><a href="#pp-traditional">Traditional Stats</a></li>
+        <li><a href="#pp-advanced">Advanced Stats</a></li>
+      </ul>
+    </li>
     <li><a href="#ev-calculator">EV Calculator</a>
       <ul class="sub">
         <li><a href="#ev-concepts">Core Concepts</a></li>
@@ -259,7 +269,7 @@
     <li><a href="#errors">Error Handling</a></li>
     <li><a href="#mcp-server">MCP Server</a></li>
     <li><a href="#admin-console">Admin Console</a>
-      <ul>
+      <ul class="sub">
         <li><a href="#admin-pipelines">Pipeline Controls</a></li>
         <li><a href="#admin-shell">Shell Runner</a></li>
         <li><a href="#admin-repl">Python REPL</a></li>
@@ -284,7 +294,7 @@
 <p>
   This system predicts the probability that the home team wins each MLB regular season and
   spring training game, covering seasons 2000 through 2026. It combines 25 years of historical
-  data from multiple authoritative sources, engineers 119 pre-game features, and trains six
+  data from multiple authoritative sources, engineers 136 pre-game features, and trains six
   different machine learning models. The default production model is a <strong>stacked
     ensemble</strong> that blends all five base models for optimal accuracy and calibration.
 </p>
@@ -299,7 +309,7 @@
 <ol>
   <li><strong>Data ingestion</strong> — fetch raw data from 6 external sources into structured Parquet files (including
     spring training schedules with scores)</li>
-  <li><strong>Feature engineering</strong> — compute 119 pre-game features per game from the raw data (regular season from
+  <li><strong>Feature engineering</strong> — compute 136 pre-game features per game from the raw data (regular season from
     gamelogs, spring training from schedule scores)</li>
   <li><strong>Model training</strong> — train 6 models with time-weighted samples, calibration, and hyperparameter optimisation</li>
   <li><strong>Prediction &amp; monitoring</strong> — generate immutable prediction snapshots and track model drift over time</li>
@@ -465,7 +475,8 @@ If ML &gt; 0 (underdog):   prob = 100 / (ML + 100)</code></pre>
   <li><strong>Environment variable:</strong> Set <code>ODDS_API_KEY</code> to your key. Takes precedence over the config
     file.</li>
   <li><strong>Admin dashboard:</strong> Open <a href="/dashboard">Dashboard</a> → “Live Odds API Key”, enter the key,
-    and click Save. The key is written to <code>data/processed/odds/config.json</code>.</li>
+    and click Save (prompts for the admin token — see <a href="#admin-console">Admin Console</a> —
+    on first use). The key is written to <code>data/processed/odds/config.json</code>.</li>
   <li><strong>Config file:</strong> Create <code>data/processed/odds/config.json</code> with
     <code>{"api_key": "your-key-here"}</code>. The <code>data/</code> directory is git-ignored, so the key is never
     committed.</li>
@@ -497,7 +508,7 @@ If ML &gt; 0 (underdog):   prob = 100 / (ML + 100)</code></pre>
 <h2 id="features">Feature Engineering</h2>
 
 <p>
-  Every game is described by <strong>119 pre-game features</strong> computed from
+  Every game is described by <strong>136 pre-game features</strong> computed from
   the raw data sources. Features are always computed <em>before</em> the game occurs — no future
   information ever leaks into the feature set. Cross-season continuity is maintained: rolling
   windows and Elo ratings carry forward from the previous season. Spring training games use
@@ -613,6 +624,34 @@ NewElo = OldElo + K × (Actual - Expected)</code></pre>
   games) and prior-season team state. During model training, spring training games receive a
   configurable reduced sample weight (default 0.25×) so they contribute signal without
   dominating regular-season patterns.
+</p>
+
+<h3 id="f-lineup">Player Lineup Embeddings (17 features)</h3>
+<p>
+  A separate <strong>Stage 1 PyTorch model</strong> learns dense player embeddings and distills
+  them into 17 interpretable game-level features before the six tabular models ever see them.
+  Each batter is encoded from a learned <code>Embedding(vocab_size, 32)</code> vector plus rolling
+  stats (OPS, ISO, K%, BB%, xwOBA, Barrel%, Hard Hit%, wRC+, sprint speed) and bio features
+  (bat side, age, position). Starting pitchers are encoded similarly from a shared vocabulary.
+  Batter vectors are combined into a lineup vector using batting-order weights, and a small
+  feed-forward head combines both teams&rsquo; lineup and starter vectors into the 17 output
+  features:
+</p>
+<ul>
+  <li><strong>Lineup strength</strong> — <code>home_lineup_strength</code>, <code>away_lineup_strength</code></li>
+  <li><strong>Top/bottom of the order quality</strong> — <code>{side}_top3_quality</code>, <code>{side}_bottom3_quality</code></li>
+  <li><strong>Lineup variance</strong> — <code>{side}_lineup_variance</code> (top-to-bottom depth vs. a stacked order)</li>
+  <li><strong>Platoon advantage</strong> — <code>{side}_platoon_advantage</code> (batter handedness vs. opposing starter)</li>
+  <li><strong>Starting pitcher quality</strong> — <code>{side}_sp_quality</code></li>
+  <li><strong>Lineup vs. starter matchup</strong> — <code>{side}_lineup_vs_sp</code></li>
+  <li><strong>Differentials</strong> — <code>lineup_strength_diff</code>, <code>sp_quality_diff</code>, <code>matchup_advantage_diff</code></li>
+</ul>
+<p>
+  A cold-start projection network maps observable stats into the embedding space for players
+  without enough history to have a well-trained embedding, so unseen or rookie players still
+  receive reasonable feature values instead of zeros. If no Stage 1 model has been trained yet,
+  these 17 columns are populated with neutral zero values and the tabular models train normally
+  on the remaining 119 features.
 </p>
 
 <!-- ================================================================== -->
@@ -957,7 +996,8 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   <strong>Interpreting the results:</strong> A Brier score of 0.244 means the model's average
   squared probability error is about 0.244. The theoretical floor for pre-game baseball
   prediction is around 0.24, so the system is operating near the limit of what's achievable
-  without in-game or lineup information. The best single seasons (2019) reach 58–59% accuracy,
+  without live in-game information (the figures above predate the Stage 1 lineup-embedding
+  features described in <a href="#f-lineup">Feature Engineering</a>). The best single seasons (2019) reach 58–59% accuracy,
   while weaker seasons (2003, 2011) drop to ~53–54% — reflecting the inherent unpredictability
   of baseball.
 </div>
@@ -1031,6 +1071,33 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   and pitching statistics. A compact summary also appears on the
   <a href="/season/2026">2026 Season page</a>.
 </div>
+
+<!-- ================================================================== -->
+<h2 id="players-page">Players Page</h2>
+
+<p>
+  The <a href="/players">Players page</a> offers two tabs for browsing individual player
+  statistics by season: <strong>Traditional</strong> (live MLB Stats API data) and
+  <strong>Advanced</strong> (offline FanGraphs + Statcast data with league percentiles).
+</p>
+
+<h3 id="pp-traditional">Traditional Stats</h3>
+<p>
+  Full batting and pitching stat tables sourced live from the MLB Stats API
+  (<code>GET /api/player-stats</code>), with sortable columns and season/league filters —
+  the same underlying data as the <a href="/leaders">Leaders</a> page, but showing every
+  qualifying player rather than just the top of each category.
+</p>
+
+<h3 id="pp-advanced">Advanced Stats</h3>
+<p>
+  The Advanced tab reads from locally ingested FanGraphs and Statcast Parquet files
+  (<code>GET /api/player-advanced-stats</code>) rather than calling a live API, so it works
+  offline once data has been ingested. For each stat, a <strong>league percentile</strong>
+  (0&ndash;100) is computed against every qualifying player in that season, letting you gauge
+  whether a .280 average or a 3.50 ERA is actually good relative to that year's league context.
+  A name-search filter narrows the table to matching players.
+</p>
 
 
 <!-- ================================================================== -->
@@ -1237,6 +1304,16 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   from the browser with no SSH required.
 </p>
 
+<div class="warn-box">
+  <strong>Requires an admin token.</strong> Every <code>/api/admin/*</code> endpoint and both
+  <code>/ws/admin/*</code> WebSocket routes require a shared-secret token, since the shell
+  runner and REPL can execute arbitrary code on the server. Set <code>MLB_ADMIN_TOKEN</code> to
+  a fixed value, or use the one auto-generated and logged on first use (<code>docker compose
+  logs</code> / <code>logs/server.log</code>). Pass it as the <code>X-Admin-Token</code> header,
+  an <code>Authorization: Bearer &lt;token&gt;</code> header, or a <code>?token=</code> query
+  parameter — the dashboard prompts for it once and remembers it in your browser.
+</div>
+
 <h3 id="admin-pipelines">Pipeline Controls</h3>
 
 <p>
@@ -1253,16 +1330,17 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
 </ul>
 <p>
   Options are sent as a JSON body to <code>POST /api/admin/update</code> and
-  <code>POST /api/admin/ingest</code>. The Retrain pipeline does not accept options as it
-  always retrains all models.
+  <code>POST /api/admin/ingest</code> (both require the admin token — see above). The Retrain
+  pipeline does not accept options as it always retrains all models.
 </p>
 
 <h3 id="admin-shell">Shell Runner</h3>
 
 <p>
-  The shell runner connects via WebSocket (<code>WS /ws/admin/shell</code>) and executes
-  arbitrary shell commands on the server with real-time streaming output. Commands run from
-  the project root directory.
+  The shell runner connects via WebSocket (<code>WS /ws/admin/shell?token=&lt;admin-token&gt;</code>)
+  and executes arbitrary shell commands on the server with real-time streaming output. Commands
+  run from the project root directory. The connection is rejected before it opens if the token
+  is missing or invalid.
 </p>
 <ul>
   <li>Type a command and press Enter (or click Run) to execute</li>
@@ -1278,9 +1356,9 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
 <h3 id="admin-repl">Python REPL</h3>
 
 <p>
-  The Python REPL connects via WebSocket (<code>WS /ws/admin/repl</code>) and provides an
-  interactive Python console with persistent state. Variables, imports, and function
-  definitions persist across executions within a session.
+  The Python REPL connects via WebSocket (<code>WS /ws/admin/repl?token=&lt;admin-token&gt;</code>)
+  and provides an interactive Python console with persistent state. Variables, imports, and
+  function definitions persist across executions within a session.
 </p>
 <ul>
   <li>Press Enter to execute; Shift+Enter for multi-line input</li>
@@ -1293,7 +1371,7 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   <code>>>> import pandas as pd</code><br>
   <code>>>> df = pd.read_parquet("data/processed/features/features_2026.parquet")</code><br>
   <code>>>> df.shape</code><br>
-  <code>(2430, 106)</code>
+  <code>(3308, 146)</code>
 </div>
 
 <!-- ================================================================== -->
@@ -1358,7 +1436,7 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
 
 <span class="hl2">Feature Engineering</span>
  gamelogs + schedule + crosswalk + pitcher_stats + fangraphs + vegas + weather
-    └──▶ <span class="hl">build_feature_matrix()</span> ──▶ features_YYYY.parquet (119 features/game)
+    └──▶ <span class="hl">build_feature_matrix()</span> ──▶ features_YYYY.parquet (136 features/game)
     schedule (spring training scores) + prior-season features
     └──▶ <span class="hl">build_spring_features()</span> ──▶ features_spring_YYYY.parquet
 
