@@ -50,7 +50,9 @@ FROM python:3.11-slim AS pytorch-builder
 
 ARG TORCH_SOURCE=0
 ARG PYTORCH_VERSION=2.6.0
-ARG PYTORCH_BUILD_JOBS=2
+# GitHub-hosted ubuntu-latest runners have 4 vCPUs; match that instead of
+# leaving half of them idle during the (already expensive) compile.
+ARG PYTORCH_BUILD_JOBS=4
 
 WORKDIR /build
 RUN mkdir -p /wheels

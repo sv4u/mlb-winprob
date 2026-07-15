@@ -19,8 +19,8 @@ concurrency:
 # ---------------------------------------------------------------------------
 # Permissions
 #   contents: read   — checkout
-#   packages: write  — push image to GitHub Container Registry (GHCR)
-#                      (only used by the docker job; skipped on PRs)
+#   packages: write  — push image + build cache to GitHub Container Registry
+#                      (only used by the docker job; push skipped on PRs)
 # ---------------------------------------------------------------------------
 permissions:
   contents: read
@@ -28,10 +28,13 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Lint — ruff check + format (native, fast feedback)
+  # Lint & Type check — ruff + mypy, native, single dependency install
+  # (merged from two jobs: both only needed the same `uv sync --all-extras`
+  # on Python 3.11, so running them as sequential steps in one job saves a
+  # full redundant dependency install).
   # ---------------------------------------------------------------------------
   lint:
-    name: Lint
+    name: Lint & Type check
     runs-on: ubuntu-latest
 
     steps:
@@ -50,24 +53,6 @@ jobs:
 
       - name: ruff format
         run: uv run ruff format --check .
-
-  # ---------------------------------------------------------------------------
-  # Type check — mypy on source package only (native, fast feedback)
-  # ---------------------------------------------------------------------------
-  typecheck:
-    name: Type check
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.11"
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync --all-extras
 
       - name: mypy
         run: uv run mypy src/mlb_predict
@@ -114,7 +99,7 @@ jobs:
   docker:
     name: Docker — build & publish
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, test]
 
     steps:
       - uses: actions/checkout@v6
@@ -165,15 +150,24 @@ jobs:
       # -----------------------------------------------------------------------
       # Build and push the production image.
       #
-      # Platform strategy:
+      # Platform / TORCH_SOURCE strategy:
       #   PR builds    → linux/amd64 only, TORCH_SOURCE=0 (fast validation)
-      #   push to main → linux/amd64 only, TORCH_SOURCE=1 (pushed to GHCR)
+      #   push to main → linux/amd64 only, TORCH_SOURCE=0 (fast iteration)
       #   version tag  → linux/amd64 + linux/arm64, TORCH_SOURCE=1 (full release)
       #
       # TORCH_SOURCE=1 builds PyTorch from source targeting SSE4.2 so the
       # image runs on all x86-64 CPUs (including NAS devices without AVX2).
-      # The pytorch-builder layer is cached by GHA cache — only the first
-      # build (or PYTORCH_VERSION bumps) pays the ~30-90 min compile cost.
+      # That compile takes 30-90 min even on a cache hit-miss boundary, so it
+      # is reserved for tagged releases — the artifact people actually deploy
+      # long-term — rather than every push to main. Regular main pushes use
+      # the fast prebuilt AVX2 wheel (same as local `docker compose up`,
+      # which also defaults to TORCH_SOURCE=0) for quick iteration.
+      #
+      # Cache backend: registry (not GHA). GHA's cache backend has a hard
+      # 10GB-per-repo quota; the pytorch-builder stage's compiled layer alone
+      # can approach that, so it was intermittently evicted and silently
+      # forced a full ~90 min recompile even on unrelated-code tag builds.
+      # Registry cache (stored as a GHCR image tag) has no such quota.
       # -----------------------------------------------------------------------
       - name: Build and push production image
         uses: docker/build-push-action@v6
@@ -186,6 +180,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             GIT_COMMIT=${{ github.sha }}
-            TORCH_SOURCE=${{ github.event_name != 'pull_request' && '1' || '0' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            TORCH_SOURCE=${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max', github.repository) || '' }}
